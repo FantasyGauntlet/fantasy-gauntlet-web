@@ -2,15 +2,15 @@ import { initializeApp, getApps } from 'firebase/app';
 import { getAuth, type Auth } from 'firebase/auth';
 
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  apiKey: 'AIzaSyA4_7e0VV_hb8Y3Y2DmliWibwc9rubR73k',
+  authDomain: 'fantasy-gauntlet-ea8a8.firebaseapp.com',
+  projectId: 'fantasy-gauntlet-ea8a8',
+  storageBucket: 'fantasy-gauntlet-ea8a8.firebasestorage.app',
+  messagingSenderId: '628619742883',
+  appId: '1:628619742883:web:ae7b290233739534fd3916',
 };
 
-// Only initialize in the browser — NEXT_PUBLIC_ vars are undefined during SSR builds
+// Only initialize in the browser — prevents SSR errors during Next.js builds
 const app = typeof window !== 'undefined'
   ? (getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0])
   : null;
