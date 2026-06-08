@@ -13,6 +13,7 @@ interface SyncResult {
 
 const SYNCS = [
   { key: 'seed', label: 'Seed Sports', endpoint: '/sports/seed' },
+  { key: 'seed-seasons', label: 'Seed Seasons (2022–2026)', endpoint: '/sports/seed-seasons' },
   { key: 'teams', label: 'Sync Teams', endpoint: '/admin/ingestion/teams' },
   { key: 'schedule', label: 'Sync Schedule', endpoint: '/admin/ingestion/schedule' },
   { key: 'records', label: 'Sync Records', endpoint: '/admin/ingestion/records' },
