@@ -4,56 +4,55 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 
-interface SportLeague { id: number; name: string; }
-interface Season { id: number; year: number; regularSeasonStart: string; regularSeasonEnd: string; }
+interface SportLeague { id: string; name: string; sport: string; }
+
+const BASE = 'https://fantasy-gauntlet-backend-production.up.railway.app/api/v1';
 
 export default function NewLeaguePage() {
   const router = useRouter();
-  const [step, setStep] = useState(1);
   const [sportLeagues, setSportLeagues] = useState<SportLeague[]>([]);
-  const [seasons, setSeasons] = useState<Season[]>([]);
   const [form, setForm] = useState({
     name: '',
-    sportLeagueId: '',
-    seasonId: '',
-    maxMembers: 10,
+    selectedSports: [] as string[],
+    startDate: '',
+    endDate: '',
+    memberCap: '',
     isPublic: false,
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-
-  const BASE = 'https://fantasy-gauntlet-backend-production.up.railway.app/api/v1';
 
   useEffect(() => {
     fetch(`${BASE}/sports/leagues`)
       .then(r => r.json())
       .then(setSportLeagues)
       .catch(() => {});
-  }, [BASE]);
+  }, []);
 
-  useEffect(() => {
-    if (form.sportLeagueId) {
-      fetch(`${BASE}/sports/leagues/${form.sportLeagueId}/seasons`)
-        .then(r => r.json())
-        .then(setSeasons)
-        .catch(() => {});
-    }
-  }, [form.sportLeagueId, BASE]);
-
-  function set(key: string, value: unknown) {
-    setForm((f) => ({ ...f, [key]: value }));
+  function toggleSport(id: string) {
+    setForm(f => ({
+      ...f,
+      selectedSports: f.selectedSports.includes(id)
+        ? f.selectedSports.filter(s => s !== id)
+        : [...f.selectedSports, id],
+    }));
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (form.selectedSports.length === 0) {
+      setError('Select at least one sport.');
+      return;
+    }
     setError('');
     setLoading(true);
     try {
       const league = await api.post<{ id: string }>('/leagues', {
         name: form.name,
-        sportLeagueId: Number(form.sportLeagueId),
-        seasonId: Number(form.seasonId),
-        maxMembers: form.maxMembers,
+        selectedSports: form.selectedSports,
+        startDate: form.startDate,
+        endDate: form.endDate,
+        memberCap: form.memberCap ? Number(form.memberCap) : null,
         isPublic: form.isPublic,
       });
       router.push(`/leagues/${league.id}`);
@@ -74,53 +73,85 @@ export default function NewLeaguePage() {
           <input
             required
             value={form.name}
-            onChange={(e) => set('name', e.target.value)}
+            onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))}
             className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
             placeholder="My Fantasy League"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-1">Sport</label>
-          <select
-            required
-            value={form.sportLeagueId}
-            onChange={(e) => set('sportLeagueId', e.target.value)}
-            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          >
-            <option value="">Select a sport...</option>
-            {sportLeagues.map((sl) => (
-              <option key={sl.id} value={sl.id}>{sl.name}</option>
-            ))}
-          </select>
+          <label className="block text-sm font-medium text-gray-300 mb-2">
+            Sports <span className="text-gray-500 font-normal">(select all that apply)</span>
+          </label>
+          {sportLeagues.length === 0 ? (
+            <p className="text-gray-500 text-sm">Loading sports...</p>
+          ) : (
+            <div className="grid grid-cols-2 gap-2">
+              {sportLeagues.map((sl) => {
+                const checked = form.selectedSports.includes(sl.id);
+                return (
+                  <button
+                    key={sl.id}
+                    type="button"
+                    onClick={() => toggleSport(sl.id)}
+                    className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border text-left text-sm transition-colors ${
+                      checked
+                        ? 'bg-indigo-600/20 border-indigo-500 text-white'
+                        : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600 hover:text-gray-300'
+                    }`}
+                  >
+                    <div className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center ${
+                      checked ? 'bg-indigo-600 border-indigo-600' : 'border-gray-600'
+                    }`}>
+                      {checked && (
+                        <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                    </div>
+                    {sl.name}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
-        {seasons.length > 0 && (
+        <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Season</label>
-            <select
+            <label className="block text-sm font-medium text-gray-300 mb-1">Start Date</label>
+            <input
               required
-              value={form.seasonId}
-              onChange={(e) => set('seasonId', e.target.value)}
+              type="date"
+              value={form.startDate}
+              onChange={(e) => setForm(f => ({ ...f, startDate: e.target.value }))}
               className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            >
-              <option value="">Select a season...</option>
-              {seasons.map((s) => (
-                <option key={s.id} value={s.id}>{s.year}</option>
-              ))}
-            </select>
+            />
           </div>
-        )}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">End Date</label>
+            <input
+              required
+              type="date"
+              value={form.endDate}
+              onChange={(e) => setForm(f => ({ ...f, endDate: e.target.value }))}
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+        </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-1">Max Members</label>
+          <label className="block text-sm font-medium text-gray-300 mb-1">
+            Member Cap <span className="text-gray-500 font-normal">(optional)</span>
+          </label>
           <input
             type="number"
             min={2}
-            max={20}
-            value={form.maxMembers}
-            onChange={(e) => set('maxMembers', Number(e.target.value))}
+            max={100}
+            value={form.memberCap}
+            onChange={(e) => setForm(f => ({ ...f, memberCap: e.target.value }))}
             className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            placeholder="No limit"
           />
         </div>
 
@@ -129,7 +160,7 @@ export default function NewLeaguePage() {
             type="checkbox"
             id="isPublic"
             checked={form.isPublic}
-            onChange={(e) => set('isPublic', e.target.checked)}
+            onChange={(e) => setForm(f => ({ ...f, isPublic: e.target.checked }))}
             className="w-4 h-4 rounded border-gray-700 bg-gray-800 accent-indigo-600"
           />
           <label htmlFor="isPublic" className="text-sm text-gray-300">Make league public (anyone can join)</label>
@@ -149,7 +180,7 @@ export default function NewLeaguePage() {
           </button>
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || form.selectedSports.length === 0}
             className="flex-1 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-medium py-2.5 rounded-lg transition-colors"
           >
             {loading ? 'Creating...' : 'Create League'}
