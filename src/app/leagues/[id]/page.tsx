@@ -55,14 +55,22 @@ interface SportGroup {
   teams: SportTeam[];
 }
 
+interface TeamBreakdown {
+  teamId: string;
+  teamName: string;
+  sportLeagueId: string;
+  wins: number;
+  draws: number;
+  points: number;
+}
+
 interface Standing {
   userId: string;
   displayName: string;
   rank: number;
   totalPoints: number;
-  wins: number;
-  losses: number;
-  ownedTeamIds: string[];
+  teamBreakdown: TeamBreakdown[];
+  bonusPoints: number;
 }
 
 type Tab = 'standings' | 'roster' | 'waivers' | 'settings';
@@ -74,7 +82,6 @@ export default function LeaguePage() {
   const [league, setLeague] = useState<League | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [fantasyTeams, setFantasyTeams] = useState<FantasyTeam[]>([]);
-  const [standings, setStandings] = useState<Standing[]>([]);
   const [tab, setTab] = useState<Tab>('standings');
   const [loading, setLoading] = useState(true);
 
@@ -83,12 +90,10 @@ export default function LeaguePage() {
       api.get<League>(`/leagues/${id}`),
       api.get<Member[]>(`/leagues/${id}/members`),
       api.get<FantasyTeam[]>(`/leagues/${id}/teams`),
-      api.get<Standing[]>(`/leagues/${id}/standings`).catch(() => [] as Standing[]),
-    ]).then(([l, m, ft, s]) => {
+    ]).then(([l, m, ft]) => {
       setLeague(l);
       setMembers(m);
       setFantasyTeams(ft);
-      setStandings(s);
     }).catch(() => router.replace('/dashboard'))
       .finally(() => setLoading(false));
   }, [id, router]);
@@ -178,7 +183,7 @@ export default function LeaguePage() {
       </div>
 
       {tab === 'standings' && (
-        <StandingsTab standings={standings} userId={user?.uid} />
+        <StandingsTab leagueId={id} userId={user?.uid} />
       )}
 
       {tab === 'roster' && (
@@ -209,7 +214,21 @@ export default function LeaguePage() {
 
 // ─── Standings Tab ────────────────────────────────────────────────────────────
 
-function StandingsTab({ standings, userId }: { standings: Standing[]; userId?: string }) {
+function StandingsTab({ leagueId, userId }: { leagueId: string; userId?: string }) {
+  const [standings, setStandings] = useState<Standing[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLoading(true);
+    api.get<Standing[]>(`/leagues/${leagueId}/standings`)
+      .then(setStandings)
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [leagueId]);
+
+  if (loading) return <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-500" /></div>;
+
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
       <table className="w-full">
@@ -218,27 +237,51 @@ function StandingsTab({ standings, userId }: { standings: Standing[]; userId?: s
             <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase">Rank</th>
             <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase">Manager</th>
             <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 uppercase">Points</th>
-            <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 uppercase">W-L</th>
             <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 uppercase">Teams</th>
+            <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 uppercase">Bonus</th>
           </tr>
         </thead>
         <tbody>
-          {standings.map((s) => (
-            <tr key={s.userId} className={`border-b border-gray-800/50 ${s.userId === userId ? 'bg-indigo-900/10' : ''}`}>
-              <td className="px-4 py-3 text-white font-medium">#{s.rank}</td>
-              <td className="px-4 py-3 text-white">
-                {s.displayName}
-                {s.userId === userId && <span className="ml-2 text-xs text-indigo-400">(you)</span>}
-              </td>
-              <td className="px-4 py-3 text-right text-white">{s.totalPoints.toFixed(1)}</td>
-              <td className="px-4 py-3 text-right text-gray-400">{s.wins}-{s.losses}</td>
-              <td className="px-4 py-3 text-right text-gray-400">{s.ownedTeamIds?.length ?? 0}</td>
-            </tr>
-          ))}
+          {standings.map((s) => {
+            const totalWins = s.teamBreakdown.reduce((sum, t) => sum + t.wins, 0);
+            const isExpanded = expanded === s.userId;
+            return (
+              <>
+                <tr
+                  key={s.userId}
+                  onClick={() => setExpanded(isExpanded ? null : s.userId)}
+                  className={`border-b border-gray-800/50 cursor-pointer hover:bg-gray-800/30 ${s.userId === userId ? 'bg-indigo-900/10' : ''}`}
+                >
+                  <td className="px-4 py-3 text-white font-medium">#{s.rank}</td>
+                  <td className="px-4 py-3 text-white">
+                    {s.displayName}
+                    {s.userId === userId && <span className="ml-2 text-xs text-indigo-400">(you)</span>}
+                  </td>
+                  <td className="px-4 py-3 text-right text-white font-medium">{s.totalPoints.toFixed(1)}</td>
+                  <td className="px-4 py-3 text-right text-gray-400">{s.teamBreakdown.length} ({totalWins}W)</td>
+                  <td className="px-4 py-3 text-right text-gray-400">{s.bonusPoints > 0 ? `+${s.bonusPoints.toFixed(1)}` : '—'}</td>
+                </tr>
+                {isExpanded && s.teamBreakdown.length > 0 && (
+                  <tr key={`${s.userId}-breakdown`} className="border-b border-gray-800/50 bg-gray-800/20">
+                    <td colSpan={5} className="px-6 py-3">
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                        {s.teamBreakdown.map(t => (
+                          <div key={t.teamId} className="text-xs">
+                            <span className="text-white">{t.teamName}</span>
+                            <span className="text-gray-500 ml-2">{t.wins}W{t.draws > 0 ? ` ${t.draws}D` : ''} · {t.points.toFixed(1)}pts</span>
+                          </div>
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </>
+            );
+          })}
           {standings.length === 0 && (
             <tr>
               <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
-                No standings yet.
+                No standings yet — assign teams and sync records to see points.
               </td>
             </tr>
           )}
