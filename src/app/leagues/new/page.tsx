@@ -22,17 +22,23 @@ export default function NewLeaguePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const BASE = process.env.NEXT_PUBLIC_API_URL;
+
   useEffect(() => {
-    api.get<SportLeague[]>('/sports/leagues').then(setSportLeagues).catch(() => {});
-  }, []);
+    fetch(`${BASE}/sports/leagues`)
+      .then(r => r.json())
+      .then(setSportLeagues)
+      .catch(() => {});
+  }, [BASE]);
 
   useEffect(() => {
     if (form.sportLeagueId) {
-      api.get<Season[]>(`/sports/leagues/${form.sportLeagueId}/seasons`)
+      fetch(`${BASE}/sports/leagues/${form.sportLeagueId}/seasons`)
+        .then(r => r.json())
         .then(setSeasons)
         .catch(() => {});
     }
-  }, [form.sportLeagueId]);
+  }, [form.sportLeagueId, BASE]);
 
   function set(key: string, value: unknown) {
     setForm((f) => ({ ...f, [key]: value }));
