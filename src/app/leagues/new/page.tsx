@@ -22,7 +22,7 @@ export default function NewLeaguePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const BASE = process.env.NEXT_PUBLIC_API_URL;
+  const BASE = 'https://fantasy-gauntlet-backend-production.up.railway.app/api/v1';
 
   useEffect(() => {
     fetch(`${BASE}/sports/leagues`)

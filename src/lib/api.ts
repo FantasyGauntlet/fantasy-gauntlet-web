@@ -1,6 +1,7 @@
 import { auth } from './firebase';
 
-const BASE = process.env.NEXT_PUBLIC_API_URL;
+const BASE = 'https://fantasy-gauntlet-backend-production.up.railway.app/api/v1';
+export const WS_URL = 'https://fantasy-gauntlet-backend-production.up.railway.app';
 
 async function getToken(): Promise<string> {
   const user = auth.currentUser;

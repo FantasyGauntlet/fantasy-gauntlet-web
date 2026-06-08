@@ -41,7 +41,7 @@ export default function AuctionPage() {
 
     async function connect() {
       const token = await user!.getIdToken();
-      socket = io(`${process.env.NEXT_PUBLIC_WS_URL}/auction`, {
+      socket = io(`https://fantasy-gauntlet-backend-production.up.railway.app/auction`, {
         auth: { token },
         transports: ['websocket'],
       });
