@@ -309,6 +309,15 @@ function RosterTab({
   const [sportGroups, setSportGroups] = useState<SportGroup[]>([]);
   const [loadingTeams, setLoadingTeams] = useState(true);
   const [assigning, setAssigning] = useState<string | null>(null);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+
+  function toggleGroup(sport: string) {
+    setExpandedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(sport)) next.delete(sport); else next.add(sport);
+      return next;
+    });
+  }
 
   useEffect(() => {
     api.get<SportGroup[]>(`/leagues/${leagueId}/sport-teams`)
@@ -408,53 +417,73 @@ function RosterTab({
               <p className="text-gray-500 text-sm">Run <strong className="text-gray-400">Sync Teams</strong> in the admin panel first, then return here.</p>
             </div>
           ) : (
-            <div className="space-y-4">
-              {sportGroups.map(group => (
-                group.teams.length === 0 ? null : (
+            <div className="space-y-3">
+              {sportGroups.map(group => {
+                if (group.teams.length === 0) return null;
+                const isOpen = expandedGroups.has(group.sport);
+                const assignedCount = group.teams.filter(t => ownerMap[t.id]).length;
+                return (
                   <div key={group.sport} className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-                    <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between">
-                      <h3 className="font-medium text-white uppercase text-sm tracking-wide">{group.sport}</h3>
-                      <span className="text-xs text-gray-500">{group.teams.length} teams</span>
-                    </div>
-                    <div className="divide-y divide-gray-800/50">
-                      {group.teams.map(team => {
-                        const owner = ownerMap[team.id];
-                        return (
-                          <div key={team.id} className="flex items-center justify-between px-4 py-3">
-                            <div>
-                              <p className="text-white text-sm">{team.name}</p>
-                              {owner && (
-                                <p className="text-xs text-indigo-400 mt-0.5">→ {owner.displayName}</p>
+                    {/* Clickable header — acts as the dropdown toggle */}
+                    <button
+                      type="button"
+                      onClick={() => toggleGroup(group.sport)}
+                      className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-800/40 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className={`transition-transform duration-200 text-gray-400 text-xs ${isOpen ? 'rotate-90' : ''}`}>▶</span>
+                        <h3 className="font-medium text-white uppercase text-sm tracking-wide">{group.sport}</h3>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        {assignedCount > 0 && (
+                          <span className="text-xs text-indigo-400">{assignedCount} assigned</span>
+                        )}
+                        <span className="text-xs text-gray-500">{group.teams.length} teams</span>
+                      </div>
+                    </button>
+
+                    {/* Collapsible team list */}
+                    {isOpen && (
+                      <div className="border-t border-gray-800 divide-y divide-gray-800/50">
+                        {group.teams.map(team => {
+                          const owner = ownerMap[team.id];
+                          return (
+                            <div key={team.id} className="flex items-center justify-between px-4 py-3">
+                              <div>
+                                <p className="text-white text-sm">{team.name}</p>
+                                {owner && (
+                                  <p className="text-xs text-indigo-400 mt-0.5">→ {owner.displayName}</p>
+                                )}
+                              </div>
+                              {owner ? (
+                                <button
+                                  onClick={() => remove(team.id, owner.id)}
+                                  disabled={assigning === team.id}
+                                  className="text-sm text-red-400 hover:text-red-300 disabled:opacity-50 px-3 py-1 rounded"
+                                >
+                                  {assigning === team.id ? '...' : 'Remove'}
+                                </button>
+                              ) : (
+                                <select
+                                  disabled={assigning === team.id}
+                                  defaultValue=""
+                                  onChange={e => { if (e.target.value) assign(team.id, e.target.value); e.target.value = ''; }}
+                                  className="bg-gray-800 border border-gray-700 text-sm text-white rounded-lg px-2 py-1 disabled:opacity-50"
+                                >
+                                  <option value="">Assign to...</option>
+                                  {fantasyTeams.map(ft => (
+                                    <option key={ft.id} value={ft.id}>{ft.displayName}</option>
+                                  ))}
+                                </select>
                               )}
                             </div>
-                            {owner ? (
-                              <button
-                                onClick={() => remove(team.id, owner.id)}
-                                disabled={assigning === team.id}
-                                className="text-sm text-red-400 hover:text-red-300 disabled:opacity-50 px-3 py-1 rounded"
-                              >
-                                {assigning === team.id ? '...' : 'Remove'}
-                              </button>
-                            ) : (
-                              <select
-                                disabled={assigning === team.id}
-                                defaultValue=""
-                                onChange={e => { if (e.target.value) assign(team.id, e.target.value); e.target.value = ''; }}
-                                className="bg-gray-800 border border-gray-700 text-sm text-white rounded-lg px-2 py-1 disabled:opacity-50"
-                              >
-                                <option value="">Assign to...</option>
-                                {fantasyTeams.map(ft => (
-                                  <option key={ft.id} value={ft.id}>{ft.displayName}</option>
-                                ))}
-                              </select>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
-                )
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
