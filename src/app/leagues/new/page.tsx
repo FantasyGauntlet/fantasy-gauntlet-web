@@ -21,12 +21,13 @@ export default function NewLeaguePage() {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [sportsError, setSportsError] = useState('');
 
   useEffect(() => {
     fetch(`${BASE}/sports/leagues`)
-      .then(r => r.json())
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then(setSportLeagues)
-      .catch(() => {});
+      .catch((e) => setSportsError(e.message));
   }, []);
 
   function toggleSport(id: string) {
@@ -83,7 +84,9 @@ export default function NewLeaguePage() {
           <label className="block text-sm font-medium text-gray-300 mb-2">
             Sports <span className="text-gray-500 font-normal">(select all that apply)</span>
           </label>
-          {sportLeagues.length === 0 ? (
+          {sportsError ? (
+            <p className="text-red-400 text-sm">{sportsError}</p>
+          ) : sportLeagues.length === 0 ? (
             <p className="text-gray-500 text-sm">Loading sports...</p>
           ) : (
             <div className="grid grid-cols-2 gap-2">
