@@ -199,23 +199,34 @@ export default function AdminPage() {
                 {selectedSport && (
                   <>
                     <div>
-                      <label className="block text-sm text-gray-400 mb-1">Team</label>
+                      <label className="block text-sm text-gray-400 mb-1">
+                        Team {bonusForm.teamId && <span className="text-indigo-400 font-medium">✓ selected</span>}
+                      </label>
                       <input
                         value={teamFilter}
                         onChange={e => setTeamFilter(e.target.value)}
                         placeholder="Filter teams..."
                         className={`${inputCls} mb-2`}
                       />
-                      <select
-                        value={bonusForm.teamId}
-                        onChange={e => setBonusForm(f => ({ ...f, teamId: e.target.value }))}
-                        required
-                        size={6}
-                        className={inputCls}
-                      >
-                        <option value="">Select team...</option>
-                        {filteredTeams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                      </select>
+                      <div className="max-h-48 overflow-y-auto border border-gray-700 rounded-lg bg-gray-800">
+                        {filteredTeams.length === 0 && (
+                          <p className="text-gray-500 text-sm px-3 py-2">No teams found</p>
+                        )}
+                        {filteredTeams.map(t => (
+                          <button
+                            key={t.id}
+                            type="button"
+                            onClick={() => setBonusForm(f => ({ ...f, teamId: t.id }))}
+                            className={`w-full text-left px-3 py-2 text-sm transition-colors border-b border-gray-700 last:border-0 ${
+                              bonusForm.teamId === t.id
+                                ? 'bg-indigo-600 text-white'
+                                : 'text-gray-300 hover:bg-gray-700'
+                            }`}
+                          >
+                            {t.name}
+                          </button>
+                        ))}
+                      </div>
                     </div>
 
                     <div>
