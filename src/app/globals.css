@@ -1,26 +1,107 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* ── Class-based dark mode ─────────────────────────────────────────────────── */
+@variant dark (&:where(.dark, .dark *));
+
+/* ── Design tokens (Tailwind v4 @theme → generates utility classes) ──────── */
+@theme {
+  /* Dark-mode defaults */
+  --color-base:         #060d06;
+  --color-card:         #0c1a0c;
+  --color-card-hover:   #112011;
+  --color-field:        #152515;
+  --color-field-2:      #1c321c;
+  --color-line:         #1c321c;
+  --color-line-2:       #274527;
+
+  --color-copy:         #f1fdf2;
+  --color-copy-2:       #8abf8e;
+  --color-copy-3:       #537553;
+
+  --color-brand:        #22c55e;
+  --color-brand-2:      #16a34a;
+  --color-brand-3:      #4ade80;
+  --color-brand-dim:    #0d3d1a;
+  --color-brand-text:   #22c55e;
+
+  --color-danger:       #f87171;
+  --color-danger-bg:    #3b0a0a;
+  --color-warn:         #fbbf24;
+  --color-warn-bg:      #3d2000;
+  --color-info:         #60a5fa;
+  --color-info-bg:      #0f2340;
+  --color-positive:     #4ade80;
+  --color-positive-bg:  #0d3d1a;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* ── Light mode overrides ─────────────────────────────────────────────────── */
+.light {
+  --color-base:         #f7fdf8;
+  --color-card:         #ffffff;
+  --color-card-hover:   #f0fbf1;
+  --color-field:        #f0f9f1;
+  --color-field-2:      #e2f4e4;
+  --color-line:         #cce8d0;
+  --color-line-2:       #a8d8ae;
+
+  --color-copy:         #0c2b10;
+  --color-copy-2:       #2a6636;
+  --color-copy-3:       #6b8e72;
+
+  --color-brand:        #16a34a;
+  --color-brand-2:      #15803d;
+  --color-brand-3:      #22c55e;
+  --color-brand-dim:    #dcfce7;
+  --color-brand-text:   #15803d;
+
+  --color-danger:       #dc2626;
+  --color-danger-bg:    #fee2e2;
+  --color-warn:         #d97706;
+  --color-warn-bg:      #fef3c7;
+  --color-info:         #2563eb;
+  --color-info-bg:      #dbeafe;
+  --color-positive:     #16a34a;
+  --color-positive-bg:  #dcfce7;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+/* ── Base styles ──────────────────────────────────────────────────────────── */
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--color-base);
+  color: var(--color-copy);
+  font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Smooth theme transitions ─────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  transition-property: background-color, border-color, color, box-shadow;
+  transition-duration: 150ms;
+  transition-timing-function: ease;
+}
+
+/* Don't animate layout/transform properties */
+[class*="animate-"],
+[class*="transition-"],
+[class*="duration-"] {
+  transition-property: all;
+}
+
+/* ── Scrollbar styling ────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-line-2); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-copy-3); }
+
+/* ── Focus ring ───────────────────────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+}
+
+/* ── Date input styling fix ───────────────────────────────────────────────── */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.6) sepia(1) hue-rotate(90deg);
+  cursor: pointer;
 }

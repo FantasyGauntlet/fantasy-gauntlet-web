@@ -15,14 +15,17 @@ export default function LeaguesLayout({ children }: { children: React.ReactNode 
 
   if (loading || !user) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-950">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500" />
+      <div className="flex items-center justify-center min-h-screen bg-base">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-brand border-t-transparent rounded-full animate-spin" />
+          <p className="text-copy-3 text-sm">Loading...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-950">
+    <div className="min-h-screen bg-base">
       <NavBar />
       <main className="max-w-6xl mx-auto px-4 py-8">{children}</main>
     </div>

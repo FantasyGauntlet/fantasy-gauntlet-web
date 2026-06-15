@@ -14,7 +14,7 @@ interface Season { id: string; label: string; }
 interface BonusPoint { id: string; teamId: string; seasonId: string; sportLeagueId: string; label: string; points: number; awardedAt: string; }
 
 const SYNCS = [
-  { key: 'seed',         label: 'Seed Sports',             endpoint: '/sports/seed' },
+  { key: 'seed',         label: 'Seed Sports',              endpoint: '/sports/seed' },
   { key: 'seed-seasons', label: 'Seed Seasons (2022–2026)', endpoint: '/sports/seed-seasons' },
   { key: 'teams',        label: 'Sync Teams',               endpoint: '/admin/ingestion/teams' },
   { key: 'schedule',     label: 'Sync Schedule',            endpoint: '/admin/ingestion/schedule' },
@@ -23,11 +23,18 @@ const SYNCS = [
 
 type Tab = 'sync' | 'bonus' | 'scoring';
 
+function Spinner({ size = 'sm' }: { size?: 'sm' | 'md' }) {
+  const s = size === 'sm' ? 'w-4 h-4 border-[1.5px]' : 'w-6 h-6 border-2';
+  return <div className={`${s} border-brand border-t-transparent rounded-full animate-spin`} />;
+}
+
+const inputCls = 'w-full bg-field border border-line-2 rounded-xl px-4 py-2.5 text-copy text-sm placeholder-copy-3 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors';
+
 export default function AdminPage() {
   const { user } = useAuth();
   const [tab, setTab] = useState<Tab>('sync');
 
-  // ── Data Sync tab ──────────────────────────────────────────────────────────
+  // ── Data Sync ──────────────────────────────────────────────────────────────
   const [results, setResults] = useState<Record<string, SyncResult>>({});
 
   async function runSync(key: string, label: string, endpoint: string) {
@@ -44,7 +51,7 @@ export default function AdminPage() {
     for (const s of SYNCS) await runSync(s.key, s.label, s.endpoint);
   }
 
-  // ── Bonus Points tab ───────────────────────────────────────────────────────
+  // ── Bonus Points ───────────────────────────────────────────────────────────
   const [sports, setSports] = useState<SportLeague[]>([]);
   const [selectedSport, setSelectedSport] = useState('');
   const [teams, setTeams] = useState<Team[]>([]);
@@ -99,14 +106,12 @@ export default function AdminPage() {
     try {
       await api.delete(`/admin/bonus-points/${id}`);
       setBonusList(b => b.filter(x => x.id !== id));
-    } catch {}
+    } catch { /* ignore */ }
   }
 
-  const filteredTeams = teams.filter(t =>
-    t.name.toLowerCase().includes(teamFilter.toLowerCase())
-  );
+  const filteredTeams = teams.filter(t => t.name.toLowerCase().includes(teamFilter.toLowerCase()));
 
-  // ── League Scoring tab ─────────────────────────────────────────────────────
+  // ── League Scoring ─────────────────────────────────────────────────────────
   const [leagueId, setLeagueId] = useState('');
   const [scoringResult, setScoringResult] = useState<{ status: 'idle' | 'loading' | 'success' | 'error'; message: string }>({ status: 'idle', message: '' });
 
@@ -122,29 +127,31 @@ export default function AdminPage() {
     }
   }
 
-  // ── Render ─────────────────────────────────────────────────────────────────
   const tabs: { key: Tab; label: string }[] = [
     { key: 'sync',    label: 'Data Sync' },
     { key: 'bonus',   label: 'Bonus Points' },
     { key: 'scoring', label: 'League Scoring' },
   ];
 
-  const inputCls = 'w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500';
-
   return (
-    <div className="min-h-screen bg-gray-950">
+    <div className="min-h-screen bg-base">
       <NavBar />
       <main className="max-w-3xl mx-auto px-4 py-8">
-        <h1 className="text-2xl font-bold text-white mb-2">Admin Panel</h1>
-        <p className="text-gray-400 text-sm mb-6">Signed in as {user?.email}</p>
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-copy">Admin Panel</h1>
+          <p className="text-copy-3 text-sm mt-1">Signed in as {user?.email}</p>
+        </div>
 
-        <div className="flex gap-1 mb-6 bg-gray-900 border border-gray-800 rounded-xl p-1">
+        {/* Tab bar */}
+        <div className="flex gap-0.5 mb-6 border-b border-line">
           {tabs.map(t => (
             <button
               key={t.key}
               onClick={() => setTab(t.key)}
-              className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
-                tab === t.key ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:text-white'
+              className={`px-4 py-2.5 text-sm font-medium transition-colors -mb-px border-b-2 ${
+                tab === t.key
+                  ? 'border-brand text-brand'
+                  : 'border-transparent text-copy-3 hover:text-copy-2 hover:border-line-2'
               }`}
             >
               {t.label}
@@ -154,42 +161,53 @@ export default function AdminPage() {
 
         {/* ── Data Sync ── */}
         {tab === 'sync' && (
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 space-y-4">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-lg font-semibold text-white">Data Sync</h2>
-              <button onClick={runAll} className="bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+          <div className="bg-card border border-line rounded-2xl p-5">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-sm font-semibold text-copy">Data Sync</h2>
+              <button
+                onClick={runAll}
+                className="bg-brand hover:bg-brand-2 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+              >
                 Run All
               </button>
             </div>
-            {SYNCS.map(s => {
-              const r = results[s.key];
-              return (
-                <div key={s.key} className="flex items-center justify-between py-3 border-b border-gray-800 last:border-0">
-                  <div>
-                    <p className="text-white font-medium">{s.label}</p>
-                    {r && <p className={`text-xs mt-1 ${r.status === 'success' ? 'text-green-400' : r.status === 'error' ? 'text-red-400' : 'text-gray-400'}`}>{r.message}</p>}
+            <div className="space-y-1">
+              {SYNCS.map(s => {
+                const r = results[s.key];
+                return (
+                  <div key={s.key} className="flex items-center justify-between py-3 border-b border-line/50 last:border-0">
+                    <div>
+                      <p className="text-sm font-medium text-copy">{s.label}</p>
+                      {r && (
+                        <p className={`text-xs mt-0.5 ${
+                          r.status === 'success' ? 'text-positive' :
+                          r.status === 'error' ? 'text-danger' : 'text-copy-3'
+                        }`}>{r.message}</p>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => runSync(s.key, s.label, s.endpoint)}
+                      disabled={r?.status === 'loading'}
+                      className="flex items-center gap-1.5 bg-field hover:bg-field-2 border border-line disabled:opacity-50 text-copy-2 text-xs px-3 py-1.5 rounded-lg transition-colors"
+                    >
+                      {r?.status === 'loading' ? <Spinner /> : null}
+                      {r?.status === 'loading' ? 'Running...' : 'Run'}
+                    </button>
                   </div>
-                  <button
-                    onClick={() => runSync(s.key, s.label, s.endpoint)}
-                    disabled={r?.status === 'loading'}
-                    className="bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition-colors"
-                  >
-                    {r?.status === 'loading' ? 'Running...' : 'Run'}
-                  </button>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         )}
 
         {/* ── Bonus Points ── */}
         {tab === 'bonus' && (
-          <div className="space-y-6">
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-              <h2 className="text-lg font-semibold text-white mb-4">Award Bonus Points</h2>
+          <div className="space-y-4">
+            <div className="bg-card border border-line rounded-2xl p-5">
+              <h2 className="text-sm font-semibold text-copy mb-5">Award Bonus Points</h2>
               <form onSubmit={awardBonus} className="space-y-4">
                 <div>
-                  <label className="block text-sm text-gray-400 mb-1">Sport</label>
+                  <label className="block text-xs font-medium text-copy-2 mb-1.5">Sport</label>
                   <select value={selectedSport} onChange={e => setSelectedSport(e.target.value)} required className={inputCls}>
                     <option value="">Select sport...</option>
                     {sports.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -199,8 +217,8 @@ export default function AdminPage() {
                 {selectedSport && (
                   <>
                     <div>
-                      <label className="block text-sm text-gray-400 mb-1">
-                        Team {bonusForm.teamId && <span className="text-indigo-400 font-medium">✓ selected</span>}
+                      <label className="block text-xs font-medium text-copy-2 mb-1.5">
+                        Team{bonusForm.teamId && <span className="text-brand ml-1.5 font-semibold">✓ selected</span>}
                       </label>
                       <input
                         value={teamFilter}
@@ -208,19 +226,18 @@ export default function AdminPage() {
                         placeholder="Filter teams..."
                         className={`${inputCls} mb-2`}
                       />
-                      <div className="max-h-48 overflow-y-auto border border-gray-700 rounded-lg bg-gray-800">
-                        {filteredTeams.length === 0 && (
-                          <p className="text-gray-500 text-sm px-3 py-2">No teams found</p>
-                        )}
-                        {filteredTeams.map(t => (
+                      <div className="max-h-44 overflow-y-auto border border-line-2 rounded-xl bg-field">
+                        {filteredTeams.length === 0 ? (
+                          <p className="text-copy-3 text-xs px-3 py-3">No teams found</p>
+                        ) : filteredTeams.map(t => (
                           <button
                             key={t.id}
                             type="button"
                             onClick={() => setBonusForm(f => ({ ...f, teamId: t.id }))}
-                            className={`w-full text-left px-3 py-2 text-sm transition-colors border-b border-gray-700 last:border-0 ${
+                            className={`w-full text-left px-3 py-2.5 text-sm transition-colors border-b border-line/50 last:border-0 ${
                               bonusForm.teamId === t.id
-                                ? 'bg-indigo-600 text-white'
-                                : 'text-gray-300 hover:bg-gray-700'
+                                ? 'bg-brand text-white'
+                                : 'text-copy-2 hover:bg-field-2 hover:text-copy'
                             }`}
                           >
                             {t.name}
@@ -230,7 +247,7 @@ export default function AdminPage() {
                     </div>
 
                     <div>
-                      <label className="block text-sm text-gray-400 mb-1">Season</label>
+                      <label className="block text-xs font-medium text-copy-2 mb-1.5">Season</label>
                       <select value={bonusForm.seasonId} onChange={e => setBonusForm(f => ({ ...f, seasonId: e.target.value }))} required className={inputCls}>
                         <option value="">Select season...</option>
                         {seasons.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
@@ -241,60 +258,56 @@ export default function AdminPage() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-sm text-gray-400 mb-1">Label</label>
+                    <label className="block text-xs font-medium text-copy-2 mb-1.5">Label</label>
                     <input
                       value={bonusForm.label}
                       onChange={e => setBonusForm(f => ({ ...f, label: e.target.value }))}
                       placeholder="e.g. Super Bowl Champion"
-                      required
-                      className={inputCls}
+                      required className={inputCls}
                     />
                   </div>
                   <div>
-                    <label className="block text-sm text-gray-400 mb-1">Points</label>
+                    <label className="block text-xs font-medium text-copy-2 mb-1.5">Points</label>
                     <input
-                      type="number"
-                      value={bonusForm.points}
+                      type="number" value={bonusForm.points}
                       onChange={e => setBonusForm(f => ({ ...f, points: e.target.value }))}
-                      placeholder="50"
-                      required
-                      min={1}
-                      className={inputCls}
+                      placeholder="50" required min={1} className={inputCls}
                     />
                   </div>
                 </div>
 
                 {awardStatus.status !== 'idle' && (
-                  <p className={`text-xs ${awardStatus.status === 'success' ? 'text-green-400' : awardStatus.status === 'error' ? 'text-red-400' : 'text-gray-400'}`}>
-                    {awardStatus.message}
-                  </p>
+                  <p className={`text-xs ${
+                    awardStatus.status === 'success' ? 'text-positive' :
+                    awardStatus.status === 'error' ? 'text-danger' : 'text-copy-3'
+                  }`}>{awardStatus.message}</p>
                 )}
 
                 <button
                   type="submit"
                   disabled={awardStatus.status === 'loading' || !bonusForm.teamId || !bonusForm.seasonId}
-                  className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-medium py-2.5 rounded-lg transition-colors text-sm"
+                  className="w-full bg-brand hover:bg-brand-2 disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl transition-colors text-sm"
                 >
                   {awardStatus.status === 'loading' ? 'Awarding...' : 'Award Bonus Points'}
                 </button>
               </form>
             </div>
 
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-              <h2 className="text-lg font-semibold text-white mb-4">Awarded Bonus Points</h2>
+            <div className="bg-card border border-line rounded-2xl p-5">
+              <h2 className="text-sm font-semibold text-copy mb-4">Awarded Bonus Points</h2>
               {bonusList.length === 0 ? (
-                <p className="text-gray-500 text-sm">No bonus points awarded yet.</p>
+                <p className="text-copy-3 text-sm">No bonus points awarded yet.</p>
               ) : (
                 <div className="space-y-1">
                   {bonusList.map(b => (
-                    <div key={b.id} className="flex items-center justify-between py-3 border-b border-gray-800 last:border-0">
+                    <div key={b.id} className="flex items-center justify-between py-3 border-b border-line/50 last:border-0">
                       <div>
-                        <p className="text-white text-sm font-medium">{b.teamId} &mdash; {b.label}</p>
-                        <p className="text-gray-400 text-xs mt-0.5">{b.sportLeagueId} · {b.seasonId} · +{b.points} pts</p>
+                        <p className="text-sm font-medium text-copy">{b.teamId} — {b.label}</p>
+                        <p className="text-xs text-copy-3 mt-0.5">{b.sportLeagueId} · {b.seasonId} · +{b.points} pts</p>
                       </div>
                       <button
                         onClick={() => deleteBonus(b.id)}
-                        className="text-red-400 hover:text-red-300 text-sm px-3 py-1 rounded-lg hover:bg-red-900/20 transition-colors ml-4 flex-shrink-0"
+                        className="text-xs text-danger hover:text-danger/80 px-3 py-1.5 rounded-lg hover:bg-danger-bg transition-colors ml-4 flex-shrink-0"
                       >
                         Delete
                       </button>
@@ -308,13 +321,12 @@ export default function AdminPage() {
 
         {/* ── League Scoring ── */}
         {tab === 'scoring' && (
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-            <h2 className="text-lg font-semibold text-white mb-2">Recalculate League Scoring</h2>
-            <p className="text-gray-400 text-sm mb-4">
-              Overwrites locked scoring values (winValue, drawValue) for an existing league.
-              Find the league ID in the URL when viewing the league.
+          <div className="bg-card border border-line rounded-2xl p-5">
+            <h2 className="text-sm font-semibold text-copy mb-1">Recalculate League Scoring</h2>
+            <p className="text-xs text-copy-3 mb-5">
+              Overwrites locked scoring values (winValue, drawValue) for an existing league. Find the league ID in the URL when viewing the league.
             </p>
-            <div className="flex gap-3">
+            <div className="flex gap-2">
               <input
                 value={leagueId}
                 onChange={e => setLeagueId(e.target.value)}
@@ -324,15 +336,17 @@ export default function AdminPage() {
               <button
                 onClick={recalculateScoring}
                 disabled={scoringResult.status === 'loading' || !leagueId.trim()}
-                className="bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition-colors whitespace-nowrap"
+                className="flex items-center gap-1.5 bg-field hover:bg-field-2 border border-line disabled:opacity-50 text-copy-2 text-sm px-4 py-2.5 rounded-xl transition-colors whitespace-nowrap"
               >
+                {scoringResult.status === 'loading' ? <Spinner /> : null}
                 {scoringResult.status === 'loading' ? 'Running...' : 'Recalculate'}
               </button>
             </div>
             {scoringResult.status !== 'idle' && (
-              <p className={`text-xs mt-3 ${scoringResult.status === 'success' ? 'text-green-400' : scoringResult.status === 'error' ? 'text-red-400' : 'text-gray-400'}`}>
-                {scoringResult.message}
-              </p>
+              <p className={`text-xs mt-3 ${
+                scoringResult.status === 'success' ? 'text-positive' :
+                scoringResult.status === 'error' ? 'text-danger' : 'text-copy-3'
+              }`}>{scoringResult.message}</p>
             )}
           </div>
         )}
