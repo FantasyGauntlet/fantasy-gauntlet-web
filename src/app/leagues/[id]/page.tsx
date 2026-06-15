@@ -189,6 +189,7 @@ export default function LeaguePage() {
       {tab === 'roster' && (
         <RosterTab
           leagueId={id}
+          leagueState={league.state}
           fantasyTeams={fantasyTeams}
           setFantasyTeams={setFantasyTeams}
           isCommissioner={isCommissioner}
@@ -295,12 +296,14 @@ function StandingsTab({ leagueId, userId }: { leagueId: string; userId?: string 
 
 function RosterTab({
   leagueId,
+  leagueState,
   fantasyTeams,
   setFantasyTeams,
   isCommissioner,
   selectedSports,
 }: {
   leagueId: string;
+  leagueState: string;
   fantasyTeams: FantasyTeam[];
   setFantasyTeams: React.Dispatch<React.SetStateAction<FantasyTeam[]>>;
   isCommissioner: boolean;
@@ -310,6 +313,10 @@ function RosterTab({
   const [loadingTeams, setLoadingTeams] = useState(true);
   const [assigning, setAssigning] = useState<string | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [placeholderName, setPlaceholderName] = useState('');
+  const [addingPlaceholder, setAddingPlaceholder] = useState(false);
+  const [inviteEmails, setInviteEmails] = useState<Record<string, string>>({});
+  const [inviteStatus, setInviteStatus] = useState<Record<string, { status: 'idle' | 'loading' | 'success' | 'error'; message: string }>>({});
 
   function toggleGroup(sport: string) {
     setExpandedGroups(prev => {
@@ -358,6 +365,34 @@ function RosterTab({
     }
   }
 
+  async function addPlaceholder(e: React.FormEvent) {
+    e.preventDefault();
+    if (!placeholderName.trim()) return;
+    setAddingPlaceholder(true);
+    try {
+      const team = await api.post<FantasyTeam>(`/leagues/${leagueId}/members/placeholder`, { displayName: placeholderName.trim() });
+      setFantasyTeams(prev => [...prev, team]);
+      setPlaceholderName('');
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Failed to add player');
+    } finally {
+      setAddingPlaceholder(false);
+    }
+  }
+
+  async function sendInvite(fantasyTeamId: string) {
+    const email = (inviteEmails[fantasyTeamId] ?? '').trim();
+    if (!email) return;
+    setInviteStatus(s => ({ ...s, [fantasyTeamId]: { status: 'loading', message: 'Sending...' } }));
+    try {
+      await api.post(`/leagues/${leagueId}/invites`, { email });
+      setInviteStatus(s => ({ ...s, [fantasyTeamId]: { status: 'success', message: `Invite sent to ${email}` } }));
+      setInviteEmails(e => ({ ...e, [fantasyTeamId]: '' }));
+    } catch (err: unknown) {
+      setInviteStatus(s => ({ ...s, [fantasyTeamId]: { status: 'error', message: err instanceof Error ? err.message : 'Failed to send invite' } }));
+    }
+  }
+
   // Per-member roster summary at the top
   const memberRosters = fantasyTeams.map(ft => ({
     ft,
@@ -368,12 +403,37 @@ function RosterTab({
 
   return (
     <div className="space-y-6">
+      {/* Add Placeholder Player — commissioner + draft only */}
+      {isCommissioner && leagueState === 'draft' && (
+        <form onSubmit={addPlaceholder} className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex gap-3">
+          <input
+            value={placeholderName}
+            onChange={e => setPlaceholderName(e.target.value)}
+            placeholder="New player name..."
+            required
+            className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+          <button
+            type="submit"
+            disabled={addingPlaceholder || !placeholderName.trim()}
+            className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors whitespace-nowrap"
+          >
+            {addingPlaceholder ? 'Adding...' : '+ Add Player'}
+          </button>
+        </form>
+      )}
+
       {/* Member roster cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {memberRosters.map(({ ft, teams }) => (
           <div key={ft.id} className="bg-gray-900 border border-gray-800 rounded-xl p-4">
             <div className="flex items-center justify-between mb-3">
-              <p className="font-medium text-white">{ft.displayName}</p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="font-medium text-white">{ft.displayName}</p>
+                {ft.isPlaceholder && (
+                  <span className="text-xs bg-yellow-900/40 text-yellow-400 border border-yellow-800/60 px-1.5 py-0.5 rounded">placeholder</span>
+                )}
+              </div>
               <span className="text-xs text-gray-500">{teams.length} team{teams.length !== 1 ? 's' : ''}</span>
             </div>
             {teams.length === 0 ? (
@@ -397,6 +457,34 @@ function RosterTab({
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+            {/* Email invite for placeholder players */}
+            {isCommissioner && ft.isPlaceholder && (
+              <div className="mt-3 pt-3 border-t border-gray-800">
+                <div className="flex gap-2">
+                  <input
+                    type="email"
+                    value={inviteEmails[ft.id] ?? ''}
+                    onChange={e => setInviteEmails(s => ({ ...s, [ft.id]: e.target.value }))}
+                    placeholder="Invite by email..."
+                    className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-white text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => sendInvite(ft.id)}
+                    disabled={inviteStatus[ft.id]?.status === 'loading' || !inviteEmails[ft.id]?.trim()}
+                    className="bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-white text-xs px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap"
+                  >
+                    {inviteStatus[ft.id]?.status === 'loading' ? '...' : 'Send Invite'}
+                  </button>
+                </div>
+                {inviteStatus[ft.id] && inviteStatus[ft.id].status !== 'idle' && (
+                  <p className={`text-xs mt-1 ${
+                    inviteStatus[ft.id].status === 'success' ? 'text-green-400' :
+                    inviteStatus[ft.id].status === 'error' ? 'text-red-400' : 'text-gray-400'
+                  }`}>{inviteStatus[ft.id].message}</p>
+                )}
               </div>
             )}
           </div>
