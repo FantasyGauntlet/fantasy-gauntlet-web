@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
+import FGLogo from './FGLogo';
 
 function SunIcon() {
   return (
@@ -50,7 +51,7 @@ export default function NavBar() {
         {/* Brand */}
         <div className="flex items-center gap-6">
           <Link href="/dashboard" className="flex items-center gap-2 group">
-            <img src="/logo.png" alt="Fantasy Gauntlet" className="w-7 h-7 rounded-lg object-contain" />
+            <FGLogo size={30} />
             <span className="font-bold text-sm text-copy group-hover:text-brand transition-colors">
               Fantasy Gauntlet
             </span>
