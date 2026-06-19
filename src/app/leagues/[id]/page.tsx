@@ -231,6 +231,7 @@ export default function LeaguePage() {
           setFantasyTeams={setFantasyTeams}
           isCommissioner={isCommissioner}
           selectedSports={league.selectedSports}
+          userId={user?.uid}
         />
       )}
       {tab === 'waivers' && (
@@ -386,7 +387,7 @@ function StandingsTab({ leagueId, userId }: { leagueId: string; userId?: string 
 // ─── Roster Tab ───────────────────────────────────────────────────────────────
 
 function RosterTab({
-  leagueId, leagueState, fantasyTeams, setFantasyTeams, isCommissioner, selectedSports,
+  leagueId, leagueState, fantasyTeams, setFantasyTeams, isCommissioner, selectedSports, userId,
 }: {
   leagueId: string;
   leagueState: string;
@@ -394,6 +395,7 @@ function RosterTab({
   setFantasyTeams: React.Dispatch<React.SetStateAction<FantasyTeam[]>>;
   isCommissioner: boolean;
   selectedSports: string[];
+  userId?: string;
 }) {
   const [sportGroups, setSportGroups] = useState<SportGroup[]>([]);
   const [loadingTeams, setLoadingTeams] = useState(true);
@@ -405,6 +407,7 @@ function RosterTab({
   const [inviteStatus, setInviteStatus] = useState<Record<string, { status: 'idle' | 'loading' | 'success' | 'error'; message: string }>>({});
   const [invites, setInvites] = useState<LeagueInvite[]>([]);
   const [inviteActions, setInviteActions] = useState<Record<string, 'cancelling' | 'resending' | null>>({});
+  const [viewingId, setViewingId] = useState<string>('');
 
   useEffect(() => {
     api.get<SportGroup[]>(`/leagues/${leagueId}/sport-teams`)
@@ -418,10 +421,33 @@ function RosterTab({
       .catch(() => {});
   }, [leagueId, isCommissioner]);
 
+  // Default to the logged-in user's own team
+  useEffect(() => {
+    if (viewingId) return;
+    const myTeam = fantasyTeams.find(ft => ft.userId === userId && !ft.isPlaceholder);
+    setViewingId(myTeam?.id ?? fantasyTeams[0]?.id ?? '');
+  }, [fantasyTeams, userId, viewingId]);
+
   const ownerMap: Record<string, FantasyTeam> = {};
   for (const ft of fantasyTeams) {
     for (const tid of ft.ownedTeamIds) ownerMap[tid] = ft;
   }
+
+  const allSportTeams = sportGroups.flatMap(g => g.teams);
+  const sportTeamById = new Map(allSportTeams.map(t => [t.id, t]));
+
+  const viewingTeam = fantasyTeams.find(ft => ft.id === viewingId);
+  const viewingIsMe = viewingTeam?.userId === userId;
+  const viewingOwnedTeams = (viewingTeam?.ownedTeamIds ?? [])
+    .map(id => sportTeamById.get(id))
+    .filter(Boolean)
+    .sort((a, b) => (a as SportTeam).name.localeCompare((b as SportTeam).name)) as SportTeam[];
+
+  // Dropdown: logged-in user's team first, then others alphabetically
+  const orderedTeams = [
+    ...fantasyTeams.filter(ft => ft.userId === userId && !ft.isPlaceholder),
+    ...fantasyTeams.filter(ft => ft.userId !== userId || ft.isPlaceholder).sort((a, b) => a.displayName.localeCompare(b.displayName)),
+  ];
 
   function toggleGroup(sport: string) {
     setExpandedGroups(prev => {
@@ -495,153 +521,146 @@ function RosterTab({
     }
   }
 
-  const memberRosters = [...fantasyTeams]
-    .sort((a, b) => a.displayName.localeCompare(b.displayName))
-    .map(ft => ({
-      ft,
-      teams: ft.ownedTeamIds
-        .map(tid => sportGroups.flatMap(g => g.teams).find(t => t.id === tid))
-        .filter(Boolean)
-        .sort((a, b) => (a as SportTeam).name.localeCompare((b as SportTeam).name)) as SportTeam[],
-    }));
-
   return (
     <div className="space-y-6">
-      {/* Add placeholder player */}
-      {isCommissioner && leagueState === 'draft' && (
-        <form onSubmit={addPlaceholder} className="flex gap-2">
-          <input
-            value={placeholderName}
-            onChange={e => setPlaceholderName(e.target.value)}
-            placeholder="Add placeholder player name..."
-            required
-            className="flex-1 bg-field border border-line-2 rounded-xl px-4 py-2.5 text-copy text-sm placeholder-copy-3 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors"
-          />
-          <button
-            type="submit"
-            disabled={addingPlaceholder || !placeholderName.trim()}
-            className="bg-brand hover:bg-brand-2 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors whitespace-nowrap"
-          >
-            {addingPlaceholder ? '...' : '+ Add Player'}
-          </button>
-        </form>
-      )}
 
-      {/* Roster cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        {memberRosters.map(({ ft, teams }) => (
-          <div key={ft.id} className="bg-card border border-line rounded-2xl p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2 flex-wrap">
-                <p className="font-semibold text-copy text-sm">{ft.displayName}</p>
-                {ft.isPlaceholder && (
-                  <span className="text-xs bg-warn-bg text-warn border border-warn/20 px-2 py-0.5 rounded-full">placeholder</span>
-                )}
-              </div>
-              <span className="text-xs text-copy-3">{teams.length} team{teams.length !== 1 ? 's' : ''}</span>
-            </div>
-
-            {teams.length === 0 ? (
-              <p className="text-copy-3 text-xs py-2">No teams assigned yet</p>
-            ) : (
-              <div className="space-y-1.5">
-                {teams.map(t => (
-                  <div key={t.id} className="flex items-center justify-between bg-field rounded-lg px-3 py-2">
-                    <div>
-                      <p className="text-xs font-medium text-copy">{t.name}</p>
-                      <p className="text-xs text-copy-3">{formatLeagueName(t.sportLeagueId)}</p>
-                    </div>
-                    {isCommissioner && (
-                      <button
-                        onClick={() => remove(t.id, ft.id)}
-                        disabled={assigning === t.id}
-                        className="text-xs text-danger hover:text-danger/80 disabled:opacity-50 transition-colors"
-                      >
-                        Remove
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {isCommissioner && ft.isPlaceholder && (
-              <div className="mt-3 pt-3 border-t border-line">
-                <div className="flex gap-2">
-                  <input
-                    type="email"
-                    value={inviteEmails[ft.id] ?? ''}
-                    onChange={e => setInviteEmails(s => ({ ...s, [ft.id]: e.target.value }))}
-                    placeholder="Invite by email..."
-                    className="flex-1 bg-field border border-line-2 rounded-lg px-3 py-1.5 text-copy text-xs placeholder-copy-3 focus:outline-none focus:border-brand transition-colors"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => sendInvite(ft.id)}
-                    disabled={inviteStatus[ft.id]?.status === 'loading' || !inviteEmails[ft.id]?.trim()}
-                    className="bg-field-2 hover:bg-line border border-line text-copy-2 text-xs px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap disabled:opacity-50"
-                  >
-                    {inviteStatus[ft.id]?.status === 'loading' ? '...' : 'Send Invite'}
-                  </button>
-                </div>
-                {inviteStatus[ft.id] && inviteStatus[ft.id].status !== 'idle' && (
-                  <p className={`text-xs mt-1.5 ${
-                    inviteStatus[ft.id].status === 'success' ? 'text-positive' :
-                    inviteStatus[ft.id].status === 'error' ? 'text-danger' : 'text-copy-3'
-                  }`}>{inviteStatus[ft.id].message}</p>
-                )}
-              </div>
-            )}
+      {/* ── Roster viewer ── */}
+      <div className="bg-card border border-line rounded-2xl overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-line">
+          <div>
+            <p className="text-sm font-semibold text-copy">
+              {viewingTeam?.displayName ?? '—'}
+              {viewingTeam?.isPlaceholder && (
+                <span className="ml-2 text-xs bg-warn-bg text-warn border border-warn/20 px-2 py-0.5 rounded-full align-middle">placeholder</span>
+              )}
+            </p>
+            {viewingIsMe && <p className="text-xs text-brand mt-0.5">Your team</p>}
+            <p className="text-xs text-copy-3 mt-0.5">{viewingOwnedTeams.length} team{viewingOwnedTeams.length !== 1 ? 's' : ''}</p>
           </div>
-        ))}
+          {orderedTeams.length > 1 && (
+            <select
+              value={viewingId}
+              onChange={e => setViewingId(e.target.value)}
+              className="bg-field border border-line-2 text-sm text-copy rounded-xl px-3 py-2 focus:outline-none focus:border-brand transition-colors"
+            >
+              {orderedTeams.map(ft => (
+                <option key={ft.id} value={ft.id}>
+                  {ft.displayName}{ft.userId === userId && !ft.isPlaceholder ? ' (You)' : ''}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+        {viewingOwnedTeams.length === 0 ? (
+          <div className="px-5 py-8 text-center">
+            <p className="text-copy-3 text-sm">No teams assigned yet.</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-line/50">
+            {viewingOwnedTeams.map(t => (
+              <div key={t.id} className="flex items-center px-5 py-3.5 hover:bg-field/30 transition-colors">
+                <div>
+                  <p className="text-sm font-medium text-copy">{t.name}</p>
+                  <p className="text-xs text-copy-3 mt-0.5">{formatLeagueName(t.sportLeagueId)}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Pending invites — commissioner only */}
-      {isCommissioner && invites.length > 0 && (
-        <div>
-          <h2 className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-3">
-            Pending Invites · {invites.length}
-          </h2>
-          <div className="space-y-2">
-            {invites.map(invite => {
-              const action = inviteActions[invite.id];
-              return (
-                <div key={invite.id} className="bg-card border border-line rounded-2xl px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
-                  <div>
-                    <p className="text-sm font-medium text-copy">{invite.toEmail}</p>
-                    <p className="text-xs text-copy-3 mt-0.5">
-                      Sent {new Date(invite.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                      <span className="mx-1.5">·</span>
-                      Expires {new Date(invite.expiresAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                    </p>
-                  </div>
-                  <div className="flex gap-2 flex-shrink-0">
-                    <button
-                      onClick={() => resendInvite(invite.id)}
-                      disabled={!!action}
-                      className="text-xs bg-field hover:bg-field-2 border border-line text-copy-2 hover:text-copy px-3 py-1.5 rounded-lg transition-colors font-medium disabled:opacity-50"
-                    >
-                      {action === 'resending' ? 'Sending...' : 'Resend'}
-                    </button>
-                    <button
-                      onClick={() => cancelInvite(invite.id)}
-                      disabled={!!action}
-                      className="text-xs bg-danger-bg border border-danger/20 text-danger hover:bg-danger hover:text-white px-3 py-1.5 rounded-lg transition-colors font-medium disabled:opacity-50"
-                    >
-                      {action === 'cancelling' ? 'Cancelling...' : 'Cancel'}
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Assign teams — commissioner only */}
+      {/* ── Commissioner tools ── */}
       {isCommissioner && (
-        <div>
-          <h2 className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-3">Assign Teams</h2>
+        <div className="space-y-4">
+          {/* Add placeholder */}
+          {leagueState === 'draft' && (
+            <form onSubmit={addPlaceholder} className="flex gap-2">
+              <input
+                value={placeholderName}
+                onChange={e => setPlaceholderName(e.target.value)}
+                placeholder="Add placeholder player name..."
+                required
+                className="flex-1 bg-field border border-line-2 rounded-xl px-4 py-2.5 text-copy text-sm placeholder-copy-3 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors"
+              />
+              <button
+                type="submit"
+                disabled={addingPlaceholder || !placeholderName.trim()}
+                className="bg-brand hover:bg-brand-2 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors whitespace-nowrap"
+              >
+                {addingPlaceholder ? '...' : '+ Add Player'}
+              </button>
+            </form>
+          )}
+
+          {/* Invite placeholders */}
+          {fantasyTeams.filter(ft => ft.isPlaceholder).map(ft => (
+            <div key={ft.id} className="bg-card border border-line rounded-2xl px-4 py-3">
+              <p className="text-xs font-medium text-copy mb-2">{ft.displayName} — Send Invite</p>
+              <div className="flex gap-2">
+                <input
+                  type="email"
+                  value={inviteEmails[ft.id] ?? ''}
+                  onChange={e => setInviteEmails(s => ({ ...s, [ft.id]: e.target.value }))}
+                  placeholder="Email address..."
+                  className="flex-1 bg-field border border-line-2 rounded-lg px-3 py-1.5 text-copy text-xs placeholder-copy-3 focus:outline-none focus:border-brand transition-colors"
+                />
+                <button
+                  type="button"
+                  onClick={() => sendInvite(ft.id)}
+                  disabled={inviteStatus[ft.id]?.status === 'loading' || !inviteEmails[ft.id]?.trim()}
+                  className="bg-field-2 hover:bg-line border border-line text-copy-2 text-xs px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap disabled:opacity-50"
+                >
+                  {inviteStatus[ft.id]?.status === 'loading' ? '...' : 'Send Invite'}
+                </button>
+              </div>
+              {inviteStatus[ft.id] && inviteStatus[ft.id].status !== 'idle' && (
+                <p className={`text-xs mt-1.5 ${
+                  inviteStatus[ft.id].status === 'success' ? 'text-positive' :
+                  inviteStatus[ft.id].status === 'error' ? 'text-danger' : 'text-copy-3'
+                }`}>{inviteStatus[ft.id].message}</p>
+              )}
+            </div>
+          ))}
+
+          {/* Pending invites */}
+          {invites.length > 0 && (
+            <div>
+              <h2 className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-3">
+                Pending Invites · {invites.length}
+              </h2>
+              <div className="space-y-2">
+                {invites.map(invite => {
+                  const action = inviteActions[invite.id];
+                  return (
+                    <div key={invite.id} className="bg-card border border-line rounded-2xl px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+                      <div>
+                        <p className="text-sm font-medium text-copy">{invite.toEmail}</p>
+                        <p className="text-xs text-copy-3 mt-0.5">
+                          Sent {new Date(invite.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                          <span className="mx-1.5">·</span>
+                          Expires {new Date(invite.expiresAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                        </p>
+                      </div>
+                      <div className="flex gap-2 flex-shrink-0">
+                        <button onClick={() => resendInvite(invite.id)} disabled={!!action}
+                          className="text-xs bg-field hover:bg-field-2 border border-line text-copy-2 hover:text-copy px-3 py-1.5 rounded-lg transition-colors font-medium disabled:opacity-50">
+                          {action === 'resending' ? 'Sending...' : 'Resend'}
+                        </button>
+                        <button onClick={() => cancelInvite(invite.id)} disabled={!!action}
+                          className="text-xs bg-danger-bg border border-danger/20 text-danger hover:bg-danger hover:text-white px-3 py-1.5 rounded-lg transition-colors font-medium disabled:opacity-50">
+                          {action === 'cancelling' ? 'Cancelling...' : 'Cancel'}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Assign teams */}
+          <div>
+            <h2 className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-3">Assign Teams</h2>
           {loadingTeams ? (
             <div className="flex justify-center py-8"><Spinner /></div>
           ) : sportGroups.every(g => g.teams.length === 0) ? (
@@ -719,6 +738,7 @@ function RosterTab({
               })}
             </div>
           )}
+        </div>
         </div>
       )}
     </div>
