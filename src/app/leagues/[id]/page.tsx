@@ -42,7 +42,7 @@ interface FantasyTeam {
 interface SportTeam { id: string; name: string; shortName: string; sportLeagueId: string; logoUrl: string | null; }
 interface SportGroup { sport: string; teams: SportTeam[]; }
 
-interface TeamBreakdown { teamId: string; teamName: string; sportLeagueId: string; sport: string; wins: number; draws: number; losses: number; points: number; }
+interface TeamBreakdown { teamId: string; teamName: string; sportLeagueId: string; sport: string; logoUrl: string | null; wins: number; draws: number; losses: number; points: number; }
 interface BonusBreakdownItem { teamId: string; teamName: string; label: string; points: number; }
 interface Standing {
   userId: string; displayName: string; rank: number;
@@ -336,13 +336,18 @@ function StandingsTab({ leagueId, userId }: { leagueId: string; userId?: string 
                                 hasBonus ? 'border-positive/30 cursor-pointer hover:border-positive/60' : 'border-line'
                               }`}
                             >
-                              <div className="flex items-center justify-between px-3 py-2">
-                                <div className="min-w-0 flex-1 mr-2">
-                                  <div className="flex items-center gap-1.5">
-                                    <p className="text-xs font-medium text-copy truncate">{t.teamName}</p>
-                                    {hasBonus && <span className="text-positive text-xs flex-shrink-0">★</span>}
+                              <div className="flex items-center justify-between px-3 py-2 gap-2">
+                                <div className="flex items-center gap-2 min-w-0 flex-1">
+                                  {t.logoUrl && (
+                                    <img src={t.logoUrl} alt={t.teamName} className="w-7 h-7 object-contain flex-shrink-0" />
+                                  )}
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-1">
+                                      <p className="text-xs font-medium text-copy truncate">{t.teamName}</p>
+                                      {hasBonus && <span className="text-positive text-xs flex-shrink-0">★</span>}
+                                    </div>
+                                    <p className="text-xs text-copy-3 mt-0.5">{formatLeagueName(t.sportLeagueId)}</p>
                                   </div>
-                                  <p className="text-xs text-copy-3 mt-0.5">{formatLeagueName(t.sportLeagueId)}</p>
                                 </div>
                                 <div className="text-right flex-shrink-0">
                                   <p className="text-xs font-semibold text-copy">{teamTotal.toFixed(1)}</p>
@@ -572,14 +577,19 @@ function RosterTab({
               const bonus = teamBonusMap.get(t.id) ?? 0;
               const total = (stats?.points ?? 0) + bonus;
               return (
-                <div key={t.id} className="flex items-center justify-between px-5 py-3.5 hover:bg-field/30 transition-colors">
-                  <div>
-                    <p className="text-sm font-medium text-copy">{t.name}</p>
-                    <p className="text-xs text-copy-3 mt-0.5">{formatLeagueName(t.sportLeagueId)}</p>
+                <div key={t.id} className="flex items-center justify-between px-5 py-3.5 hover:bg-field/30 transition-colors gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    {t.logoUrl && (
+                      <img src={t.logoUrl} alt={t.name} className="w-9 h-9 object-contain flex-shrink-0" />
+                    )}
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-copy truncate">{t.name}</p>
+                      <p className="text-xs text-copy-3 mt-0.5">{formatLeagueName(t.sportLeagueId)}</p>
+                    </div>
                   </div>
                   {stats && (
-                    <div className="text-right flex-shrink-0 ml-4">
-                      <p className="text-sm font-semibold text-copy">{total.toFixed(1)} pts{bonus > 0 && <span className="text-positive ml-1 text-xs">+{bonus} bonus</span>}</p>
+                    <div className="text-right flex-shrink-0">
+                      <p className="text-sm font-semibold text-copy">{total.toFixed(1)} pts{bonus > 0 && <span className="text-positive ml-1 text-xs">+{bonus}</span>}</p>
                       <p className="text-xs text-copy-3 mt-0.5">{formatRecord(stats.wins, stats.draws, stats.losses, stats.sport)}</p>
                     </div>
                   )}
@@ -815,8 +825,11 @@ function ClaimCard({
           {/* Team transfer */}
           <div className="flex items-center gap-2">
             <div className="flex-1 bg-danger-bg/40 border border-danger/15 rounded-xl px-3 py-2.5">
-              <p className="text-xs text-copy-3 mb-0.5">Drop</p>
-              <p className="font-semibold text-copy text-xs leading-snug">{dropTeam?.name ?? claim.dropTeamId}</p>
+              <p className="text-xs text-copy-3 mb-1">Drop</p>
+              <div className="flex items-center gap-2">
+                {dropTeam?.logoUrl && <img src={dropTeam.logoUrl} alt={dropTeam.name} className="w-6 h-6 object-contain flex-shrink-0" />}
+                <p className="font-semibold text-copy text-xs leading-snug">{dropTeam?.name ?? claim.dropTeamId}</p>
+              </div>
               {dropTeam && (
                 <>
                   <p className="text-xs text-copy-3 mt-0.5">{formatLeagueName(dropTeam.sportLeagueId)}</p>
@@ -830,8 +843,11 @@ function ClaimCard({
               <path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
             <div className="flex-1 bg-positive-bg/40 border border-positive/15 rounded-xl px-3 py-2.5">
-              <p className="text-xs text-copy-3 mb-0.5">Add</p>
-              <p className="font-semibold text-copy text-xs leading-snug">{addTeam?.name ?? claim.addTeamId}</p>
+              <p className="text-xs text-copy-3 mb-1">Add</p>
+              <div className="flex items-center gap-2">
+                {addTeam?.logoUrl && <img src={addTeam.logoUrl} alt={addTeam.name} className="w-6 h-6 object-contain flex-shrink-0" />}
+                <p className="font-semibold text-copy text-xs leading-snug">{addTeam?.name ?? claim.addTeamId}</p>
+              </div>
               {addTeam && (
                 <>
                   <p className="text-xs text-copy-3 mt-0.5">{formatLeagueName(addTeam.sportLeagueId)}</p>
@@ -1098,8 +1114,11 @@ function WaiversTab({
                         : 'bg-field border-line text-copy-2 hover:border-line-2 hover:text-copy'
                     }`}
                   >
-                    <p className="font-medium text-xs leading-snug">{t.name}</p>
-                    <p className="text-xs text-copy-3 mt-0.5">{formatLeagueName(t.sportLeagueId)}</p>
+                    <div className="flex items-center gap-2 mb-1">
+                      {t.logoUrl && <img src={t.logoUrl} alt={t.name} className="w-6 h-6 object-contain flex-shrink-0" />}
+                      <p className="font-medium text-xs leading-snug">{t.name}</p>
+                    </div>
+                    <p className="text-xs text-copy-3">{formatLeagueName(t.sportLeagueId)}</p>
                     <p className="text-xs text-copy-2 mt-1">
                       {formatRecord(t.wins, t.draws, t.losses, t.sport)} · {t.points.toFixed(1)} pts
                     </p>
@@ -1161,8 +1180,11 @@ function WaiversTab({
                         : 'bg-field border-line text-copy-2 hover:border-line-2 hover:text-copy'
                     }`}
                   >
-                    <p className="font-medium text-xs leading-snug">{t.name}</p>
-                    <p className="text-xs text-copy-3 mt-0.5">{formatLeagueName(t.sportLeagueId)}</p>
+                    <div className="flex items-center gap-2 mb-1">
+                      {t.logoUrl && <img src={t.logoUrl} alt={t.name} className="w-6 h-6 object-contain flex-shrink-0" />}
+                      <p className="font-medium text-xs leading-snug">{t.name}</p>
+                    </div>
+                    <p className="text-xs text-copy-3">{formatLeagueName(t.sportLeagueId)}</p>
                     <p className="text-xs text-copy-2 mt-1">
                       {formatRecord(t.wins, t.draws, t.losses, t.sport)} · {t.points.toFixed(1)} pts
                     </p>

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 
-interface SportLeague { id: string; name: string; sport: string; }
+interface SportLeague { id: string; name: string; sport: string; logoUrl?: string | null; }
 
 const BASE = 'https://fantasy-gauntlet-backend-production.up.railway.app/api/v1';
 
@@ -211,7 +211,10 @@ export default function NewLeaguePage() {
                         </svg>
                       )}
                     </div>
-                    <span className="text-base leading-none">{icon}</span>
+                    {sl.logoUrl
+                      ? <img src={sl.logoUrl} alt={sl.name} className="w-6 h-6 object-contain flex-shrink-0" />
+                      : <span className="text-base leading-none flex-shrink-0">{icon}</span>
+                    }
                     <span className="font-medium truncate">{sl.name}</span>
                   </button>
                 );
