@@ -2,25 +2,41 @@ export default function FGLogo({ size = 28 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
       {/* Background */}
-      <rect width="100" height="100" rx="14" fill="#0a0a0a"/>
+      <rect width="100" height="100" rx="10" fill="#0a0a0a"/>
 
-      {/* Green F-hook: solid P-shape filling the left + bowl arc */}
+      {/*
+        Green "f" hook — closed filled path tracing the stroke outline.
+        Starts at foot bottom-left, goes up the straight left side,
+        sweeps up-right for the arm, comes back via the inner concave,
+        down the inner stem, then curves right for the foot.
+      */}
       <path
-        fill="#3AB83D"
-        d="M20,82 L20,26 Q20,6 44,6 Q70,6 70,28 Q70,52 50,54 L36,54 L36,82 Z"
+        fill="#3CB33D"
+        d={[
+          'M16,80',
+          'L16,26',                    // straight left side going up
+          'Q16,6 44,8',               // outer arc sweeping up and right
+          'Q64,8 66,14',              // arm continuing right to tip
+          'C66,26 46,46 38,52',       // inner concave sweeping back down-left
+          'L38,68',                    // inner stem going down
+          'Q38,80 47,80',             // inner foot curving right
+          'Q30,83 16,80',             // outer foot curving back left
+          'Z',
+        ].join(' ')}
       />
 
-      {/* Black punch-out to hollow the bowl */}
-      <ellipse cx="46" cy="29" rx="17" ry="19" fill="#0a0a0a"/>
-
-      {/* White G bracket — reversed-C with notch at upper-left */}
+      {/*
+        White "G" bracket — rectangle with a square notch cut from the
+        upper-left (the concave of the f becomes the notch of the G),
+        and a slightly rounded bottom-left corner.
+      */}
       <path
         fill="white"
-        d="M44,54 L44,82 L74,82 L74,20 L58,20 L58,54 Z"
+        d="M42,52 L42,78 Q42,82 46,82 L72,82 L72,20 L57,20 L57,52 Z"
       />
 
-      {/* Green dot inside the G */}
-      <circle cx="63" cy="68" r="8" fill="#3AB83D"/>
+      {/* Green dot centred in the lower white area */}
+      <circle cx="57" cy="64" r="9" fill="#3CB33D"/>
     </svg>
   );
 }
