@@ -158,9 +158,25 @@ export default function NewLeaguePage() {
         <div className="bg-card border border-line rounded-2xl p-5">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-semibold text-copy">Select Sports</h2>
-            {form.selectedSports.length > 0 && (
-              <span className="text-xs text-brand font-medium">{form.selectedSports.length} selected</span>
-            )}
+            <div className="flex items-center gap-3">
+              {form.selectedSports.length > 0 && (
+                <span className="text-xs text-brand font-medium">{form.selectedSports.length} selected</span>
+              )}
+              {sportLeagues.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setForm(f => ({
+                    ...f,
+                    selectedSports: f.selectedSports.length === sportLeagues.length
+                      ? []
+                      : sportLeagues.map(sl => sl.id),
+                  }))}
+                  className="text-xs text-copy-3 hover:text-copy-2 underline transition-colors"
+                >
+                  {form.selectedSports.length === sportLeagues.length ? 'Deselect all' : 'Select all'}
+                </button>
+              )}
+            </div>
           </div>
 
           {sportsError ? (

@@ -42,10 +42,12 @@ interface FantasyTeam {
 interface SportTeam { id: string; name: string; shortName: string; sportLeagueId: string; logoUrl: string | null; }
 interface SportGroup { sport: string; teams: SportTeam[]; }
 
-interface TeamBreakdown { teamId: string; teamName: string; sportLeagueId: string; wins: number; draws: number; points: number; }
+interface TeamBreakdown { teamId: string; teamName: string; sportLeagueId: string; sport: string; wins: number; draws: number; losses: number; points: number; }
+interface BonusBreakdownItem { teamId: string; teamName: string; label: string; points: number; }
 interface Standing {
   userId: string; displayName: string; rank: number;
   totalPoints: number; teamBreakdown: TeamBreakdown[]; bonusPoints: number;
+  bonusBreakdown: BonusBreakdownItem[];
 }
 
 interface TeamWithRecord {
@@ -53,6 +55,7 @@ interface TeamWithRecord {
   name: string;
   shortName: string;
   sportLeagueId: string;
+  sport: string;
   logoUrl: string | null;
   wins: number;
   draws: number;
@@ -84,6 +87,13 @@ const STATE_META: Record<string, { label: string; cls: string }> = {
   completed: { label: 'Completed', cls: 'bg-field text-copy-3 border-line' },
   cancelled: { label: 'Cancelled', cls: 'bg-danger-bg text-danger border-danger/20' },
 };
+
+function formatRecord(wins: number, draws: number, losses: number, sport: string): string {
+  if (sport === 'soccer') return `${wins}W ${draws}D ${losses}L`;
+  const parts = [`${wins}W`, `${losses}L`];
+  if (draws > 0) parts.push(`${draws}D`);
+  return parts.join(' ');
+}
 
 function Spinner({ size = 'md' }: { size?: 'sm' | 'md' }) {
   const s = size === 'sm' ? 'w-5 h-5 border-[1.5px]' : 'w-8 h-8 border-2';
@@ -295,22 +305,46 @@ function StandingsTab({ leagueId, userId }: { leagueId: string; userId?: string 
                     <span className="text-sm text-positive">{s.bonusPoints > 0 ? `+${s.bonusPoints.toFixed(1)}` : '—'}</span>
                   </td>
                 </tr>
-                {isExpanded && s.teamBreakdown.length > 0 && (
+                {isExpanded && (s.teamBreakdown.length > 0 || s.bonusBreakdown?.length > 0) && (
                   <tr key={`${s.userId}-bd`} className="border-b border-line/50 bg-field/20">
-                    <td colSpan={5} className="px-6 py-4">
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                        {s.teamBreakdown.map(t => (
-                          <div key={t.teamId} className="flex items-center justify-between bg-card border border-line rounded-lg px-3 py-2">
-                            <div>
-                              <p className="text-xs font-medium text-copy">{t.teamName}</p>
-                              <p className="text-xs text-copy-3 uppercase mt-0.5">{t.sportLeagueId}</p>
+                    <td colSpan={5} className="px-6 py-4 space-y-3">
+                      {/* Team-by-team regular season breakdown */}
+                      {s.teamBreakdown.length > 0 && (
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                          {[...s.teamBreakdown].sort((a, b) => a.teamName.localeCompare(b.teamName)).map(t => (
+                            <div key={t.teamId} className="flex items-center justify-between bg-card border border-line rounded-lg px-3 py-2">
+                              <div>
+                                <p className="text-xs font-medium text-copy">{t.teamName}</p>
+                                <p className="text-xs text-copy-3 uppercase mt-0.5">{t.sportLeagueId}</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-xs font-semibold text-copy">{t.points.toFixed(1)}</p>
+                                <p className="text-xs text-copy-3">{formatRecord(t.wins, t.draws, t.losses, t.sport)}</p>
+                              </div>
                             </div>
-                            <div className="text-right">
-                              <p className="text-xs font-semibold text-copy">{t.points.toFixed(1)}</p>
-                              <p className="text-xs text-copy-3">{t.wins}W{t.draws > 0 ? ` ${t.draws}D` : ''}</p>
+                          ))}
+                        </div>
+                      )}
+                      {/* Bonus awards */}
+                      {s.bonusBreakdown?.length > 0 && (
+                        <div className="space-y-1.5">
+                          <p className="text-xs font-semibold text-copy-3 uppercase tracking-wider">Bonus Awards</p>
+                          {s.bonusBreakdown.map((b, i) => (
+                            <div key={i} className="flex items-center justify-between bg-positive-bg/40 border border-positive/20 rounded-lg px-3 py-2">
+                              <div>
+                                <p className="text-xs font-medium text-copy">{b.label}</p>
+                                <p className="text-xs text-copy-3 mt-0.5">{b.teamName}</p>
+                              </div>
+                              <p className="text-xs font-semibold text-positive">+{b.points.toFixed(1)}</p>
                             </div>
-                          </div>
-                        ))}
+                          ))}
+                        </div>
+                      )}
+                      {/* Points summary */}
+                      <div className="flex items-center gap-4 text-xs text-copy-3 pt-1 border-t border-line/50">
+                        <span>Regular: <span className="text-copy font-medium">{(s.totalPoints - s.bonusPoints).toFixed(1)}</span></span>
+                        {s.bonusPoints > 0 && <span>Bonus: <span className="text-positive font-medium">+{s.bonusPoints.toFixed(1)}</span></span>}
+                        <span>Total: <span className="text-copy font-semibold">{s.totalPoints.toFixed(1)}</span></span>
                       </div>
                     </td>
                   </tr>
@@ -436,12 +470,15 @@ function RosterTab({
     }
   }
 
-  const memberRosters = fantasyTeams.map(ft => ({
-    ft,
-    teams: ft.ownedTeamIds
-      .map(tid => sportGroups.flatMap(g => g.teams).find(t => t.id === tid))
-      .filter(Boolean) as SportTeam[],
-  }));
+  const memberRosters = [...fantasyTeams]
+    .sort((a, b) => a.displayName.localeCompare(b.displayName))
+    .map(ft => ({
+      ft,
+      teams: ft.ownedTeamIds
+        .map(tid => sportGroups.flatMap(g => g.teams).find(t => t.id === tid))
+        .filter(Boolean)
+        .sort((a, b) => (a as SportTeam).name.localeCompare((b as SportTeam).name)) as SportTeam[],
+    }));
 
   return (
     <div className="space-y-6">
@@ -618,7 +655,7 @@ function RosterTab({
                     </button>
                     {isOpen && (
                       <div className="border-t border-line divide-y divide-line/50">
-                        {group.teams.map(team => {
+                        {[...group.teams].sort((a, b) => a.name.localeCompare(b.name)).map(team => {
                           const owner = ownerMap[team.id];
                           return (
                             <div key={team.id} className="flex items-center justify-between px-4 py-3 hover:bg-field/20 transition-colors">
@@ -718,7 +755,7 @@ function ClaimCard({
                 <>
                   <p className="text-xs text-copy-3 uppercase mt-0.5">{dropTeam.sportLeagueId}</p>
                   <p className="text-xs text-copy-2 mt-0.5">
-                    {dropTeam.wins}W{dropTeam.draws > 0 ? ` ${dropTeam.draws}D` : ''} · {dropTeam.points.toFixed(1)} pts
+                    {formatRecord(dropTeam.wins, dropTeam.draws, dropTeam.losses, dropTeam.sport)} · {dropTeam.points.toFixed(1)} pts
                   </p>
                 </>
               )}
@@ -733,7 +770,7 @@ function ClaimCard({
                 <>
                   <p className="text-xs text-copy-3 uppercase mt-0.5">{addTeam.sportLeagueId}</p>
                   <p className="text-xs text-copy-2 mt-0.5">
-                    {addTeam.wins}W{addTeam.draws > 0 ? ` ${addTeam.draws}D` : ''} · {addTeam.points.toFixed(1)} pts
+                    {formatRecord(addTeam.wins, addTeam.draws, addTeam.losses, addTeam.sport)} · {addTeam.points.toFixed(1)} pts
                   </p>
                 </>
               )}
@@ -833,6 +870,8 @@ function WaiversTab({
   const [dropTeamId, setDropTeamId] = useState('');
   const [addTeamId, setAddTeamId] = useState('');
   const [sportFilter, setSportFilter] = useState('all');
+  const [poolSearch, setPoolSearch] = useState('');
+  const [poolSort, setPoolSort] = useState<'alpha' | 'points'>('alpha');
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [submitSuccess, setSubmitSuccess] = useState('');
@@ -870,9 +909,16 @@ function WaiversTab({
     [pool, allOwnedIds],
   );
 
-  const filteredAvailable = sportFilter === 'all'
-    ? availableTeams
-    : availableTeams.filter(t => t.sportLeagueId === sportFilter);
+  const filteredAvailable = useMemo(() => {
+    let list = sportFilter === 'all' ? availableTeams : availableTeams.filter(t => t.sportLeagueId === sportFilter);
+    if (poolSearch.trim()) {
+      const q = poolSearch.trim().toLowerCase();
+      list = list.filter(t => t.name.toLowerCase().includes(q) || t.shortName.toLowerCase().includes(q));
+    }
+    return poolSort === 'points'
+      ? [...list].sort((a, b) => b.points - a.points)
+      : [...list].sort((a, b) => a.name.localeCompare(b.name));
+  }, [availableTeams, sportFilter, poolSearch, poolSort]);
 
   const myRosterTeams = (myTeam?.ownedTeamIds ?? [])
     .map(id => teamMap.get(id)).filter(Boolean) as TeamWithRecord[];
@@ -989,7 +1035,7 @@ function WaiversTab({
                     <p className="font-medium text-xs leading-snug">{t.name}</p>
                     <p className="text-xs text-copy-3 uppercase mt-0.5">{t.sportLeagueId}</p>
                     <p className="text-xs text-copy-2 mt-1">
-                      {t.wins}W{t.draws > 0 ? ` ${t.draws}D` : ''} · {t.points.toFixed(1)} pts
+                      {formatRecord(t.wins, t.draws, t.losses, t.sport)} · {t.points.toFixed(1)} pts
                     </p>
                   </button>
                 ))}
@@ -1003,14 +1049,32 @@ function WaiversTab({
               <p className="text-xs font-semibold text-copy-3 uppercase tracking-wider">
                 2. Add from available pool
               </p>
-              <select
-                value={sportFilter}
-                onChange={e => setSportFilter(e.target.value)}
-                className="bg-field border border-line-2 text-xs text-copy rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-brand transition-colors"
-              >
-                <option value="all">All sports</option>
-                {selectedSports.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
+              <div className="flex items-center gap-2 flex-wrap">
+                <select
+                  value={sportFilter}
+                  onChange={e => setSportFilter(e.target.value)}
+                  className="bg-field border border-line-2 text-xs text-copy rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-brand transition-colors"
+                >
+                  <option value="all">All sports</option>
+                  {selectedSports.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setPoolSort(s => s === 'alpha' ? 'points' : 'alpha')}
+                  className="bg-field border border-line-2 text-xs text-copy-2 rounded-lg px-2.5 py-1.5 hover:border-brand hover:text-copy transition-colors"
+                >
+                  {poolSort === 'alpha' ? 'A–Z' : 'Top Pts'}
+                </button>
+              </div>
+            </div>
+            <div className="mb-2">
+              <input
+                type="text"
+                value={poolSearch}
+                onChange={e => setPoolSearch(e.target.value)}
+                placeholder="Search teams..."
+                className="w-full bg-field border border-line-2 rounded-lg px-3 py-1.5 text-xs text-copy placeholder-copy-3 focus:outline-none focus:border-brand transition-colors"
+              />
             </div>
             {filteredAvailable.length === 0 ? (
               <div className="text-center py-6 border border-dashed border-line rounded-xl">
@@ -1034,7 +1098,7 @@ function WaiversTab({
                     <p className="font-medium text-xs leading-snug">{t.name}</p>
                     <p className="text-xs text-copy-3 uppercase mt-0.5">{t.sportLeagueId}</p>
                     <p className="text-xs text-copy-2 mt-1">
-                      {t.wins}W{t.draws > 0 ? ` ${t.draws}D` : ''} · {t.points.toFixed(1)} pts
+                      {formatRecord(t.wins, t.draws, t.losses, t.sport)} · {t.points.toFixed(1)} pts
                     </p>
                   </button>
                 ))}
