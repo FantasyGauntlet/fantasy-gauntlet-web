@@ -27,6 +27,12 @@ interface League {
 
 interface Member { id: string; userId: string; role: 'commissioner' | 'member'; joinedAt: string; }
 
+interface LeagueInvite {
+  id: string; leagueId: string; toEmail: string;
+  status: 'pending' | 'accepted' | 'declined' | 'expired' | 'cancelled';
+  createdAt: string; expiresAt: string;
+}
+
 interface FantasyTeam {
   id: string; userId: string; displayName: string;
   isPlaceholder: boolean; ownedTeamIds: string[];
@@ -338,11 +344,20 @@ function RosterTab({
   const [addingPlaceholder, setAddingPlaceholder] = useState(false);
   const [inviteEmails, setInviteEmails] = useState<Record<string, string>>({});
   const [inviteStatus, setInviteStatus] = useState<Record<string, { status: 'idle' | 'loading' | 'success' | 'error'; message: string }>>({});
+  const [invites, setInvites] = useState<LeagueInvite[]>([]);
+  const [inviteActions, setInviteActions] = useState<Record<string, 'cancelling' | 'resending' | null>>({});
 
   useEffect(() => {
     api.get<SportGroup[]>(`/leagues/${leagueId}/sport-teams`)
       .then(setSportGroups).catch(() => {}).finally(() => setLoadingTeams(false));
   }, [leagueId]);
+
+  useEffect(() => {
+    if (!isCommissioner) return;
+    api.get<LeagueInvite[]>(`/leagues/${leagueId}/invites`)
+      .then(data => setInvites(data.filter(i => i.status === 'pending')))
+      .catch(() => {});
+  }, [leagueId, isCommissioner]);
 
   const ownerMap: Record<string, FantasyTeam> = {};
   for (const ft of fantasyTeams) {
@@ -387,14 +402,35 @@ function RosterTab({
     finally { setAddingPlaceholder(false); }
   }
 
+  async function cancelInvite(inviteId: string) {
+    setInviteActions(a => ({ ...a, [inviteId]: 'cancelling' }));
+    try {
+      await api.delete(`/leagues/${leagueId}/invites/${inviteId}`);
+      setInvites(i => i.filter(x => x.id !== inviteId));
+    } catch (e: unknown) { alert(e instanceof Error ? e.message : 'Failed to cancel'); }
+    finally { setInviteActions(a => ({ ...a, [inviteId]: null })); }
+  }
+
+  async function resendInvite(inviteId: string) {
+    setInviteActions(a => ({ ...a, [inviteId]: 'resending' }));
+    try {
+      await api.post(`/leagues/${leagueId}/invites/${inviteId}/resend`);
+      setInviteActions(a => ({ ...a, [inviteId]: null }));
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Failed to resend');
+      setInviteActions(a => ({ ...a, [inviteId]: null }));
+    }
+  }
+
   async function sendInvite(fantasyTeamId: string) {
     const email = (inviteEmails[fantasyTeamId] ?? '').trim();
     if (!email) return;
     setInviteStatus(s => ({ ...s, [fantasyTeamId]: { status: 'loading', message: 'Sending...' } }));
     try {
-      await api.post(`/leagues/${leagueId}/invites`, { email });
+      const invite = await api.post<LeagueInvite>(`/leagues/${leagueId}/invites`, { email });
       setInviteStatus(s => ({ ...s, [fantasyTeamId]: { status: 'success', message: `Invite sent to ${email}` } }));
       setInviteEmails(e => ({ ...e, [fantasyTeamId]: '' }));
+      setInvites(i => [...i, invite]);
     } catch (err: unknown) {
       setInviteStatus(s => ({ ...s, [fantasyTeamId]: { status: 'error', message: err instanceof Error ? err.message : 'Failed' } }));
     }
@@ -497,6 +533,48 @@ function RosterTab({
           </div>
         ))}
       </div>
+
+      {/* Pending invites — commissioner only */}
+      {isCommissioner && invites.length > 0 && (
+        <div>
+          <h2 className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-3">
+            Pending Invites · {invites.length}
+          </h2>
+          <div className="space-y-2">
+            {invites.map(invite => {
+              const action = inviteActions[invite.id];
+              return (
+                <div key={invite.id} className="bg-card border border-line rounded-2xl px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+                  <div>
+                    <p className="text-sm font-medium text-copy">{invite.toEmail}</p>
+                    <p className="text-xs text-copy-3 mt-0.5">
+                      Sent {new Date(invite.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                      <span className="mx-1.5">·</span>
+                      Expires {new Date(invite.expiresAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                    </p>
+                  </div>
+                  <div className="flex gap-2 flex-shrink-0">
+                    <button
+                      onClick={() => resendInvite(invite.id)}
+                      disabled={!!action}
+                      className="text-xs bg-field hover:bg-field-2 border border-line text-copy-2 hover:text-copy px-3 py-1.5 rounded-lg transition-colors font-medium disabled:opacity-50"
+                    >
+                      {action === 'resending' ? 'Sending...' : 'Resend'}
+                    </button>
+                    <button
+                      onClick={() => cancelInvite(invite.id)}
+                      disabled={!!action}
+                      className="text-xs bg-danger-bg border border-danger/20 text-danger hover:bg-danger hover:text-white px-3 py-1.5 rounded-lg transition-colors font-medium disabled:opacity-50"
+                    >
+                      {action === 'cancelling' ? 'Cancelling...' : 'Cancel'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Assign teams — commissioner only */}
       {isCommissioner && (
