@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
@@ -40,6 +40,21 @@ interface TeamBreakdown { teamId: string; teamName: string; sportLeagueId: strin
 interface Standing {
   userId: string; displayName: string; rank: number;
   totalPoints: number; teamBreakdown: TeamBreakdown[]; bonusPoints: number;
+}
+
+interface WaiverClaim {
+  id: string;
+  leagueId: string;
+  claimantUserId: string;
+  claimantDisplayName: string;
+  dropTeamId: string;
+  addTeamId: string;
+  status: 'pending' | 'approved' | 'denied';
+  claimantRank: number;
+  requestedAt: string;
+  reviewedAt: string | null;
+  reviewedBy: string | null;
+  denialReason: string | null;
 }
 
 type Tab = 'standings' | 'roster' | 'waivers' | 'settings';
@@ -180,7 +195,16 @@ export default function LeaguePage() {
           selectedSports={league.selectedSports}
         />
       )}
-      {tab === 'waivers' && <WaiversTab leagueId={id} isCommissioner={isCommissioner} />}
+      {tab === 'waivers' && (
+        <WaiversTab
+          leagueId={id}
+          leagueState={league.state}
+          isCommissioner={isCommissioner}
+          userId={user?.uid}
+          fantasyTeams={fantasyTeams}
+          selectedSports={league.selectedSports}
+        />
+      )}
       {tab === 'settings' && (
         <SettingsTab league={league} setLeague={setLeague} isCommissioner={isCommissioner} leagueId={id} />
       )}
@@ -552,77 +576,447 @@ function RosterTab({
 
 // ─── Waivers Tab ──────────────────────────────────────────────────────────────
 
-function WaiversTab({ leagueId, isCommissioner }: { leagueId: string; isCommissioner: boolean }) {
-  const [claims, setClaims] = useState<Array<{
-    id: string; claimantDisplayName: string; dropTeamId: string;
-    addTeamId: string; status: string; requestedAt: string;
-  }>>([]);
+const WAIVER_STATUS_CLS: Record<string, string> = {
+  pending:  'bg-warn-bg text-warn border-warn/20',
+  approved: 'bg-positive-bg text-positive border-positive/20',
+  denied:   'bg-danger-bg text-danger border-danger/20',
+};
+
+function ClaimCard({
+  claim, isCommissioner, teamMap, reviewing, denyingId, denyReason,
+  onApprove, onStartDeny, onDenyReasonChange, onConfirmDeny, onCancelDeny,
+}: {
+  claim: WaiverClaim;
+  isCommissioner: boolean;
+  teamMap: Map<string, SportTeam>;
+  reviewing: string | null;
+  denyingId: string | null;
+  denyReason: string;
+  onApprove: (id: string) => void;
+  onStartDeny: (id: string) => void;
+  onDenyReasonChange: (v: string) => void;
+  onConfirmDeny: (id: string) => void;
+  onCancelDeny: () => void;
+}) {
+  const dropTeam = teamMap.get(claim.dropTeamId);
+  const addTeam  = teamMap.get(claim.addTeamId);
+  const isReviewing = reviewing === claim.id;
+  const isDenying   = denyingId === claim.id;
+
+  return (
+    <div className="bg-card border border-line rounded-2xl p-4">
+      <div className="flex items-start gap-3 flex-wrap">
+        <div className="flex-1 min-w-0">
+          {/* Header */}
+          <div className="flex items-center gap-2 flex-wrap mb-3">
+            <span className="font-semibold text-copy text-sm">{claim.claimantDisplayName}</span>
+            {claim.claimantRank > 0 && (
+              <span className="text-xs bg-field border border-line text-copy-3 px-2 py-0.5 rounded-full">
+                #{claim.claimantRank} in standings
+              </span>
+            )}
+            <span className={`text-xs px-2.5 py-0.5 rounded-full border font-medium ${WAIVER_STATUS_CLS[claim.status]}`}>
+              {claim.status}
+            </span>
+          </div>
+
+          {/* Team transfer */}
+          <div className="flex items-center gap-2">
+            <div className="flex-1 bg-danger-bg/40 border border-danger/15 rounded-xl px-3 py-2.5">
+              <p className="text-xs text-copy-3 mb-0.5">Drop</p>
+              <p className="font-semibold text-copy text-xs leading-snug">{dropTeam?.name ?? claim.dropTeamId}</p>
+              {dropTeam && <p className="text-xs text-copy-3 uppercase mt-0.5">{dropTeam.sportLeagueId}</p>}
+            </div>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-copy-3 flex-shrink-0">
+              <path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <div className="flex-1 bg-positive-bg/40 border border-positive/15 rounded-xl px-3 py-2.5">
+              <p className="text-xs text-copy-3 mb-0.5">Add</p>
+              <p className="font-semibold text-copy text-xs leading-snug">{addTeam?.name ?? claim.addTeamId}</p>
+              {addTeam && <p className="text-xs text-copy-3 uppercase mt-0.5">{addTeam.sportLeagueId}</p>}
+            </div>
+          </div>
+
+          {/* Meta */}
+          <div className="flex items-center gap-3 mt-2.5 flex-wrap">
+            <p className="text-xs text-copy-3">
+              {new Date(claim.requestedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+              {' · '}
+              {new Date(claim.requestedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </p>
+            {claim.reviewedAt && (
+              <p className="text-xs text-copy-3">
+                Reviewed {new Date(claim.reviewedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+              </p>
+            )}
+          </div>
+          {claim.denialReason && (
+            <p className="text-xs text-danger mt-1.5 bg-danger-bg/40 rounded-lg px-2.5 py-1.5">
+              Denied: {claim.denialReason}
+            </p>
+          )}
+        </div>
+
+        {/* Commissioner actions */}
+        {isCommissioner && claim.status === 'pending' && (
+          <div className="flex-shrink-0">
+            {!isDenying ? (
+              <div className="flex gap-2">
+                <button
+                  onClick={() => onApprove(claim.id)}
+                  disabled={isReviewing}
+                  className="text-xs bg-positive-bg border border-positive/20 text-positive hover:bg-positive hover:text-white px-3 py-1.5 rounded-lg transition-colors font-medium disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {isReviewing
+                    ? <span className="inline-block w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                    : 'Approve'}
+                </button>
+                <button
+                  onClick={() => onStartDeny(claim.id)}
+                  disabled={isReviewing}
+                  className="text-xs bg-danger-bg border border-danger/20 text-danger hover:bg-danger hover:text-white px-3 py-1.5 rounded-lg transition-colors font-medium disabled:opacity-50"
+                >
+                  Deny
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-1.5 w-52">
+                <input
+                  autoFocus
+                  value={denyReason}
+                  onChange={e => onDenyReasonChange(e.target.value)}
+                  placeholder="Denial reason (optional)"
+                  className="bg-field border border-line-2 rounded-lg px-3 py-1.5 text-xs text-copy focus:outline-none focus:border-danger transition-colors"
+                />
+                <div className="flex gap-1.5">
+                  <button
+                    onClick={() => onConfirmDeny(claim.id)}
+                    disabled={isReviewing}
+                    className="flex-1 text-xs bg-danger text-white px-3 py-1.5 rounded-lg font-medium disabled:opacity-50"
+                  >
+                    {isReviewing ? '...' : 'Confirm'}
+                  </button>
+                  <button
+                    onClick={onCancelDeny}
+                    className="flex-1 text-xs bg-field border border-line text-copy-2 px-3 py-1.5 rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function WaiversTab({
+  leagueId, leagueState, isCommissioner, userId, fantasyTeams, selectedSports,
+}: {
+  leagueId: string;
+  leagueState: string;
+  isCommissioner: boolean;
+  userId?: string;
+  fantasyTeams: FantasyTeam[];
+  selectedSports: string[];
+}) {
+  const [claims, setClaims] = useState<WaiverClaim[]>([]);
+  const [sportGroups, setSportGroups] = useState<SportGroup[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Submit form
+  const [showForm, setShowForm] = useState(false);
+  const [dropTeamId, setDropTeamId] = useState('');
+  const [addTeamId, setAddTeamId] = useState('');
+  const [sportFilter, setSportFilter] = useState('all');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+  const [submitSuccess, setSubmitSuccess] = useState('');
+
+  // Inline deny state
+  const [denyingId, setDenyingId] = useState<string | null>(null);
+  const [denyReason, setDenyReason] = useState('');
+  const [reviewing, setReviewing] = useState<string | null>(null);
+
   useEffect(() => {
-    api.get<typeof claims>(`/leagues/${leagueId}/waivers`)
-      .then(setClaims).catch(() => {}).finally(() => setLoading(false));
+    Promise.all([
+      api.get<WaiverClaim[]>(`/leagues/${leagueId}/waivers`),
+      api.get<SportGroup[]>(`/leagues/${leagueId}/sport-teams`),
+    ]).then(([c, sg]) => { setClaims(c); setSportGroups(sg); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, [leagueId]);
 
+  const teamMap = useMemo(() => {
+    const m = new Map<string, SportTeam>();
+    for (const g of sportGroups) for (const t of g.teams) m.set(t.id, t);
+    return m;
+  }, [sportGroups]);
+
+  const allOwnedIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const ft of fantasyTeams) for (const id of ft.ownedTeamIds) s.add(id);
+    return s;
+  }, [fantasyTeams]);
+
+  const myTeam = fantasyTeams.find(ft => ft.userId === userId && !ft.isPlaceholder);
+
+  const availableTeams = useMemo(
+    () => sportGroups.flatMap(g => g.teams).filter(t => !allOwnedIds.has(t.id)),
+    [sportGroups, allOwnedIds],
+  );
+
+  const filteredAvailable = sportFilter === 'all'
+    ? availableTeams
+    : availableTeams.filter(t => t.sportLeagueId === sportFilter);
+
+  const myRosterTeams = (myTeam?.ownedTeamIds ?? [])
+    .map(id => teamMap.get(id)).filter(Boolean) as SportTeam[];
+
+  const pending = claims.filter(c => c.status === 'pending');
+  const history = claims.filter(c => c.status !== 'pending');
+  const canSubmit = leagueState === 'active' && !isCommissioner && !!myTeam;
+
+  function closeForm() {
+    setShowForm(false); setDropTeamId(''); setAddTeamId(''); setSubmitError('');
+  }
+
+  async function submitClaim() {
+    if (!dropTeamId || !addTeamId) return;
+    setSubmitting(true); setSubmitError('');
+    try {
+      const claim = await api.post<WaiverClaim>(`/leagues/${leagueId}/waivers`, { dropTeamId, addTeamId });
+      setClaims(c => [claim, ...c]);
+      closeForm();
+      setSubmitSuccess('Claim submitted.');
+      setTimeout(() => setSubmitSuccess(''), 4000);
+    } catch (e: unknown) {
+      setSubmitError(e instanceof Error ? e.message : 'Failed to submit claim');
+    } finally { setSubmitting(false); }
+  }
+
   async function approve(claimId: string) {
-    await api.patch(`/leagues/${leagueId}/waivers/${claimId}/approve`);
-    setClaims(c => c.map(x => x.id === claimId ? { ...x, status: 'approved' } : x));
+    setReviewing(claimId);
+    try {
+      await api.patch(`/leagues/${leagueId}/waivers/${claimId}/approve`);
+      setClaims(c => c.map(x => x.id === claimId
+        ? { ...x, status: 'approved' as const, reviewedAt: new Date().toISOString() } : x));
+    } catch (e: unknown) { alert(e instanceof Error ? e.message : 'Failed to approve'); }
+    finally { setReviewing(null); }
   }
 
   async function deny(claimId: string) {
-    const reason = prompt('Reason for denial (optional):') ?? '';
-    await api.patch(`/leagues/${leagueId}/waivers/${claimId}/deny`, { reason });
-    setClaims(c => c.map(x => x.id === claimId ? { ...x, status: 'denied' } : x));
+    setReviewing(claimId);
+    try {
+      await api.patch(`/leagues/${leagueId}/waivers/${claimId}/deny`, { reason: denyReason || undefined });
+      setClaims(c => c.map(x => x.id === claimId
+        ? { ...x, status: 'denied' as const, reviewedAt: new Date().toISOString(), denialReason: denyReason || null } : x));
+      setDenyingId(null); setDenyReason('');
+    } catch (e: unknown) { alert(e instanceof Error ? e.message : 'Failed to deny'); }
+    finally { setReviewing(null); }
   }
 
   if (loading) return <div className="flex justify-center py-12"><Spinner /></div>;
 
-  if (claims.length === 0) {
-    return (
-      <div className="text-center py-16 border border-dashed border-line rounded-2xl">
-        <p className="text-copy-3 text-sm">No waiver claims yet.</p>
-      </div>
-    );
-  }
-
-  const statusCls: Record<string, string> = {
-    pending:  'bg-warn-bg text-warn border-warn/20',
-    approved: 'bg-positive-bg text-positive border-positive/20',
-    denied:   'bg-danger-bg text-danger border-danger/20',
+  const claimCardProps = {
+    isCommissioner, teamMap, reviewing, denyingId, denyReason,
+    onApprove: approve,
+    onStartDeny: (id: string) => { setDenyingId(id); setDenyReason(''); },
+    onDenyReasonChange: setDenyReason,
+    onConfirmDeny: deny,
+    onCancelDeny: () => setDenyingId(null),
   };
 
   return (
-    <div className="space-y-2">
-      {claims.map(c => (
-        <div key={c.id} className="bg-card border border-line rounded-2xl p-4 flex items-center justify-between gap-4">
-          <div>
-            <p className="font-semibold text-copy text-sm">{c.claimantDisplayName}</p>
-            <p className="text-copy-3 text-xs mt-0.5">Drop {c.dropTeamId} → Add {c.addTeamId}</p>
-            <p className="text-copy-3 text-xs mt-1">{new Date(c.requestedAt).toLocaleDateString()}</p>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <h2 className="text-sm font-semibold text-copy">Waiver Claims</h2>
+          {leagueState !== 'active' && (
+            <p className="text-xs text-copy-3 mt-0.5">
+              Claims can only be submitted during an active league.
+            </p>
+          )}
+        </div>
+        {canSubmit && !showForm && (
+          <button
+            onClick={() => setShowForm(true)}
+            className="bg-brand hover:bg-brand-2 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors"
+          >
+            + Submit Claim
+          </button>
+        )}
+      </div>
+
+      {submitSuccess && (
+        <div className="bg-positive-bg border border-positive/20 rounded-xl px-4 py-3">
+          <p className="text-positive text-sm">{submitSuccess}</p>
+        </div>
+      )}
+
+      {/* Submit form */}
+      {showForm && canSubmit && (
+        <div className="bg-card border border-line rounded-2xl p-5 space-y-5">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-copy">New Waiver Claim</h3>
+            <button onClick={closeForm} className="text-copy-3 hover:text-copy transition-colors p-1">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" />
+              </svg>
+            </button>
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <span className={`text-xs px-2.5 py-1 rounded-full border font-medium ${statusCls[c.status] ?? statusCls.denied}`}>
-              {c.status}
-            </span>
-            {isCommissioner && c.status === 'pending' && (
-              <>
-                <button
-                  onClick={() => approve(c.id)}
-                  className="text-xs bg-positive-bg border border-positive/20 text-positive hover:bg-positive hover:text-white px-3 py-1.5 rounded-lg transition-colors font-medium"
-                >
-                  Approve
-                </button>
-                <button
-                  onClick={() => deny(c.id)}
-                  className="text-xs bg-danger-bg border border-danger/20 text-danger hover:bg-danger hover:text-white px-3 py-1.5 rounded-lg transition-colors font-medium"
-                >
-                  Deny
-                </button>
-              </>
+
+          {/* Step 1: Drop */}
+          <div>
+            <p className="text-xs font-semibold text-copy-3 uppercase tracking-wider mb-2">
+              1. Drop from your roster
+            </p>
+            {myRosterTeams.length === 0 ? (
+              <p className="text-copy-3 text-xs py-2">You have no teams to drop.</p>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                {myRosterTeams.map(t => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setDropTeamId(dropTeamId === t.id ? '' : t.id)}
+                    className={`text-left px-3 py-2.5 rounded-xl border transition-all ${
+                      dropTeamId === t.id
+                        ? 'bg-danger-bg border-danger/40 text-copy'
+                        : 'bg-field border-line text-copy-2 hover:border-line-2 hover:text-copy'
+                    }`}
+                  >
+                    <p className="font-medium text-xs leading-snug">{t.name}</p>
+                    <p className="text-xs text-copy-3 uppercase mt-0.5">{t.sportLeagueId}</p>
+                  </button>
+                ))}
+              </div>
             )}
           </div>
+
+          {/* Step 2: Add */}
+          <div>
+            <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+              <p className="text-xs font-semibold text-copy-3 uppercase tracking-wider">
+                2. Add from available pool
+              </p>
+              <select
+                value={sportFilter}
+                onChange={e => setSportFilter(e.target.value)}
+                className="bg-field border border-line-2 text-xs text-copy rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-brand transition-colors"
+              >
+                <option value="all">All sports</option>
+                {selectedSports.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            {filteredAvailable.length === 0 ? (
+              <div className="text-center py-6 border border-dashed border-line rounded-xl">
+                <p className="text-copy-3 text-xs">
+                  No available teams{sportFilter !== 'all' ? ` in ${sportFilter}` : ''}.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-56 overflow-y-auto pr-0.5">
+                {filteredAvailable.map(t => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setAddTeamId(addTeamId === t.id ? '' : t.id)}
+                    className={`text-left px-3 py-2.5 rounded-xl border transition-all ${
+                      addTeamId === t.id
+                        ? 'bg-brand-dim border-brand/40 text-copy'
+                        : 'bg-field border-line text-copy-2 hover:border-line-2 hover:text-copy'
+                    }`}
+                  >
+                    <p className="font-medium text-xs leading-snug">{t.name}</p>
+                    <p className="text-xs text-copy-3 uppercase mt-0.5">{t.sportLeagueId}</p>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Summary pill */}
+          {(dropTeamId || addTeamId) && (
+            <div className="bg-field rounded-xl px-4 py-2.5 text-xs flex items-center gap-2">
+              <span className={dropTeamId ? 'text-danger font-medium' : 'text-copy-3'}>
+                {dropTeamId ? (teamMap.get(dropTeamId)?.name ?? dropTeamId) : 'Pick a team to drop'}
+              </span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-copy-3 flex-shrink-0">
+                <path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <span className={addTeamId ? 'text-brand font-medium' : 'text-copy-3'}>
+                {addTeamId ? (teamMap.get(addTeamId)?.name ?? addTeamId) : 'Pick a team to add'}
+              </span>
+            </div>
+          )}
+
+          {submitError && (
+            <div className="bg-danger-bg border border-danger/20 rounded-xl px-4 py-2.5">
+              <p className="text-danger text-xs">{submitError}</p>
+            </div>
+          )}
+
+          <div className="flex gap-2">
+            <button
+              onClick={closeForm}
+              className="flex-1 bg-field hover:bg-field-2 border border-line text-copy-2 text-sm font-medium py-2.5 rounded-xl transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={submitClaim}
+              disabled={!dropTeamId || !addTeamId || submitting}
+              className="flex-1 bg-brand hover:bg-brand-2 disabled:opacity-40 text-white text-sm font-semibold py-2.5 rounded-xl transition-colors"
+            >
+              {submitting ? 'Submitting...' : 'Submit Claim'}
+            </button>
+          </div>
         </div>
-      ))}
+      )}
+
+      {/* Pending */}
+      {pending.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-2">
+            Pending · {pending.length}
+          </p>
+          <div className="space-y-2">
+            {pending.map(c => <ClaimCard key={c.id} claim={c} {...claimCardProps} />)}
+          </div>
+        </div>
+      )}
+
+      {/* History */}
+      {history.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-2">History</p>
+          <div className="space-y-2">
+            {history.map(c => <ClaimCard key={c.id} claim={c} {...claimCardProps} />)}
+          </div>
+        </div>
+      )}
+
+      {/* Empty state */}
+      {claims.length === 0 && !showForm && (
+        <div className="text-center py-16 border border-dashed border-line rounded-2xl">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-copy-3 mx-auto mb-3">
+            <path d="M8 7h12M8 12h12M8 17h12M4 7h.01M4 12h.01M4 17h.01" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <p className="text-copy-3 text-sm">No waiver claims yet.</p>
+          {canSubmit && (
+            <button
+              onClick={() => setShowForm(true)}
+              className="mt-3 text-brand text-sm hover:text-brand-2 transition-colors font-medium"
+            >
+              Submit the first claim →
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
