@@ -198,7 +198,6 @@ export default function LeaguePage() {
       {tab === 'waivers' && (
         <WaiversTab
           leagueId={id}
-          leagueState={league.state}
           isCommissioner={isCommissioner}
           userId={user?.uid}
           fantasyTeams={fantasyTeams}
@@ -713,10 +712,9 @@ function ClaimCard({
 }
 
 function WaiversTab({
-  leagueId, leagueState, isCommissioner, userId, fantasyTeams, selectedSports,
+  leagueId, isCommissioner, userId, fantasyTeams, selectedSports,
 }: {
   leagueId: string;
-  leagueState: string;
   isCommissioner: boolean;
   userId?: string;
   fantasyTeams: FantasyTeam[];
@@ -777,7 +775,7 @@ function WaiversTab({
 
   const pending = claims.filter(c => c.status === 'pending');
   const history = claims.filter(c => c.status !== 'pending');
-  const canSubmit = leagueState === 'active' && !isCommissioner && !!myTeam;
+  const canSubmit = !isCommissioner && !!myTeam;
 
   function closeForm() {
     setShowForm(false); setDropTeamId(''); setAddTeamId(''); setSubmitError('');
@@ -835,11 +833,6 @@ function WaiversTab({
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h2 className="text-sm font-semibold text-copy">Waiver Claims</h2>
-          {leagueState !== 'active' && (
-            <p className="text-xs text-copy-3 mt-0.5">
-              Claims can only be submitted during an active league.
-            </p>
-          )}
         </div>
         {canSubmit && !showForm && (
           <button
