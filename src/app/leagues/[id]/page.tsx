@@ -775,7 +775,7 @@ function WaiversTab({
 
   const pending = claims.filter(c => c.status === 'pending');
   const history = claims.filter(c => c.status !== 'pending');
-  const canSubmit = !isCommissioner && !!myTeam;
+  const canSubmit = !!myTeam;
 
   function closeForm() {
     setShowForm(false); setDropTeamId(''); setAddTeamId(''); setSubmitError('');
