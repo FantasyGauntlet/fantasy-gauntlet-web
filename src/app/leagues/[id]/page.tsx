@@ -245,6 +245,7 @@ function StandingsTab({ leagueId, userId }: { leagueId: string; userId?: string 
   const [standings, setStandings] = useState<Standing[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [expandedTeam, setExpandedTeam] = useState<string | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -305,44 +306,58 @@ function StandingsTab({ leagueId, userId }: { leagueId: string; userId?: string 
                     <span className="text-sm text-positive">{s.bonusPoints > 0 ? `+${s.bonusPoints.toFixed(1)}` : '—'}</span>
                   </td>
                 </tr>
-                {isExpanded && (s.teamBreakdown.length > 0 || s.bonusBreakdown?.length > 0) && (
+                {isExpanded && s.teamBreakdown.length > 0 && (
                   <tr key={`${s.userId}-bd`} className="border-b border-line/50 bg-field/20">
                     <td colSpan={5} className="px-6 py-4 space-y-3">
-                      {/* Team-by-team regular season breakdown */}
-                      {s.teamBreakdown.length > 0 && (
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                          {[...s.teamBreakdown].sort((a, b) => a.teamName.localeCompare(b.teamName)).map(t => (
-                            <div key={t.teamId} className="flex items-center justify-between bg-card border border-line rounded-lg px-3 py-2">
-                              <div>
-                                <p className="text-xs font-medium text-copy">{t.teamName}</p>
-                                <p className="text-xs text-copy-3 uppercase mt-0.5">{t.sportLeagueId}</p>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                        {[...s.teamBreakdown].sort((a, b) => a.teamName.localeCompare(b.teamName)).map(t => {
+                          const teamBonuses = s.bonusBreakdown?.filter(b => b.teamId === t.teamId) ?? [];
+                          const teamBonusTotal = teamBonuses.reduce((sum, b) => sum + b.points, 0);
+                          const teamTotal = t.points + teamBonusTotal;
+                          const teamKey = `${s.userId}_${t.teamId}`;
+                          const isTeamExpanded = expandedTeam === teamKey;
+                          const hasBonus = teamBonuses.length > 0;
+                          return (
+                            <div
+                              key={t.teamId}
+                              onClick={() => hasBonus && setExpandedTeam(isTeamExpanded ? null : teamKey)}
+                              className={`bg-card border rounded-lg overflow-hidden transition-colors ${
+                                hasBonus ? 'border-positive/30 cursor-pointer hover:border-positive/60' : 'border-line'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between px-3 py-2">
+                                <div className="min-w-0 flex-1 mr-2">
+                                  <div className="flex items-center gap-1.5">
+                                    <p className="text-xs font-medium text-copy truncate">{t.teamName}</p>
+                                    {hasBonus && <span className="text-positive text-xs flex-shrink-0">★</span>}
+                                  </div>
+                                  <p className="text-xs text-copy-3 uppercase mt-0.5">{t.sportLeagueId}</p>
+                                </div>
+                                <div className="text-right flex-shrink-0">
+                                  <p className="text-xs font-semibold text-copy">{teamTotal.toFixed(1)}</p>
+                                  <p className="text-xs text-copy-3">{formatRecord(t.wins, t.draws, t.losses, t.sport)}</p>
+                                </div>
                               </div>
-                              <div className="text-right">
-                                <p className="text-xs font-semibold text-copy">{t.points.toFixed(1)}</p>
-                                <p className="text-xs text-copy-3">{formatRecord(t.wins, t.draws, t.losses, t.sport)}</p>
-                              </div>
+                              {isTeamExpanded && (
+                                <div className="border-t border-line/50 bg-field/40 px-3 py-2 space-y-1">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-xs text-copy-3">Season</span>
+                                    <span className="text-xs text-copy">{t.points.toFixed(1)}</span>
+                                  </div>
+                                  {teamBonuses.map((b, i) => (
+                                    <div key={i} className="flex items-center justify-between">
+                                      <span className="text-xs text-positive">{b.label}</span>
+                                      <span className="text-xs font-semibold text-positive">+{b.points.toFixed(1)}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
                             </div>
-                          ))}
-                        </div>
-                      )}
-                      {/* Bonus awards */}
-                      {s.bonusBreakdown?.length > 0 && (
-                        <div className="space-y-1.5">
-                          <p className="text-xs font-semibold text-copy-3 uppercase tracking-wider">Bonus Awards</p>
-                          {s.bonusBreakdown.map((b, i) => (
-                            <div key={i} className="flex items-center justify-between bg-positive-bg/40 border border-positive/20 rounded-lg px-3 py-2">
-                              <div>
-                                <p className="text-xs font-medium text-copy">{b.label}</p>
-                                <p className="text-xs text-copy-3 mt-0.5">{b.teamName}</p>
-                              </div>
-                              <p className="text-xs font-semibold text-positive">+{b.points.toFixed(1)}</p>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      {/* Points summary */}
+                          );
+                        })}
+                      </div>
                       <div className="flex items-center gap-4 text-xs text-copy-3 pt-1 border-t border-line/50">
-                        <span>Regular: <span className="text-copy font-medium">{(s.totalPoints - s.bonusPoints).toFixed(1)}</span></span>
+                        <span>Season: <span className="text-copy font-medium">{(s.totalPoints - s.bonusPoints).toFixed(1)}</span></span>
                         {s.bonusPoints > 0 && <span>Bonus: <span className="text-positive font-medium">+{s.bonusPoints.toFixed(1)}</span></span>}
                         <span>Total: <span className="text-copy font-semibold">{s.totalPoints.toFixed(1)}</span></span>
                       </div>
