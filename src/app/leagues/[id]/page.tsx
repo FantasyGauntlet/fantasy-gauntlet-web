@@ -42,6 +42,18 @@ interface Standing {
   totalPoints: number; teamBreakdown: TeamBreakdown[]; bonusPoints: number;
 }
 
+interface TeamWithRecord {
+  id: string;
+  name: string;
+  shortName: string;
+  sportLeagueId: string;
+  logoUrl: string | null;
+  wins: number;
+  draws: number;
+  losses: number;
+  points: number;
+}
+
 interface WaiverClaim {
   id: string;
   leagueId: string;
@@ -587,7 +599,7 @@ function ClaimCard({
 }: {
   claim: WaiverClaim;
   isCommissioner: boolean;
-  teamMap: Map<string, SportTeam>;
+  teamMap: Map<string, TeamWithRecord>;
   reviewing: string | null;
   denyingId: string | null;
   denyReason: string;
@@ -624,7 +636,14 @@ function ClaimCard({
             <div className="flex-1 bg-danger-bg/40 border border-danger/15 rounded-xl px-3 py-2.5">
               <p className="text-xs text-copy-3 mb-0.5">Drop</p>
               <p className="font-semibold text-copy text-xs leading-snug">{dropTeam?.name ?? claim.dropTeamId}</p>
-              {dropTeam && <p className="text-xs text-copy-3 uppercase mt-0.5">{dropTeam.sportLeagueId}</p>}
+              {dropTeam && (
+                <>
+                  <p className="text-xs text-copy-3 uppercase mt-0.5">{dropTeam.sportLeagueId}</p>
+                  <p className="text-xs text-copy-2 mt-0.5">
+                    {dropTeam.wins}W{dropTeam.draws > 0 ? ` ${dropTeam.draws}D` : ''} · {dropTeam.points.toFixed(1)} pts
+                  </p>
+                </>
+              )}
             </div>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-copy-3 flex-shrink-0">
               <path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
@@ -632,7 +651,14 @@ function ClaimCard({
             <div className="flex-1 bg-positive-bg/40 border border-positive/15 rounded-xl px-3 py-2.5">
               <p className="text-xs text-copy-3 mb-0.5">Add</p>
               <p className="font-semibold text-copy text-xs leading-snug">{addTeam?.name ?? claim.addTeamId}</p>
-              {addTeam && <p className="text-xs text-copy-3 uppercase mt-0.5">{addTeam.sportLeagueId}</p>}
+              {addTeam && (
+                <>
+                  <p className="text-xs text-copy-3 uppercase mt-0.5">{addTeam.sportLeagueId}</p>
+                  <p className="text-xs text-copy-2 mt-0.5">
+                    {addTeam.wins}W{addTeam.draws > 0 ? ` ${addTeam.draws}D` : ''} · {addTeam.points.toFixed(1)} pts
+                  </p>
+                </>
+              )}
             </div>
           </div>
 
@@ -721,7 +747,7 @@ function WaiversTab({
   selectedSports: string[];
 }) {
   const [claims, setClaims] = useState<WaiverClaim[]>([]);
-  const [sportGroups, setSportGroups] = useState<SportGroup[]>([]);
+  const [pool, setPool] = useState<TeamWithRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Submit form
@@ -741,17 +767,17 @@ function WaiversTab({
   useEffect(() => {
     Promise.all([
       api.get<WaiverClaim[]>(`/leagues/${leagueId}/waivers`),
-      api.get<SportGroup[]>(`/leagues/${leagueId}/sport-teams`),
-    ]).then(([c, sg]) => { setClaims(c); setSportGroups(sg); })
+      api.get<TeamWithRecord[]>(`/leagues/${leagueId}/waiver-pool`),
+    ]).then(([c, p]) => { setClaims(c); setPool(p); })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [leagueId]);
 
   const teamMap = useMemo(() => {
-    const m = new Map<string, SportTeam>();
-    for (const g of sportGroups) for (const t of g.teams) m.set(t.id, t);
+    const m = new Map<string, TeamWithRecord>();
+    for (const t of pool) m.set(t.id, t);
     return m;
-  }, [sportGroups]);
+  }, [pool]);
 
   const allOwnedIds = useMemo(() => {
     const s = new Set<string>();
@@ -762,8 +788,8 @@ function WaiversTab({
   const myTeam = fantasyTeams.find(ft => ft.userId === userId && !ft.isPlaceholder);
 
   const availableTeams = useMemo(
-    () => sportGroups.flatMap(g => g.teams).filter(t => !allOwnedIds.has(t.id)),
-    [sportGroups, allOwnedIds],
+    () => pool.filter(t => !allOwnedIds.has(t.id)),
+    [pool, allOwnedIds],
   );
 
   const filteredAvailable = sportFilter === 'all'
@@ -771,7 +797,7 @@ function WaiversTab({
     : availableTeams.filter(t => t.sportLeagueId === sportFilter);
 
   const myRosterTeams = (myTeam?.ownedTeamIds ?? [])
-    .map(id => teamMap.get(id)).filter(Boolean) as SportTeam[];
+    .map(id => teamMap.get(id)).filter(Boolean) as TeamWithRecord[];
 
   const pending = claims.filter(c => c.status === 'pending');
   const history = claims.filter(c => c.status !== 'pending');
@@ -884,6 +910,9 @@ function WaiversTab({
                   >
                     <p className="font-medium text-xs leading-snug">{t.name}</p>
                     <p className="text-xs text-copy-3 uppercase mt-0.5">{t.sportLeagueId}</p>
+                    <p className="text-xs text-copy-2 mt-1">
+                      {t.wins}W{t.draws > 0 ? ` ${t.draws}D` : ''} · {t.points.toFixed(1)} pts
+                    </p>
                   </button>
                 ))}
               </div>
@@ -926,6 +955,9 @@ function WaiversTab({
                   >
                     <p className="font-medium text-xs leading-snug">{t.name}</p>
                     <p className="text-xs text-copy-3 uppercase mt-0.5">{t.sportLeagueId}</p>
+                    <p className="text-xs text-copy-2 mt-1">
+                      {t.wins}W{t.draws > 0 ? ` ${t.draws}D` : ''} · {t.points.toFixed(1)} pts
+                    </p>
                   </button>
                 ))}
               </div>
