@@ -88,6 +88,16 @@ const STATE_META: Record<string, { label: string; cls: string }> = {
   cancelled: { label: 'Cancelled', cls: 'bg-danger-bg text-danger border-danger/20' },
 };
 
+const LEAGUE_ACRONYMS = new Set(['nhl', 'nba', 'nfl', 'mlb', 'ucl', 'ncaa', 'mls', 'fifa', 'ufc']);
+
+function formatLeagueName(id: string): string {
+  return id.split('-').map(word =>
+    LEAGUE_ACRONYMS.has(word.toLowerCase())
+      ? word.toUpperCase()
+      : word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+  ).join(' ');
+}
+
 function formatRecord(wins: number, draws: number, losses: number, sport: string): string {
   if (sport === 'soccer') return `${wins}W ${draws}D ${losses}L`;
   const parts = [`${wins}W`, `${losses}L`];
@@ -190,7 +200,7 @@ export default function LeaguePage() {
         {/* Sport tags */}
         <div className="flex gap-1.5 flex-wrap">
           {league.selectedSports.map(s => (
-            <span key={s} className="text-xs bg-field border border-line text-copy-3 px-2.5 py-0.5 rounded-lg">{s}</span>
+            <span key={s} className="text-xs bg-field border border-line text-copy-3 px-2.5 py-0.5 rounded-lg">{formatLeagueName(s)}</span>
           ))}
         </div>
       </div>
@@ -331,7 +341,7 @@ function StandingsTab({ leagueId, userId }: { leagueId: string; userId?: string 
                                     <p className="text-xs font-medium text-copy truncate">{t.teamName}</p>
                                     {hasBonus && <span className="text-positive text-xs flex-shrink-0">★</span>}
                                   </div>
-                                  <p className="text-xs text-copy-3 uppercase mt-0.5">{t.sportLeagueId}</p>
+                                  <p className="text-xs text-copy-3 mt-0.5">{formatLeagueName(t.sportLeagueId)}</p>
                                 </div>
                                 <div className="text-right flex-shrink-0">
                                   <p className="text-xs font-semibold text-copy">{teamTotal.toFixed(1)}</p>
@@ -539,7 +549,7 @@ function RosterTab({
                   <div key={t.id} className="flex items-center justify-between bg-field rounded-lg px-3 py-2">
                     <div>
                       <p className="text-xs font-medium text-copy">{t.name}</p>
-                      <p className="text-xs text-copy-3 uppercase">{t.sportLeagueId}</p>
+                      <p className="text-xs text-copy-3">{formatLeagueName(t.sportLeagueId)}</p>
                     </div>
                     {isCommissioner && (
                       <button
@@ -768,7 +778,7 @@ function ClaimCard({
               <p className="font-semibold text-copy text-xs leading-snug">{dropTeam?.name ?? claim.dropTeamId}</p>
               {dropTeam && (
                 <>
-                  <p className="text-xs text-copy-3 uppercase mt-0.5">{dropTeam.sportLeagueId}</p>
+                  <p className="text-xs text-copy-3 mt-0.5">{formatLeagueName(dropTeam.sportLeagueId)}</p>
                   <p className="text-xs text-copy-2 mt-0.5">
                     {formatRecord(dropTeam.wins, dropTeam.draws, dropTeam.losses, dropTeam.sport)} · {dropTeam.points.toFixed(1)} pts
                   </p>
@@ -783,7 +793,7 @@ function ClaimCard({
               <p className="font-semibold text-copy text-xs leading-snug">{addTeam?.name ?? claim.addTeamId}</p>
               {addTeam && (
                 <>
-                  <p className="text-xs text-copy-3 uppercase mt-0.5">{addTeam.sportLeagueId}</p>
+                  <p className="text-xs text-copy-3 mt-0.5">{formatLeagueName(addTeam.sportLeagueId)}</p>
                   <p className="text-xs text-copy-2 mt-0.5">
                     {formatRecord(addTeam.wins, addTeam.draws, addTeam.losses, addTeam.sport)} · {addTeam.points.toFixed(1)} pts
                   </p>
@@ -1048,7 +1058,7 @@ function WaiversTab({
                     }`}
                   >
                     <p className="font-medium text-xs leading-snug">{t.name}</p>
-                    <p className="text-xs text-copy-3 uppercase mt-0.5">{t.sportLeagueId}</p>
+                    <p className="text-xs text-copy-3 mt-0.5">{formatLeagueName(t.sportLeagueId)}</p>
                     <p className="text-xs text-copy-2 mt-1">
                       {formatRecord(t.wins, t.draws, t.losses, t.sport)} · {t.points.toFixed(1)} pts
                     </p>
@@ -1071,7 +1081,7 @@ function WaiversTab({
                   className="bg-field border border-line-2 text-xs text-copy rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-brand transition-colors"
                 >
                   <option value="all">All sports</option>
-                  {selectedSports.map(s => <option key={s} value={s}>{s}</option>)}
+                  {selectedSports.map(s => <option key={s} value={s}>{formatLeagueName(s)}</option>)}
                 </select>
                 <button
                   type="button"
@@ -1111,7 +1121,7 @@ function WaiversTab({
                     }`}
                   >
                     <p className="font-medium text-xs leading-snug">{t.name}</p>
-                    <p className="text-xs text-copy-3 uppercase mt-0.5">{t.sportLeagueId}</p>
+                    <p className="text-xs text-copy-3 mt-0.5">{formatLeagueName(t.sportLeagueId)}</p>
                     <p className="text-xs text-copy-2 mt-1">
                       {formatRecord(t.wins, t.draws, t.losses, t.sport)} · {t.points.toFixed(1)} pts
                     </p>
