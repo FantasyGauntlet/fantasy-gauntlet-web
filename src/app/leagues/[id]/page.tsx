@@ -1286,6 +1286,7 @@ function SettingsTab({
   isCommissioner: boolean;
   leagueId: string;
 }) {
+  const router = useRouter();
   const [auctionForm, setAuctionForm] = useState({
     startingBudget:   league.auctionConfig?.startingBudget   ?? 100,
     minOpeningBid:    league.auctionConfig?.minOpeningBid    ?? 1,
@@ -1295,6 +1296,9 @@ function SettingsTab({
   });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteInput, setDeleteInput] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   const inputCls = 'w-full bg-field border border-line-2 rounded-xl px-4 py-2.5 text-copy text-sm focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors';
 
@@ -1313,8 +1317,68 @@ function SettingsTab({
     }
   }
 
+  async function handleDeleteLeague() {
+    if (deleteInput !== 'delete') return;
+    setDeleting(true);
+    try {
+      await api.delete(`/leagues/${leagueId}`);
+      router.replace('/leagues');
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Failed to delete league');
+      setDeleting(false);
+    }
+  }
+
   return (
     <div className="space-y-4 max-w-xl">
+      {/* Delete modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-card border border-line rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-9 h-9 rounded-xl bg-danger/10 flex items-center justify-center flex-shrink-0">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-danger">
+                  <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="font-semibold text-copy">Delete League</h3>
+                <p className="text-xs text-copy-3">This cannot be undone</p>
+              </div>
+            </div>
+            <p className="text-sm text-copy-2 mb-4">
+              This will permanently delete <span className="font-semibold text-copy">{league.name}</span> along with all members, rosters, and auction data.
+            </p>
+            <label className="block text-xs font-medium text-copy-2 mb-1.5">
+              Type <span className="font-mono font-bold text-danger">delete</span> to confirm
+            </label>
+            <input
+              value={deleteInput}
+              onChange={e => setDeleteInput(e.target.value)}
+              placeholder="delete"
+              className="w-full bg-field border border-line-2 rounded-xl px-4 py-2.5 text-copy text-sm placeholder-copy-3 focus:outline-none focus:border-danger focus:ring-1 focus:ring-danger transition-colors mb-4"
+              onKeyDown={e => e.key === 'Enter' && deleteInput === 'delete' && handleDeleteLeague()}
+              autoFocus
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setShowDeleteModal(false); setDeleteInput(''); }}
+                className="flex-1 bg-field hover:bg-field-2 border border-line text-copy-2 font-medium py-2.5 rounded-xl transition-colors text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteLeague}
+                disabled={deleteInput !== 'delete' || deleting}
+                className="flex-1 bg-danger hover:bg-danger/80 disabled:opacity-40 text-white font-semibold py-2.5 rounded-xl transition-colors text-sm"
+              >
+                {deleting ? 'Deleting…' : 'Delete League'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* League info */}
       <div className="bg-card border border-line rounded-2xl p-5">
         <h2 className="text-sm font-semibold text-copy mb-4">League Info</h2>
@@ -1419,6 +1483,26 @@ function SettingsTab({
               {saving ? 'Saving...' : saved ? '✓ Saved' : 'Save Auction Settings'}
             </button>
           </form>
+        </div>
+      )}
+
+      {/* Danger Zone */}
+      {isCommissioner && (
+        <div className="bg-card border border-danger/20 rounded-2xl p-5">
+          <h2 className="text-sm font-semibold text-danger mb-1">Danger Zone</h2>
+          <p className="text-xs text-copy-3 mb-4">Destructive actions that cannot be reversed.</p>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium text-copy">Delete this league</p>
+              <p className="text-xs text-copy-3 mt-0.5">Permanently removes all members, rosters, and data.</p>
+            </div>
+            <button
+              onClick={() => setShowDeleteModal(true)}
+              className="flex-shrink-0 bg-danger/10 hover:bg-danger/20 border border-danger/30 text-danger text-sm font-semibold px-4 py-2 rounded-xl transition-colors whitespace-nowrap"
+            >
+              Delete League
+            </button>
+          </div>
         </div>
       )}
     </div>

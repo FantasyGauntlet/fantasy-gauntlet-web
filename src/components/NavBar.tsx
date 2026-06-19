@@ -50,11 +50,7 @@ export default function NavBar() {
         {/* Brand */}
         <div className="flex items-center gap-6">
           <Link href="/dashboard" className="flex items-center gap-2 group">
-            <div className="w-7 h-7 rounded-lg bg-brand flex items-center justify-center">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
-                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-              </svg>
-            </div>
+            <img src="/logo.png" alt="Fantasy Gauntlet" className="w-7 h-7 rounded-lg object-contain" />
             <span className="font-bold text-sm text-copy group-hover:text-brand transition-colors">
               Fantasy Gauntlet
             </span>
