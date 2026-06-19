@@ -1102,7 +1102,29 @@ function SettingsTab({
           ))}
         </div>
         {isCommissioner && (
-          <p className="text-xs text-brand mt-4 pt-3 border-t border-line">You are the commissioner of this league.</p>
+          <div className="mt-4 pt-3 border-t border-line space-y-3">
+            <p className="text-xs text-brand">You are the commissioner of this league.</p>
+            {league.state === 'draft' && (
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-medium text-copy">Skip auction &amp; go live</p>
+                  <p className="text-xs text-copy-3 mt-0.5">Transition directly to active without running an auction.</p>
+                </div>
+                <button
+                  onClick={async () => {
+                    if (!confirm('Set league to active? This skips the auction and cannot be undone.')) return;
+                    try {
+                      const updated = await api.patch<League>(`/leagues/${leagueId}/state`, { state: 'active' });
+                      setLeague(updated);
+                    } catch (e: unknown) { alert(e instanceof Error ? e.message : 'Failed'); }
+                  }}
+                  className="flex-shrink-0 bg-brand hover:bg-brand-2 text-white text-xs font-semibold px-3 py-2 rounded-xl transition-colors whitespace-nowrap"
+                >
+                  Set Active
+                </button>
+              </div>
+            )}
+          </div>
         )}
       </div>
 
