@@ -408,10 +408,12 @@ function RosterTab({
   const [invites, setInvites] = useState<LeagueInvite[]>([]);
   const [inviteActions, setInviteActions] = useState<Record<string, 'cancelling' | 'resending' | null>>({});
   const [viewingId, setViewingId] = useState<string>('');
+  const [standings, setStandings] = useState<Standing[]>([]);
 
   useEffect(() => {
     api.get<SportGroup[]>(`/leagues/${leagueId}/sport-teams`)
       .then(setSportGroups).catch(() => {}).finally(() => setLoadingTeams(false));
+    api.get<Standing[]>(`/leagues/${leagueId}/standings`).then(setStandings).catch(() => {});
   }, [leagueId]);
 
   useEffect(() => {
@@ -435,6 +437,14 @@ function RosterTab({
 
   const allSportTeams = sportGroups.flatMap(g => g.teams);
   const sportTeamById = new Map(allSportTeams.map(t => [t.id, t]));
+
+  // Build per-team record/points from standings
+  const teamStatsMap = new Map<string, TeamBreakdown>();
+  const teamBonusMap = new Map<string, number>();
+  for (const s of standings) {
+    for (const td of s.teamBreakdown) teamStatsMap.set(td.teamId, td);
+    for (const bd of s.bonusBreakdown) teamBonusMap.set(bd.teamId, (teamBonusMap.get(bd.teamId) ?? 0) + bd.points);
+  }
 
   const viewingTeam = fantasyTeams.find(ft => ft.id === viewingId);
   const viewingIsMe = viewingTeam?.userId === userId;
@@ -557,14 +567,25 @@ function RosterTab({
           </div>
         ) : (
           <div className="divide-y divide-line/50">
-            {viewingOwnedTeams.map(t => (
-              <div key={t.id} className="flex items-center px-5 py-3.5 hover:bg-field/30 transition-colors">
-                <div>
-                  <p className="text-sm font-medium text-copy">{t.name}</p>
-                  <p className="text-xs text-copy-3 mt-0.5">{formatLeagueName(t.sportLeagueId)}</p>
+            {viewingOwnedTeams.map(t => {
+              const stats = teamStatsMap.get(t.id);
+              const bonus = teamBonusMap.get(t.id) ?? 0;
+              const total = (stats?.points ?? 0) + bonus;
+              return (
+                <div key={t.id} className="flex items-center justify-between px-5 py-3.5 hover:bg-field/30 transition-colors">
+                  <div>
+                    <p className="text-sm font-medium text-copy">{t.name}</p>
+                    <p className="text-xs text-copy-3 mt-0.5">{formatLeagueName(t.sportLeagueId)}</p>
+                  </div>
+                  {stats && (
+                    <div className="text-right flex-shrink-0 ml-4">
+                      <p className="text-sm font-semibold text-copy">{total.toFixed(1)} pts{bonus > 0 && <span className="text-positive ml-1 text-xs">+{bonus} bonus</span>}</p>
+                      <p className="text-xs text-copy-3 mt-0.5">{formatRecord(stats.wins, stats.draws, stats.losses, stats.sport)}</p>
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
