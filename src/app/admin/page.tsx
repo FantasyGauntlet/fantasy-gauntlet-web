@@ -11,7 +11,14 @@ interface SyncResult { label: string; status: 'idle' | 'loading' | 'success' | '
 interface SportLeague { id: string; name: string; }
 interface Team { id: string; name: string; }
 interface Season { id: string; label: string; }
-interface BonusPoint { id: string; teamId: string; seasonId: string; sportLeagueId: string; label: string; points: number; awardedAt: string; }
+interface BonusPoint { id: string; teamId: string; teamName: string; seasonId: string; seasonLabel: string; sportLeagueId: string; label: string; points: number; awardedAt: string; }
+
+const LEAGUE_ACRONYMS = new Set(['nhl', 'nba', 'nfl', 'mlb', 'ucl', 'ncaa', 'mls', 'fifa', 'ufc']);
+function formatLeagueName(id: string): string {
+  return id.split('-').map(w =>
+    LEAGUE_ACRONYMS.has(w.toLowerCase()) ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)
+  ).join(' ');
+}
 
 const SYNCS = [
   { key: 'seed',         label: 'Seed Sports',              endpoint: '/sports/seed' },
@@ -302,8 +309,8 @@ export default function AdminPage() {
                   {bonusList.map(b => (
                     <div key={b.id} className="flex items-center justify-between py-3 border-b border-line/50 last:border-0">
                       <div>
-                        <p className="text-sm font-medium text-copy">{b.teamId} — {b.label}</p>
-                        <p className="text-xs text-copy-3 mt-0.5">{b.sportLeagueId} · {b.seasonId} · +{b.points} pts</p>
+                        <p className="text-sm font-medium text-copy">{b.teamName} — {b.label}</p>
+                        <p className="text-xs text-copy-3 mt-0.5">{formatLeagueName(b.sportLeagueId)} · {b.seasonLabel} · +{b.points} pts</p>
                       </div>
                       <button
                         onClick={() => deleteBonus(b.id)}
