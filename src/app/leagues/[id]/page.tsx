@@ -133,7 +133,7 @@ export default function LeaguePage() {
 
   async function startAuction() {
     try {
-      await api.patch(`/leagues/${id}/state`, { state: 'auction' });
+      await api.post(`/leagues/${id}/auction/start`);
       setLeague(l => l ? { ...l, state: 'auction' } : l);
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : 'Failed to start auction');
