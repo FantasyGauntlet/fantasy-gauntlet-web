@@ -119,6 +119,22 @@ export default function AdminPage() {
 
   const filteredTeams = teams.filter(t => t.name.toLowerCase().includes(teamFilter.toLowerCase()));
 
+  // ── NCAAF Debug ────────────────────────────────────────────────────────────
+  const [ncaafSeason, setNcaafSeason] = useState('2024-2025');
+  const [ncaafTeam, setNcaafTeam] = useState('Texas Tech');
+  const [ncaafDebug, setNcaafDebug] = useState<{ status: 'idle' | 'loading' | 'success' | 'error'; data: any }>({ status: 'idle', data: null });
+
+  async function runNcaafDebug() {
+    setNcaafDebug({ status: 'loading', data: null });
+    try {
+      const params = new URLSearchParams({ season: ncaafSeason, team: ncaafTeam });
+      const res = await api.get<any>(`/admin/ingestion/ncaaf-debug?${params}`);
+      setNcaafDebug({ status: 'success', data: res });
+    } catch (e: unknown) {
+      setNcaafDebug({ status: 'error', data: e instanceof Error ? e.message : 'Failed' });
+    }
+  }
+
   // ── League Scoring ─────────────────────────────────────────────────────────
   const [leagueId, setLeagueId] = useState('');
   const [scoringResult, setScoringResult] = useState<{ status: 'idle' | 'loading' | 'success' | 'error'; message: string }>({ status: 'idle', message: '' });
@@ -205,6 +221,34 @@ export default function AdminPage() {
                 );
               })}
             </div>
+          </div>
+        )}
+
+        {/* ── NCAAF Debug ── */}
+        {tab === 'sync' && (
+          <div className="bg-card border border-line rounded-2xl p-5 mt-4">
+            <h2 className="text-sm font-semibold text-copy mb-1">NCAAF Records Debug</h2>
+            <p className="text-xs text-copy-3 mb-4">Fetches directly from ESPN (bypasses Firestore) to check computed wins.</p>
+            <div className="flex gap-2 mb-2">
+              <input value={ncaafSeason} onChange={e => setNcaafSeason(e.target.value)} placeholder="2024-2025" className={`w-32 ${inputCls}`} />
+              <input value={ncaafTeam} onChange={e => setNcaafTeam(e.target.value)} placeholder="Texas Tech" className={`flex-1 ${inputCls}`} />
+              <button
+                onClick={runNcaafDebug}
+                disabled={ncaafDebug.status === 'loading'}
+                className="flex items-center gap-1.5 bg-field hover:bg-field-2 border border-line disabled:opacity-50 text-copy-2 text-xs px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap"
+              >
+                {ncaafDebug.status === 'loading' ? <Spinner /> : null}
+                {ncaafDebug.status === 'loading' ? 'Loading...' : 'Debug'}
+              </button>
+            </div>
+            {ncaafDebug.status === 'success' && (
+              <pre className="bg-field rounded-xl p-3 text-xs text-copy overflow-x-auto whitespace-pre-wrap">
+                {JSON.stringify(ncaafDebug.data, null, 2)}
+              </pre>
+            )}
+            {ncaafDebug.status === 'error' && (
+              <p className="text-xs text-danger">{String(ncaafDebug.data)}</p>
+            )}
           </div>
         )}
 
