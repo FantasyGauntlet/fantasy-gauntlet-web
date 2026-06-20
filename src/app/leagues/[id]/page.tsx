@@ -16,6 +16,7 @@ interface League {
   startDate: string;
   endDate: string;
   selectedSports: string[];
+  seasonRefs: { sportLeagueId: string; winValue: number; drawValue: number | null; scalingValue: number; }[];
   auctionConfig: {
     startingBudget: number;
     minOpeningBid: number;
@@ -23,6 +24,7 @@ interface League {
     nominationMode: string;
     countdownSeconds: number;
   } | null;
+  previousLeagueId?: string;
 }
 
 interface Member { id: string; userId: string; role: 'commissioner' | 'member'; joinedAt: string; }
@@ -35,6 +37,7 @@ interface LeagueInvite {
 
 interface FantasyTeam {
   id: string; userId: string; displayName: string;
+  logoUrl?: string | null;
   isPlaceholder: boolean; ownedTeamIds: string[];
   remainingBudget: number; totalPoints: number;
 }
@@ -78,7 +81,7 @@ interface WaiverClaim {
   denialReason: string | null;
 }
 
-type Tab = 'standings' | 'roster' | 'waivers' | 'settings';
+type Tab = 'standings' | 'roster' | 'waivers' | 'history' | 'settings';
 
 const STATE_META: Record<string, { label: string; cls: string }> = {
   draft:     { label: 'Draft',     cls: 'bg-warn-bg text-warn border-warn/20' },
@@ -155,6 +158,7 @@ export default function LeaguePage() {
     { key: 'standings', label: 'Standings' },
     { key: 'roster', label: 'Roster' },
     { key: 'waivers', label: 'Waivers' },
+    { key: 'history', label: 'History' },
     { key: 'settings', label: 'Settings' },
   ];
 
@@ -243,6 +247,7 @@ export default function LeaguePage() {
           selectedSports={league.selectedSports}
         />
       )}
+      {tab === 'history' && <HistoryTab previousLeagueId={league.previousLeagueId} />}
       {tab === 'settings' && (
         <SettingsTab league={league} setLeague={setLeague} isCommissioner={isCommissioner} leagueId={id} />
       )}
@@ -414,6 +419,10 @@ function RosterTab({
   const [inviteActions, setInviteActions] = useState<Record<string, 'cancelling' | 'resending' | null>>({});
   const [viewingId, setViewingId] = useState<string>('');
   const [standings, setStandings] = useState<Standing[]>([]);
+  const [editName, setEditName] = useState('');
+  const [editLogoUrl, setEditLogoUrl] = useState('');
+  const [editSaving, setEditSaving] = useState(false);
+  const [editMsg, setEditMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
     api.get<SportGroup[]>(`/leagues/${leagueId}/sport-teams`)
@@ -434,6 +443,16 @@ function RosterTab({
     const myTeam = fantasyTeams.find(ft => ft.userId === userId && !ft.isPlaceholder);
     setViewingId(myTeam?.id ?? fantasyTeams[0]?.id ?? '');
   }, [fantasyTeams, userId, viewingId]);
+
+  // Sync edit fields when the viewed team changes
+  useEffect(() => {
+    const t = fantasyTeams.find(ft => ft.id === viewingId);
+    if (t && t.userId === userId) {
+      setEditName(t.displayName);
+      setEditLogoUrl(t.logoUrl ?? '');
+      setEditMsg(null);
+    }
+  }, [viewingId, fantasyTeams, userId]);
 
   const ownerMap: Record<string, FantasyTeam> = {};
   for (const ft of fantasyTeams) {
@@ -522,6 +541,22 @@ function RosterTab({
     }
   }
 
+  async function saveTeam(e: React.FormEvent) {
+    e.preventDefault();
+    setEditSaving(true); setEditMsg(null);
+    try {
+      const updated = await api.patch<FantasyTeam>(`/leagues/${leagueId}/teams/my`, {
+        displayName: editName.trim() || undefined,
+        logoUrl: editLogoUrl.trim() || null,
+      });
+      setFantasyTeams(prev => prev.map(ft => ft.id === updated.id ? updated : ft));
+      setEditMsg({ type: 'success', text: 'Team updated.' });
+      setTimeout(() => setEditMsg(null), 3000);
+    } catch (e: unknown) {
+      setEditMsg({ type: 'error', text: e instanceof Error ? e.message : 'Failed to save' });
+    } finally { setEditSaving(false); }
+  }
+
   async function sendInvite(fantasyTeamId: string) {
     const email = (inviteEmails[fantasyTeamId] ?? '').trim();
     if (!email) return;
@@ -599,6 +634,56 @@ function RosterTab({
           </div>
         )}
       </div>
+
+      {/* ── Team customization (owner only) ── */}
+      {viewingIsMe && (
+        <div className="bg-card border border-line rounded-2xl p-5">
+          <h2 className="text-sm font-semibold text-copy mb-4">Customize Your Team</h2>
+          <form onSubmit={saveTeam} className="space-y-3">
+            <div>
+              <label className="block text-xs font-medium text-copy-2 mb-1.5">Team Name</label>
+              <input
+                value={editName}
+                onChange={e => setEditName(e.target.value)}
+                placeholder="Team display name..."
+                className="w-full bg-field border border-line-2 rounded-xl px-4 py-2.5 text-copy text-sm placeholder-copy-3 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-copy-2 mb-1.5">Logo URL</label>
+              <input
+                value={editLogoUrl}
+                onChange={e => setEditLogoUrl(e.target.value)}
+                placeholder="https://example.com/logo.png"
+                className="w-full bg-field border border-line-2 rounded-xl px-4 py-2.5 text-copy text-sm placeholder-copy-3 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors"
+              />
+              {editLogoUrl && (
+                <div className="mt-2 flex items-center gap-2">
+                  <img
+                    src={editLogoUrl}
+                    alt="Logo preview"
+                    className="w-10 h-10 object-contain border border-line rounded-lg bg-field"
+                    onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                  />
+                  <p className="text-xs text-copy-3">Preview</p>
+                </div>
+              )}
+            </div>
+            {editMsg && (
+              <p className={`text-xs ${editMsg.type === 'success' ? 'text-positive' : 'text-danger'}`}>
+                {editMsg.text}
+              </p>
+            )}
+            <button
+              type="submit"
+              disabled={editSaving}
+              className="bg-brand hover:bg-brand-2 disabled:opacity-50 text-white font-semibold px-5 py-2.5 rounded-xl transition-colors text-sm"
+            >
+              {editSaving ? 'Saving...' : 'Save Changes'}
+            </button>
+          </form>
+        </div>
+      )}
 
       {/* ── Commissioner tools ── */}
       {isCommissioner && (
@@ -1276,6 +1361,26 @@ function WaiversTab({
   );
 }
 
+// ─── History Tab ──────────────────────────────────────────────────────────────
+
+function HistoryTab({ previousLeagueId }: { previousLeagueId?: string }) {
+  return (
+    <div className="text-center py-16 border border-dashed border-line rounded-2xl">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-copy-3 mx-auto mb-3">
+        <path d="M12 8v4l3 3" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M3.05 11a9 9 0 1 1 .5 4" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M3 16v-5h5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      <p className="text-copy-2 text-sm font-medium">No previous seasons on record.</p>
+      <p className="text-copy-3 text-xs mt-1">
+        {previousLeagueId
+          ? 'Previous season data will appear here once available.'
+          : 'This is the first season of this league.'}
+      </p>
+    </div>
+  );
+}
+
 // ─── Settings Tab ─────────────────────────────────────────────────────────────
 
 function SettingsTab({
@@ -1299,6 +1404,7 @@ function SettingsTab({
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteInput, setDeleteInput] = useState('');
   const [deleting, setDeleting] = useState(false);
+  const [renewing, setRenewing] = useState(false);
 
   const inputCls = 'w-full bg-field border border-line-2 rounded-xl px-4 py-2.5 text-copy text-sm focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors';
 
@@ -1326,6 +1432,18 @@ function SettingsTab({
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : 'Failed to delete league');
       setDeleting(false);
+    }
+  }
+
+  async function handleRenew() {
+    if (!confirm('Start a new season? Members will be carried over and the new league will be in draft state.')) return;
+    setRenewing(true);
+    try {
+      const newLeague = await api.post<{ id: string }>(`/leagues/${leagueId}/renew`);
+      router.push(`/leagues/${newLeague.id}`);
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Failed to renew league');
+      setRenewing(false);
     }
   }
 
@@ -1418,6 +1536,21 @@ function SettingsTab({
                 </button>
               </div>
             )}
+            {league.state === 'completed' && (
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-medium text-copy">Renew this league</p>
+                  <p className="text-xs text-copy-3 mt-0.5">Start a new season. Members carry over; a new draft league is created.</p>
+                </div>
+                <button
+                  onClick={handleRenew}
+                  disabled={renewing}
+                  className="flex-shrink-0 bg-brand hover:bg-brand-2 disabled:opacity-50 text-white text-xs font-semibold px-3 py-2 rounded-xl transition-colors whitespace-nowrap"
+                >
+                  {renewing ? 'Creating...' : 'Renew League'}
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1505,6 +1638,92 @@ function SettingsTab({
           </div>
         </div>
       )}
+
+      {/* League Rules */}
+      <div className="bg-card border border-line rounded-2xl p-5 space-y-6">
+        <h2 className="text-sm font-semibold text-copy">League Rules</h2>
+
+        <section>
+          <h3 className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-3">General Rules</h3>
+          <ol className="space-y-2 list-decimal list-inside">
+            {[
+              'Each manager has a roster of 11 total teams, with a minimum of 1 team per sport in the league.',
+              '2 Wildcard Teams per roster — can be from any sport.',
+              'Limits: maximum 1 EPL team per manager; maximum 2 teams in any single sport.',
+              'Points are earned based on Wins, Draws, and Playoff performance. Bonus points are awarded for Conference and Division Champions. NCAAF awards bonus for Power 4 teams (SEC, Big Ten, ACC, Big 12); NCAAB for Power 5 (Power 4 + Big East).',
+              'Buy-in is $100. Payout details are listed under the Payout Rules tab.',
+            ].map((rule, i) => (
+              <li key={i} className="text-sm text-copy-2 leading-relaxed pl-1">{rule}</li>
+            ))}
+          </ol>
+        </section>
+
+        <div className="border-t border-line" />
+
+        <section>
+          <h3 className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-3">Auction Rules</h3>
+          <ol className="space-y-2 list-decimal list-inside">
+            {[
+              'Each player has $1,000 to spend — this is a hard cap.',
+              'Teams are presented in randomized order.',
+              'Each team has a 15-second bidding window. The timer resets with every new bid.',
+              'Teams not won at auction become free agent teams available on waivers.',
+              'College Football (NCAAF) and College Basketball (NCAAB) only include the preseason top 25. Additional teams may be acquired through the waiver wire.',
+            ].map((rule, i) => (
+              <li key={i} className="text-sm text-copy-2 leading-relaxed pl-1">{rule}</li>
+            ))}
+          </ol>
+        </section>
+
+        <div className="border-t border-line" />
+
+        <section>
+          <h3 className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-3">Bonus Payouts · $75 per winner</h3>
+          <div className="space-y-2">
+            {[
+              { label: 'Bonus 1', desc: 'Manager whose lowest-scoring roster team earns the fewest points.' },
+              { label: 'Bonus 2', desc: 'Manager with the highest points-to-auction-cost ratio across their roster.' },
+            ].map(b => (
+              <div key={b.label} className="flex gap-3 bg-field border border-line rounded-xl px-4 py-3">
+                <span className="text-xs font-semibold text-brand whitespace-nowrap mt-0.5">{b.label}</span>
+                <p className="text-sm text-copy-2">{b.desc}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {league.seasonRefs.length > 0 && (
+          <>
+            <div className="border-t border-line" />
+            <section>
+              <h3 className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-3">Scoring Breakdown</h3>
+              <div className="overflow-x-auto rounded-xl border border-line">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-field/60 border-b border-line">
+                      <th className="text-left px-4 py-2.5 text-xs font-semibold text-copy-3">Sport</th>
+                      <th className="text-right px-4 py-2.5 text-xs font-semibold text-copy-3">Win</th>
+                      <th className="text-right px-4 py-2.5 text-xs font-semibold text-copy-3">Draw</th>
+                      <th className="text-right px-4 py-2.5 text-xs font-semibold text-copy-3">Bonus Scale</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {league.seasonRefs.map((ref, i) => (
+                      <tr key={ref.sportLeagueId} className={i > 0 ? 'border-t border-line/50' : ''}>
+                        <td className="px-4 py-2.5 font-medium text-copy">{formatLeagueName(ref.sportLeagueId)}</td>
+                        <td className="px-4 py-2.5 text-right text-copy-2">{ref.winValue}</td>
+                        <td className="px-4 py-2.5 text-right text-copy-2">{ref.drawValue ?? '—'}</td>
+                        <td className="px-4 py-2.5 text-right text-copy-2">{ref.scalingValue}×</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-xs text-copy-3 mt-2">Bonus Scale applies to playoff and championship bonus points.</p>
+            </section>
+          </>
+        )}
+      </div>
     </div>
   );
 }
