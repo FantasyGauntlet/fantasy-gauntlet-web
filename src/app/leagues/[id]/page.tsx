@@ -635,7 +635,7 @@ function RosterTab({
     if (!email) return;
     setInviteStatus(s => ({ ...s, [fantasyTeamId]: { status: 'loading', message: 'Sending...' } }));
     try {
-      const invite = await api.post<LeagueInvite>(`/leagues/${leagueId}/invites`, { email });
+      const invite = await api.post<LeagueInvite>(`/leagues/${leagueId}/invites`, { email, placeholderTeamId: fantasyTeamId });
       setInviteStatus(s => ({ ...s, [fantasyTeamId]: { status: 'success', message: `Invite sent to ${email}` } }));
       setInviteEmails(e => ({ ...e, [fantasyTeamId]: '' }));
       setInvites(i => [...i, invite]);
