@@ -429,6 +429,7 @@ function RosterTab({
   const [coOwnerEmail, setCoOwnerEmail] = useState('');
   const [coOwnerSaving, setCoOwnerSaving] = useState(false);
   const [coOwnerMsg, setCoOwnerMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [removingTeam, setRemovingTeam] = useState(false);
 
   useEffect(() => {
     api.get<SportGroup[]>(`/leagues/${leagueId}/sport-teams`)
@@ -463,16 +464,22 @@ function RosterTab({
     }
   }, [viewingId, fantasyTeams, userId]);
 
-  // Load co-owners whenever we switch to viewing our own team
+  // Load co-owners when viewing a non-placeholder team (own team or commissioner viewing any team)
   useEffect(() => {
     setCoOwners([]);
     setCoOwnerMsg(null);
     setCoOwnerEmail('');
     const t = fantasyTeams.find(ft => ft.id === viewingId);
-    if (!t || !isMyTeam(t)) return;
-    api.get<{ uid: string; email: string }[]>(`/leagues/${leagueId}/teams/my/co-owners`)
-      .then(setCoOwners).catch(() => {});
-  }, [viewingId, leagueId, fantasyTeams, userId]);
+    if (!t || t.isPlaceholder) return;
+    const mine = !t.isPlaceholder && (t.userId === userId || (t.coOwnerIds ?? []).includes(userId ?? ''));
+    if (mine) {
+      api.get<{ uid: string; email: string }[]>(`/leagues/${leagueId}/teams/my/co-owners`)
+        .then(setCoOwners).catch(() => {});
+    } else if (isCommissioner) {
+      api.get<{ uid: string; email: string }[]>(`/leagues/${leagueId}/teams/${viewingId}/co-owners`)
+        .then(setCoOwners).catch(() => {});
+    }
+  }, [viewingId, leagueId, fantasyTeams, userId, isCommissioner]);
 
   const ownerMap: Record<string, FantasyTeam> = {};
   for (const ft of fantasyTeams) {
@@ -598,12 +605,28 @@ function RosterTab({
 
   async function handleRemoveCoOwner(coOwnerUid: string) {
     try {
-      const updated = await api.delete<{ uid: string; email: string }[]>(
-        `/leagues/${leagueId}/teams/my/co-owners/${coOwnerUid}`,
-      );
+      const endpoint = viewingIsPrimaryOwner
+        ? `/leagues/${leagueId}/teams/my/co-owners/${coOwnerUid}`
+        : `/leagues/${leagueId}/teams/${viewingId}/co-owners/${coOwnerUid}`;
+      const updated = await api.delete<{ uid: string; email: string }[]>(endpoint);
       setCoOwners(updated);
     } catch (err: unknown) {
       setCoOwnerMsg({ type: 'error', text: err instanceof Error ? err.message : 'Failed to remove co-owner' });
+    }
+  }
+
+  async function handleRemoveTeam() {
+    if (!viewingTeam) return;
+    if (!confirm(`Remove "${viewingTeam.displayName}" from the league? Their sport teams will return to the pool. This cannot be undone.`)) return;
+    setRemovingTeam(true);
+    try {
+      await api.delete(`/leagues/${leagueId}/teams/${viewingId}`);
+      setFantasyTeams(prev => prev.filter(ft => ft.id !== viewingId));
+      setViewingId('');
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Failed to remove team');
+    } finally {
+      setRemovingTeam(false);
     }
   }
 
@@ -740,16 +763,20 @@ function RosterTab({
       )}
 
       {/* ── Co-owners ── */}
-      {viewingIsMe && (
+      {viewingTeam && !viewingTeam.isPlaceholder && (viewingIsMe || isCommissioner) && (
         <div className="bg-card border border-line rounded-2xl p-5">
           <h2 className="text-sm font-semibold text-copy mb-1">Co-owners</h2>
-          <p className="text-xs text-copy-3 mb-4">Allow another account to manage this team alongside you.</p>
+          <p className="text-xs text-copy-3 mb-4">
+            {viewingIsMe
+              ? 'Allow another account to manage this team alongside you.'
+              : `Co-owners linked to ${viewingTeam.displayName}.`}
+          </p>
           {coOwners.length > 0 && (
             <div className="space-y-2 mb-4">
               {coOwners.map(co => (
                 <div key={co.uid} className="flex items-center justify-between bg-field border border-line rounded-xl px-4 py-2.5">
                   <span className="text-sm text-copy">{co.email}</span>
-                  {viewingIsPrimaryOwner && (
+                  {(viewingIsPrimaryOwner || isCommissioner) && (
                     <button
                       type="button"
                       onClick={() => handleRemoveCoOwner(co.uid)}
@@ -763,7 +790,7 @@ function RosterTab({
             </div>
           )}
           {coOwners.length === 0 && (
-            <p className="text-xs text-copy-3 mb-4">No co-owners yet.</p>
+            <p className="text-xs text-copy-3 mb-4">No co-owners.</p>
           )}
           {viewingIsPrimaryOwner && (
             <form onSubmit={handleAddCoOwner} className="flex gap-2">
@@ -788,6 +815,24 @@ function RosterTab({
               {coOwnerMsg.text}
             </p>
           )}
+        </div>
+      )}
+
+      {/* ── Remove team (commissioner only, not own team) ── */}
+      {isCommissioner && viewingTeam && viewingTeam.userId !== userId && (
+        <div className="bg-card border border-danger/20 rounded-2xl p-5">
+          <h2 className="text-sm font-semibold text-copy mb-1">Remove Team</h2>
+          <p className="text-xs text-copy-3 mb-4">
+            Permanently removes {viewingTeam.displayName} from this league. Their sport teams return to the available pool.
+          </p>
+          <button
+            type="button"
+            onClick={handleRemoveTeam}
+            disabled={removingTeam}
+            className="bg-danger-bg border border-danger/20 hover:bg-danger hover:text-white text-danger text-sm font-semibold px-5 py-2.5 rounded-xl transition-colors disabled:opacity-50"
+          >
+            {removingTeam ? 'Removing...' : `Remove ${viewingTeam.displayName}`}
+          </button>
         </div>
       )}
 
