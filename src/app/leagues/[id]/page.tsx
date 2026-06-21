@@ -40,6 +40,7 @@ interface FantasyTeam {
   logoUrl?: string | null;
   isPlaceholder: boolean; ownedTeamIds: string[];
   remainingBudget: number; totalPoints: number;
+  coOwnerIds?: string[];
 }
 
 interface SportTeam { id: string; name: string; shortName: string; sportLeagueId: string; logoUrl: string | null; }
@@ -424,6 +425,11 @@ function RosterTab({
   const [editSaving, setEditSaving] = useState(false);
   const [editMsg, setEditMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  const [coOwners, setCoOwners] = useState<{ uid: string; email: string }[]>([]);
+  const [coOwnerEmail, setCoOwnerEmail] = useState('');
+  const [coOwnerSaving, setCoOwnerSaving] = useState(false);
+  const [coOwnerMsg, setCoOwnerMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
   useEffect(() => {
     api.get<SportGroup[]>(`/leagues/${leagueId}/sport-teams`)
       .then(setSportGroups).catch(() => {}).finally(() => setLoadingTeams(false));
@@ -437,22 +443,36 @@ function RosterTab({
       .catch(() => {});
   }, [leagueId, isCommissioner]);
 
+  const isMyTeam = (ft: FantasyTeam) =>
+    !ft.isPlaceholder && (ft.userId === userId || (ft.coOwnerIds ?? []).includes(userId ?? ''));
+
   // Default to the logged-in user's own team
   useEffect(() => {
     if (viewingId) return;
-    const myTeam = fantasyTeams.find(ft => ft.userId === userId && !ft.isPlaceholder);
+    const myTeam = fantasyTeams.find(ft => isMyTeam(ft));
     setViewingId(myTeam?.id ?? fantasyTeams[0]?.id ?? '');
   }, [fantasyTeams, userId, viewingId]);
 
   // Sync edit fields when the viewed team changes
   useEffect(() => {
     const t = fantasyTeams.find(ft => ft.id === viewingId);
-    if (t && t.userId === userId) {
+    if (t && isMyTeam(t)) {
       setEditName(t.displayName);
       setEditLogoUrl(t.logoUrl ?? '');
       setEditMsg(null);
     }
   }, [viewingId, fantasyTeams, userId]);
+
+  // Load co-owners whenever we switch to viewing our own team
+  useEffect(() => {
+    setCoOwners([]);
+    setCoOwnerMsg(null);
+    setCoOwnerEmail('');
+    const t = fantasyTeams.find(ft => ft.id === viewingId);
+    if (!t || !isMyTeam(t)) return;
+    api.get<{ uid: string; email: string }[]>(`/leagues/${leagueId}/teams/my/co-owners`)
+      .then(setCoOwners).catch(() => {});
+  }, [viewingId, leagueId, fantasyTeams, userId]);
 
   const ownerMap: Record<string, FantasyTeam> = {};
   for (const ft of fantasyTeams) {
@@ -471,7 +491,8 @@ function RosterTab({
   }
 
   const viewingTeam = fantasyTeams.find(ft => ft.id === viewingId);
-  const viewingIsMe = viewingTeam?.userId === userId;
+  const viewingIsMe = viewingTeam ? isMyTeam(viewingTeam) : false;
+  const viewingIsPrimaryOwner = viewingTeam?.userId === userId;
   const viewingOwnedTeams = (viewingTeam?.ownedTeamIds ?? [])
     .map(id => sportTeamById.get(id))
     .filter(Boolean)
@@ -479,8 +500,8 @@ function RosterTab({
 
   // Dropdown: logged-in user's team first, then others alphabetically
   const orderedTeams = [
-    ...fantasyTeams.filter(ft => ft.userId === userId && !ft.isPlaceholder),
-    ...fantasyTeams.filter(ft => ft.userId !== userId || ft.isPlaceholder).sort((a, b) => a.displayName.localeCompare(b.displayName)),
+    ...fantasyTeams.filter(ft => isMyTeam(ft)),
+    ...fantasyTeams.filter(ft => !isMyTeam(ft)).sort((a, b) => a.displayName.localeCompare(b.displayName)),
   ];
 
   function toggleGroup(sport: string) {
@@ -557,6 +578,35 @@ function RosterTab({
     } finally { setEditSaving(false); }
   }
 
+  async function handleAddCoOwner(e: React.FormEvent) {
+    e.preventDefault();
+    if (!coOwnerEmail.trim()) return;
+    setCoOwnerSaving(true); setCoOwnerMsg(null);
+    try {
+      const updated = await api.post<{ uid: string; email: string }[]>(
+        `/leagues/${leagueId}/teams/my/co-owners`,
+        { email: coOwnerEmail.trim() },
+      );
+      setCoOwners(updated);
+      setCoOwnerEmail('');
+      setCoOwnerMsg({ type: 'success', text: 'Co-owner added.' });
+      setTimeout(() => setCoOwnerMsg(null), 3000);
+    } catch (err: unknown) {
+      setCoOwnerMsg({ type: 'error', text: err instanceof Error ? err.message : 'Failed to add co-owner' });
+    } finally { setCoOwnerSaving(false); }
+  }
+
+  async function handleRemoveCoOwner(coOwnerUid: string) {
+    try {
+      const updated = await api.delete<{ uid: string; email: string }[]>(
+        `/leagues/${leagueId}/teams/my/co-owners/${coOwnerUid}`,
+      );
+      setCoOwners(updated);
+    } catch (err: unknown) {
+      setCoOwnerMsg({ type: 'error', text: err instanceof Error ? err.message : 'Failed to remove co-owner' });
+    }
+  }
+
   async function sendInvite(fantasyTeamId: string) {
     const email = (inviteEmails[fantasyTeamId] ?? '').trim();
     if (!email) return;
@@ -584,7 +634,11 @@ function RosterTab({
                 <span className="ml-2 text-xs bg-warn-bg text-warn border border-warn/20 px-2 py-0.5 rounded-full align-middle">placeholder</span>
               )}
             </p>
-            {viewingIsMe && <p className="text-xs text-brand mt-0.5">Your team</p>}
+            {viewingIsMe && (
+                <p className="text-xs text-brand mt-0.5">
+                  {viewingIsPrimaryOwner ? 'Your team' : 'Your team (co-owner)'}
+                </p>
+              )}
             <p className="text-xs text-copy-3 mt-0.5">{viewingOwnedTeams.length} team{viewingOwnedTeams.length !== 1 ? 's' : ''}</p>
           </div>
           {orderedTeams.length > 1 && (
@@ -595,7 +649,7 @@ function RosterTab({
             >
               {orderedTeams.map(ft => (
                 <option key={ft.id} value={ft.id}>
-                  {ft.displayName}{ft.userId === userId && !ft.isPlaceholder ? ' (You)' : ''}
+                  {ft.displayName}{isMyTeam(ft) ? ' (You)' : ''}
                 </option>
               ))}
             </select>
@@ -682,6 +736,58 @@ function RosterTab({
               {editSaving ? 'Saving...' : 'Save Changes'}
             </button>
           </form>
+        </div>
+      )}
+
+      {/* ── Co-owners ── */}
+      {viewingIsMe && (
+        <div className="bg-card border border-line rounded-2xl p-5">
+          <h2 className="text-sm font-semibold text-copy mb-1">Co-owners</h2>
+          <p className="text-xs text-copy-3 mb-4">Allow another account to manage this team alongside you.</p>
+          {coOwners.length > 0 && (
+            <div className="space-y-2 mb-4">
+              {coOwners.map(co => (
+                <div key={co.uid} className="flex items-center justify-between bg-field border border-line rounded-xl px-4 py-2.5">
+                  <span className="text-sm text-copy">{co.email}</span>
+                  {viewingIsPrimaryOwner && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveCoOwner(co.uid)}
+                      className="text-xs text-danger hover:text-danger/80 transition-colors font-medium ml-3"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          {coOwners.length === 0 && (
+            <p className="text-xs text-copy-3 mb-4">No co-owners yet.</p>
+          )}
+          {viewingIsPrimaryOwner && (
+            <form onSubmit={handleAddCoOwner} className="flex gap-2">
+              <input
+                type="email"
+                value={coOwnerEmail}
+                onChange={e => setCoOwnerEmail(e.target.value)}
+                placeholder="Email address..."
+                className="flex-1 bg-field border border-line-2 rounded-xl px-4 py-2 text-copy text-sm placeholder-copy-3 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors"
+              />
+              <button
+                type="submit"
+                disabled={!coOwnerEmail.trim() || coOwnerSaving}
+                className="bg-field-2 hover:bg-line border border-line text-copy-2 text-sm font-medium px-4 py-2 rounded-xl transition-colors whitespace-nowrap disabled:opacity-50"
+              >
+                {coOwnerSaving ? '...' : 'Add'}
+              </button>
+            </form>
+          )}
+          {coOwnerMsg && (
+            <p className={`text-xs mt-2 ${coOwnerMsg.type === 'error' ? 'text-danger' : 'text-positive'}`}>
+              {coOwnerMsg.text}
+            </p>
+          )}
         </div>
       )}
 
@@ -1069,7 +1175,9 @@ function WaiversTab({
     return s;
   }, [fantasyTeams]);
 
-  const myTeam = fantasyTeams.find(ft => ft.userId === userId && !ft.isPlaceholder);
+  const myTeam = fantasyTeams.find(ft =>
+    !ft.isPlaceholder && (ft.userId === userId || (ft.coOwnerIds ?? []).includes(userId ?? '')),
+  );
 
   const availableTeams = useMemo(
     () => pool.filter(t => !allOwnedIds.has(t.id)),
