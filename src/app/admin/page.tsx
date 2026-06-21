@@ -135,6 +135,22 @@ export default function AdminPage() {
     }
   }
 
+  // ── NCAAB Debug ────────────────────────────────────────────────────────────
+  const [ncaabSeason, setNcaabSeason] = useState('2024-2025');
+  const [ncaabTeam, setNcaabTeam] = useState('Connecticut');
+  const [ncaabDebug, setNcaabDebug] = useState<{ status: 'idle' | 'loading' | 'success' | 'error'; data: any }>({ status: 'idle', data: null });
+
+  async function runNcaabDebug() {
+    setNcaabDebug({ status: 'loading', data: null });
+    try {
+      const params = new URLSearchParams({ season: ncaabSeason, ...(ncaabTeam ? { team: ncaabTeam } : {}) });
+      const res = await api.get<any>(`/admin/ingestion/ncaab-debug?${params}`);
+      setNcaabDebug({ status: 'success', data: res });
+    } catch (e: unknown) {
+      setNcaabDebug({ status: 'error', data: e instanceof Error ? e.message : 'Failed' });
+    }
+  }
+
   // ── League Scoring ─────────────────────────────────────────────────────────
   const [scoringResult, setScoringResult] = useState<{ status: 'idle' | 'loading' | 'success' | 'error'; message: string }>({ status: 'idle', message: '' });
 
@@ -263,6 +279,52 @@ export default function AdminPage() {
             )}
             {ncaafDebug.status === 'error' && (
               <p className="text-xs text-danger mt-2">{String(ncaafDebug.data)}</p>
+            )}
+          </div>
+        )}
+
+        {/* ── NCAAB Debug ── */}
+        {tab === 'sync' && (
+          <div className="bg-card border border-line rounded-2xl p-5 mt-4">
+            <h2 className="text-sm font-semibold text-copy mb-1">NCAAB Records Debug</h2>
+            <p className="text-xs text-copy-3 mb-4">
+              Shows raw ESPN event counts, the computed cutoff date, and how many events fall before vs. after it. Helps diagnose why tournament games might be leaking into records.
+            </p>
+            <div className="space-y-2 mb-3">
+              <div>
+                <label className="block text-xs font-medium text-copy-2 mb-1">Season</label>
+                <input
+                  value={ncaabSeason}
+                  onChange={e => setNcaabSeason(e.target.value)}
+                  placeholder="2024-2025"
+                  className={inputCls}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-copy-2 mb-1">Team name filter (partial match)</label>
+                <input
+                  value={ncaabTeam}
+                  onChange={e => setNcaabTeam(e.target.value)}
+                  placeholder="e.g. Connecticut"
+                  className={inputCls}
+                />
+              </div>
+            </div>
+            <button
+              onClick={runNcaabDebug}
+              disabled={ncaabDebug.status === 'loading'}
+              className="flex items-center gap-1.5 bg-field hover:bg-field-2 border border-line disabled:opacity-50 text-copy-2 text-xs px-3 py-1.5 rounded-lg transition-colors"
+            >
+              {ncaabDebug.status === 'loading' ? <Spinner /> : null}
+              {ncaabDebug.status === 'loading' ? 'Loading...' : 'Run Debug'}
+            </button>
+            {ncaabDebug.status === 'success' && (
+              <pre className="mt-3 bg-field rounded-xl p-3 text-xs text-copy overflow-x-auto whitespace-pre-wrap">
+                {JSON.stringify(ncaabDebug.data, null, 2)}
+              </pre>
+            )}
+            {ncaabDebug.status === 'error' && (
+              <p className="text-xs text-danger mt-2">{String(ncaabDebug.data)}</p>
             )}
           </div>
         )}
