@@ -136,16 +136,13 @@ export default function AdminPage() {
   }
 
   // ── League Scoring ─────────────────────────────────────────────────────────
-  const [leagueId, setLeagueId] = useState('');
   const [scoringResult, setScoringResult] = useState<{ status: 'idle' | 'loading' | 'success' | 'error'; message: string }>({ status: 'idle', message: '' });
 
   async function recalculateScoring() {
-    const id = leagueId.trim();
-    if (!id) return;
     setScoringResult({ status: 'loading', message: 'Recalculating...' });
     try {
-      const res = await api.post<{ message: string; updated: number }>(`/admin/leagues/${id}/recalculate-scoring`);
-      setScoringResult({ status: 'success', message: `${res.message} (${res.updated} sports updated)` });
+      const res = await api.post<{ leagues: number; refs: number }>('/admin/ingestion/recalculate-scoring');
+      setScoringResult({ status: 'success', message: `Done — patched ${res.refs} season refs across ${res.leagues} leagues.` });
     } catch (e: unknown) {
       setScoringResult({ status: 'error', message: e instanceof Error ? e.message : 'Failed' });
     }
@@ -392,26 +389,18 @@ export default function AdminPage() {
         {/* ── League Scoring ── */}
         {tab === 'scoring' && (
           <div className="bg-card border border-line rounded-2xl p-5">
-            <h2 className="text-sm font-semibold text-copy mb-1">Recalculate League Scoring</h2>
+            <h2 className="text-sm font-semibold text-copy mb-1">Recalculate All League Scoring</h2>
             <p className="text-xs text-copy-3 mb-5">
-              Overwrites locked scoring values (winValue, drawValue) for an existing league. Find the league ID in the URL when viewing the league.
+              Re-derives winValue / drawValue / scalingValue for every league from the current season docs and patches Firestore. Use this to fix leagues created before the NFL 17-game correction.
             </p>
-            <div className="flex gap-2">
-              <input
-                value={leagueId}
-                onChange={e => setLeagueId(e.target.value)}
-                placeholder="e.g. 6cG7dWz2BfRICs35j6kQ"
-                className={`flex-1 ${inputCls}`}
-              />
-              <button
-                onClick={recalculateScoring}
-                disabled={scoringResult.status === 'loading' || !leagueId.trim()}
-                className="flex items-center gap-1.5 bg-field hover:bg-field-2 border border-line disabled:opacity-50 text-copy-2 text-sm px-4 py-2.5 rounded-xl transition-colors whitespace-nowrap"
-              >
-                {scoringResult.status === 'loading' ? <Spinner /> : null}
-                {scoringResult.status === 'loading' ? 'Running...' : 'Recalculate'}
-              </button>
-            </div>
+            <button
+              onClick={recalculateScoring}
+              disabled={scoringResult.status === 'loading'}
+              className="flex items-center gap-1.5 bg-field hover:bg-field-2 border border-line disabled:opacity-50 text-copy-2 text-sm px-4 py-2.5 rounded-xl transition-colors"
+            >
+              {scoringResult.status === 'loading' ? <Spinner /> : null}
+              {scoringResult.status === 'loading' ? 'Running...' : 'Recalculate Scoring'}
+            </button>
             {scoringResult.status !== 'idle' && (
               <p className={`text-xs mt-3 ${
                 scoringResult.status === 'success' ? 'text-positive' :
