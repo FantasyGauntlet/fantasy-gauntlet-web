@@ -228,26 +228,44 @@ export default function AdminPage() {
         {tab === 'sync' && (
           <div className="bg-card border border-line rounded-2xl p-5 mt-4">
             <h2 className="text-sm font-semibold text-copy mb-1">NCAAF Records Debug</h2>
-            <p className="text-xs text-copy-3 mb-4">Fetches directly from ESPN (bypasses Firestore) to check computed wins.</p>
-            <div className="flex gap-2 mb-2">
-              <input value={ncaafSeason} onChange={e => setNcaafSeason(e.target.value)} placeholder="2024-2025" className={`w-32 ${inputCls}`} />
-              <input value={ncaafTeam} onChange={e => setNcaafTeam(e.target.value)} placeholder="Texas Tech" className={`flex-1 ${inputCls}`} />
-              <button
-                onClick={runNcaafDebug}
-                disabled={ncaafDebug.status === 'loading'}
-                className="flex items-center gap-1.5 bg-field hover:bg-field-2 border border-line disabled:opacity-50 text-copy-2 text-xs px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap"
-              >
-                {ncaafDebug.status === 'loading' ? <Spinner /> : null}
-                {ncaafDebug.status === 'loading' ? 'Loading...' : 'Debug'}
-              </button>
+            <p className="text-xs text-copy-3 mb-4">
+              Queries ESPN scoreboard and Firestore fixtures live. Shows how many games each source has and a sample filtered by team name.
+            </p>
+            <div className="space-y-2 mb-3">
+              <div>
+                <label className="block text-xs font-medium text-copy-2 mb-1">Season</label>
+                <input
+                  value={ncaafSeason}
+                  onChange={e => setNcaafSeason(e.target.value)}
+                  placeholder="2025-2026"
+                  className={inputCls}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-copy-2 mb-1">Team name filter (partial match)</label>
+                <input
+                  value={ncaafTeam}
+                  onChange={e => setNcaafTeam(e.target.value)}
+                  placeholder="e.g. Texas Tech"
+                  className={inputCls}
+                />
+              </div>
             </div>
+            <button
+              onClick={runNcaafDebug}
+              disabled={ncaafDebug.status === 'loading'}
+              className="flex items-center gap-1.5 bg-field hover:bg-field-2 border border-line disabled:opacity-50 text-copy-2 text-xs px-3 py-1.5 rounded-lg transition-colors"
+            >
+              {ncaafDebug.status === 'loading' ? <Spinner /> : null}
+              {ncaafDebug.status === 'loading' ? 'Loading...' : 'Run Debug'}
+            </button>
             {ncaafDebug.status === 'success' && (
-              <pre className="bg-field rounded-xl p-3 text-xs text-copy overflow-x-auto whitespace-pre-wrap">
+              <pre className="mt-3 bg-field rounded-xl p-3 text-xs text-copy overflow-x-auto whitespace-pre-wrap">
                 {JSON.stringify(ncaafDebug.data, null, 2)}
               </pre>
             )}
             {ncaafDebug.status === 'error' && (
-              <p className="text-xs text-danger">{String(ncaafDebug.data)}</p>
+              <p className="text-xs text-danger mt-2">{String(ncaafDebug.data)}</p>
             )}
           </div>
         )}
