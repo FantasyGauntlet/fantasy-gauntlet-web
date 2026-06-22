@@ -106,6 +106,8 @@ const STATE_META: Record<string, { label: string; cls: string }> = {
   cancelled: { label: 'Cancelled', cls: 'bg-danger-bg text-danger border-danger/20' },
 };
 
+const SPORT_ORDER = ['world-cup', 'nfl', 'nba', 'mlb', 'nhl', 'ncaa-football', 'ncaa-basketball', 'premier-league', 'ucl'];
+
 const LEAGUE_ACRONYMS = new Set(['nhl', 'nba', 'nfl', 'mlb', 'ucl', 'ncaa', 'mls', 'fifa', 'ufc']);
 
 function formatLeagueName(id: string): string {
@@ -531,7 +533,22 @@ function RosterTab({
   const viewingOwnedTeams = (viewingTeam?.ownedTeamIds ?? [])
     .map(id => sportTeamById.get(id))
     .filter(Boolean)
-    .sort((a, b) => (a as SportTeam).name.localeCompare((b as SportTeam).name)) as SportTeam[];
+    .sort((a, b) => {
+      const ai = SPORT_ORDER.indexOf((a as SportTeam).sportLeagueId);
+      const bi = SPORT_ORDER.indexOf((b as SportTeam).sportLeagueId);
+      const ao = ai === -1 ? 999 : ai;
+      const bo = bi === -1 ? 999 : bi;
+      if (ao !== bo) return ao - bo;
+      return (a as SportTeam).name.localeCompare((b as SportTeam).name);
+    }) as SportTeam[];
+
+  const viewingWildCardIds = new Set<string>();
+  { const seen = new Set<string>();
+    for (const t of viewingOwnedTeams) {
+      if (seen.has(t.sportLeagueId)) viewingWildCardIds.add(t.id);
+      else seen.add(t.sportLeagueId);
+    }
+  }
 
   const myFantasyTeam = fantasyTeams.find(ft => isMyTeam(ft));
   const myOwnedTeams = (myFantasyTeam?.ownedTeamIds ?? [])
@@ -743,6 +760,7 @@ function RosterTab({
               const bonus = teamBonusMap.get(t.id) ?? 0;
               const total = (stats?.points ?? 0) + bonus;
               const canTrade = !viewingIsMe && !!myFantasyTeam && myOwnedTeams.length > 0;
+              const isWildCard = viewingWildCardIds.has(t.id);
               return (
                 <div key={t.id} className="flex items-center justify-between px-5 py-3.5 hover:bg-field/30 transition-colors gap-3">
                   <div className="flex items-center gap-3 min-w-0">
@@ -750,7 +768,12 @@ function RosterTab({
                       <img src={t.logoUrl} alt={t.name} className="w-9 h-9 object-contain flex-shrink-0" />
                     )}
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-copy truncate">{t.name}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium text-copy truncate">{t.name}</p>
+                        {isWildCard && (
+                          <span className="text-xs bg-warn-bg text-warn border border-warn/20 px-1.5 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">Wild Card</span>
+                        )}
+                      </div>
                       <p className="text-xs text-copy-3 mt-0.5">{formatLeagueName(t.sportLeagueId)}</p>
                     </div>
                   </div>
