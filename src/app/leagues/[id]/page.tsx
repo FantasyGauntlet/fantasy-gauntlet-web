@@ -898,19 +898,6 @@ function RosterTab({
             <p className="text-xs text-copy-3 mt-0.5">{viewingOwnedTeams.length} team{viewingOwnedTeams.length !== 1 ? 's' : ''}</p>
           </div>
           <div className="flex items-center gap-2">
-            {orderedTeams.length > 1 && (
-              <select
-                value={viewingId}
-                onChange={e => setViewingId(e.target.value)}
-                className="bg-field border border-line-2 text-sm text-copy rounded-xl px-3 py-2 focus:outline-none focus:border-brand transition-colors"
-              >
-                {orderedTeams.map(ft => (
-                  <option key={ft.id} value={ft.id}>
-                    {ft.displayName}{isMyTeam(ft) ? ' (You)' : ''}
-                  </option>
-                ))}
-              </select>
-            )}
             {canProposeTrade && (
               <button
                 type="button"
@@ -924,6 +911,19 @@ function RosterTab({
               >
                 Trade
               </button>
+            )}
+            {orderedTeams.length > 1 && (
+              <select
+                value={viewingId}
+                onChange={e => setViewingId(e.target.value)}
+                className="bg-field border border-line-2 text-sm text-copy rounded-xl px-3 py-2 focus:outline-none focus:border-brand transition-colors"
+              >
+                {orderedTeams.map(ft => (
+                  <option key={ft.id} value={ft.id}>
+                    {ft.displayName}{isMyTeam(ft) ? ' (You)' : ''}
+                  </option>
+                ))}
+              </select>
             )}
           </div>
         </div>
