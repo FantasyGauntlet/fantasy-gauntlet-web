@@ -82,7 +82,21 @@ interface WaiverClaim {
   denialReason: string | null;
 }
 
-type Tab = 'standings' | 'roster' | 'waivers' | 'history' | 'settings';
+interface Trade {
+  id: string;
+  leagueId: string;
+  proposerFantasyTeamId: string;
+  proposerUserId: string;
+  receiverFantasyTeamId: string;
+  receiverUserId: string;
+  offeredSportTeamId: string;
+  requestedSportTeamId: string;
+  status: 'pending' | 'accepted' | 'rejected' | 'cancelled';
+  createdAt: string;
+  updatedAt: string;
+}
+
+type Tab = 'standings' | 'roster' | 'waivers' | 'trades' | 'history' | 'settings';
 
 const STATE_META: Record<string, { label: string; cls: string }> = {
   draft:     { label: 'Draft',     cls: 'bg-warn-bg text-warn border-warn/20' },
@@ -159,6 +173,7 @@ export default function LeaguePage() {
     { key: 'standings', label: 'Standings' },
     { key: 'roster', label: 'Roster' },
     { key: 'waivers', label: 'Waivers' },
+    { key: 'trades', label: 'Trades' },
     { key: 'history', label: 'History' },
     { key: 'settings', label: 'League' },
   ];
@@ -246,6 +261,14 @@ export default function LeaguePage() {
           userId={user?.uid}
           fantasyTeams={fantasyTeams}
           selectedSports={league.selectedSports}
+        />
+      )}
+      {tab === 'trades' && (
+        <TradesTab
+          leagueId={id}
+          fantasyTeams={fantasyTeams}
+          setFantasyTeams={setFantasyTeams}
+          userId={user?.uid}
         />
       )}
       {tab === 'history' && <HistoryTab previousLeagueId={league.previousLeagueId} />}
@@ -431,6 +454,11 @@ function RosterTab({
   const [coOwnerMsg, setCoOwnerMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [removingTeam, setRemovingTeam] = useState(false);
 
+  const [tradeTarget, setTradeTarget] = useState<{ sportTeamId: string; sportTeamName: string; receiverFantasyTeamId: string } | null>(null);
+  const [tradePick, setTradePick] = useState('');
+  const [tradeSubmitting, setTradeSubmitting] = useState(false);
+  const [tradeMsg, setTradeMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
   useEffect(() => {
     api.get<SportGroup[]>(`/leagues/${leagueId}/sport-teams`)
       .then(setSportGroups).catch(() => {}).finally(() => setLoadingTeams(false));
@@ -504,6 +532,32 @@ function RosterTab({
     .map(id => sportTeamById.get(id))
     .filter(Boolean)
     .sort((a, b) => (a as SportTeam).name.localeCompare((b as SportTeam).name)) as SportTeam[];
+
+  const myFantasyTeam = fantasyTeams.find(ft => isMyTeam(ft));
+  const myOwnedTeams = (myFantasyTeam?.ownedTeamIds ?? [])
+    .map(id => sportTeamById.get(id))
+    .filter(Boolean)
+    .sort((a, b) => (a as SportTeam).name.localeCompare((b as SportTeam).name)) as SportTeam[];
+
+  async function submitTrade() {
+    if (!tradeTarget || !tradePick) return;
+    setTradeSubmitting(true);
+    setTradeMsg(null);
+    try {
+      await api.post(`/leagues/${leagueId}/trades`, {
+        offeredSportTeamId: tradePick,
+        requestedSportTeamId: tradeTarget.sportTeamId,
+        receiverFantasyTeamId: tradeTarget.receiverFantasyTeamId,
+      });
+      setTradeMsg({ type: 'success', text: 'Trade proposal sent!' });
+      setTradePick('');
+      setTimeout(() => { setTradeTarget(null); setTradeMsg(null); }, 1500);
+    } catch (err: unknown) {
+      setTradeMsg({ type: 'error', text: err instanceof Error ? err.message : 'Failed to propose trade' });
+    } finally {
+      setTradeSubmitting(false);
+    }
+  }
 
   // Dropdown: logged-in user's team first, then others alphabetically
   const orderedTeams = [
@@ -688,6 +742,7 @@ function RosterTab({
               const stats = teamStatsMap.get(t.id);
               const bonus = teamBonusMap.get(t.id) ?? 0;
               const total = (stats?.points ?? 0) + bonus;
+              const canTrade = !viewingIsMe && !!myFantasyTeam && myOwnedTeams.length > 0;
               return (
                 <div key={t.id} className="flex items-center justify-between px-5 py-3.5 hover:bg-field/30 transition-colors gap-3">
                   <div className="flex items-center gap-3 min-w-0">
@@ -699,12 +754,23 @@ function RosterTab({
                       <p className="text-xs text-copy-3 mt-0.5">{formatLeagueName(t.sportLeagueId)}</p>
                     </div>
                   </div>
-                  {stats && (
-                    <div className="text-right flex-shrink-0">
-                      <p className="text-sm font-semibold text-copy">{total.toFixed(1)} pts{bonus > 0 && <span className="text-positive ml-1 text-xs">+{bonus}</span>}</p>
-                      <p className="text-xs text-copy-3 mt-0.5">{formatRecord(stats.wins, stats.draws, stats.losses, stats.sport)}</p>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-3 flex-shrink-0">
+                    {canTrade && (
+                      <button
+                        type="button"
+                        onClick={() => { setTradeTarget({ sportTeamId: t.id, sportTeamName: t.name, receiverFantasyTeamId: viewingTeam!.id }); setTradePick(''); setTradeMsg(null); }}
+                        className="text-xs text-brand border border-brand/30 hover:bg-brand/10 px-2.5 py-1 rounded-lg transition-colors font-medium"
+                      >
+                        Trade
+                      </button>
+                    )}
+                    {stats && (
+                      <div className="text-right">
+                        <p className="text-sm font-semibold text-copy">{total.toFixed(1)} pts{bonus > 0 && <span className="text-positive ml-1 text-xs">+{bonus}</span>}</p>
+                        <p className="text-xs text-copy-3 mt-0.5">{formatRecord(stats.wins, stats.draws, stats.losses, stats.sport)}</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               );
             })}
@@ -1006,6 +1072,80 @@ function RosterTab({
             </div>
           )}
         </div>
+        </div>
+      )}
+
+      {/* ── Trade proposal modal ── */}
+      {tradeTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+          onClick={() => setTradeTarget(null)}
+        >
+          <div
+            className="bg-card border border-line rounded-2xl p-6 max-w-sm w-full shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <h2 className="text-base font-bold text-copy mb-1">Propose Trade</h2>
+            <p className="text-xs text-copy-3 mb-5">Send a trade offer to {viewingTeam?.displayName}.</p>
+
+            <div className="mb-5 flex items-center gap-3 p-3 bg-field border border-line rounded-xl">
+              <div>
+                <p className="text-xs text-copy-3 mb-0.5">You want</p>
+                <p className="text-sm font-semibold text-copy">{tradeTarget.sportTeamName}</p>
+              </div>
+            </div>
+
+            <p className="text-xs font-medium text-copy-2 mb-2">Select what you&apos;re offering</p>
+            <div className="space-y-1.5 max-h-52 overflow-y-auto mb-4">
+              {myOwnedTeams.map(t => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setTradePick(t.id)}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-colors text-left ${
+                    tradePick === t.id
+                      ? 'border-brand bg-brand/10 text-copy'
+                      : 'border-line bg-field/50 hover:bg-field text-copy-2'
+                  }`}
+                >
+                  {t.logoUrl && <img src={t.logoUrl} alt={t.name} className="w-7 h-7 object-contain flex-shrink-0" />}
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{t.name}</p>
+                    <p className="text-xs text-copy-3">{formatLeagueName(t.sportLeagueId)}</p>
+                  </div>
+                  {tradePick === t.id && (
+                    <svg className="ml-auto text-brand flex-shrink-0" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  )}
+                </button>
+              ))}
+            </div>
+
+            {tradeMsg && (
+              <p className={`text-xs mb-3 ${tradeMsg.type === 'success' ? 'text-positive' : 'text-danger'}`}>
+                {tradeMsg.text}
+              </p>
+            )}
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setTradeTarget(null)}
+                className="flex-1 bg-field hover:bg-field-2 border border-line text-copy-2 text-sm font-medium py-2.5 rounded-xl transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={submitTrade}
+                disabled={!tradePick || tradeSubmitting}
+                className="flex-1 bg-brand hover:bg-brand-2 disabled:opacity-50 text-white text-sm font-semibold py-2.5 rounded-xl transition-colors"
+              >
+                {tradeSubmitting ? 'Sending...' : 'Send Offer'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -1508,6 +1648,198 @@ function WaiversTab({
               Submit the first claim →
             </button>
           )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Trades Tab ───────────────────────────────────────────────────────────────
+
+function TradesTab({
+  leagueId, fantasyTeams, setFantasyTeams, userId,
+}: {
+  leagueId: string;
+  fantasyTeams: FantasyTeam[];
+  setFantasyTeams: React.Dispatch<React.SetStateAction<FantasyTeam[]>>;
+  userId?: string;
+}) {
+  const [trades, setTrades] = useState<Trade[]>([]);
+  const [sportGroups, setSportGroups] = useState<SportGroup[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [acting, setActing] = useState<string | null>(null);
+
+  useEffect(() => {
+    Promise.all([
+      api.get<Trade[]>(`/leagues/${leagueId}/trades`),
+      api.get<SportGroup[]>(`/leagues/${leagueId}/sport-teams`),
+    ]).then(([t, sg]) => { setTrades(t); setSportGroups(sg); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [leagueId]);
+
+  const sportTeamById = new Map(sportGroups.flatMap(g => g.teams).map(t => [t.id, t]));
+  const fantasyTeamById = new Map(fantasyTeams.map(ft => [ft.id, ft]));
+
+  const myFantasyTeam = fantasyTeams.find(
+    ft => !ft.isPlaceholder && (ft.userId === userId || (ft.coOwnerIds ?? []).includes(userId ?? '')),
+  );
+
+  async function respond(tradeId: string, action: 'accept' | 'reject' | 'cancel') {
+    setActing(tradeId);
+    try {
+      const updated = await api.post<Trade>(`/leagues/${leagueId}/trades/${tradeId}/respond`, { action });
+      setTrades(prev => prev.map(t => t.id === tradeId ? updated : t));
+
+      if (action === 'accept') {
+        // Refresh fantasy teams so rosters reflect the swap
+        const freshTeams = await api.get<FantasyTeam[]>(`/leagues/${leagueId}/teams`);
+        setFantasyTeams(freshTeams);
+      }
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Failed');
+    } finally {
+      setActing(null);
+    }
+  }
+
+  if (loading) return <div className="flex justify-center py-12"><Spinner /></div>;
+
+  const pending  = trades.filter(t => t.status === 'pending');
+  const resolved = trades.filter(t => t.status !== 'pending');
+
+  const incoming = pending.filter(t => t.receiverFantasyTeamId === myFantasyTeam?.id);
+  const outgoing = pending.filter(t => t.proposerFantasyTeamId === myFantasyTeam?.id);
+  const other    = pending.filter(t =>
+    t.proposerFantasyTeamId !== myFantasyTeam?.id && t.receiverFantasyTeamId !== myFantasyTeam?.id,
+  );
+
+  function TradeRow({ trade }: { trade: Trade }) {
+    const offered   = sportTeamById.get(trade.offeredSportTeamId);
+    const requested = sportTeamById.get(trade.requestedSportTeamId);
+    const proposer  = fantasyTeamById.get(trade.proposerFantasyTeamId);
+    const receiver  = fantasyTeamById.get(trade.receiverFantasyTeamId);
+    const isActing  = acting === trade.id;
+    const isIncoming = trade.receiverFantasyTeamId === myFantasyTeam?.id;
+    const isOutgoing = trade.proposerFantasyTeamId === myFantasyTeam?.id;
+
+    const statusCls: Record<string, string> = {
+      pending:   'bg-warn-bg text-warn border-warn/20',
+      accepted:  'bg-positive-bg text-positive border-positive/20',
+      rejected:  'bg-danger-bg text-danger border-danger/20',
+      cancelled: 'bg-field text-copy-3 border-line',
+    };
+
+    return (
+      <div className="bg-card border border-line rounded-2xl p-4">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* Offered team */}
+            <div className="flex flex-col items-center gap-1 min-w-[80px]">
+              {offered?.logoUrl && <img src={offered.logoUrl} alt={offered.name} className="w-10 h-10 object-contain" />}
+              <p className="text-xs font-medium text-copy text-center leading-tight">{offered?.name ?? '—'}</p>
+              <p className="text-xs text-copy-3 text-center">{proposer?.displayName ?? '—'}</p>
+            </div>
+            {/* Arrow */}
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-copy-3 flex-shrink-0">
+              <path d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            {/* Requested team */}
+            <div className="flex flex-col items-center gap-1 min-w-[80px]">
+              {requested?.logoUrl && <img src={requested.logoUrl} alt={requested.name} className="w-10 h-10 object-contain" />}
+              <p className="text-xs font-medium text-copy text-center leading-tight">{requested?.name ?? '—'}</p>
+              <p className="text-xs text-copy-3 text-center">{receiver?.displayName ?? '—'}</p>
+            </div>
+          </div>
+          <span className={`text-xs font-medium px-2 py-0.5 rounded-full border capitalize ${statusCls[trade.status] ?? statusCls.cancelled}`}>
+            {trade.status}
+          </span>
+        </div>
+
+        <p className="text-xs text-copy-3 mt-3">
+          {new Date(trade.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+        </p>
+
+        {trade.status === 'pending' && (isIncoming || isOutgoing) && (
+          <div className="flex gap-2 mt-3">
+            {isIncoming && (
+              <>
+                <button
+                  onClick={() => respond(trade.id, 'accept')}
+                  disabled={isActing}
+                  className="flex-1 text-xs bg-positive-bg border border-positive/20 text-positive hover:bg-positive hover:text-white py-2 rounded-xl transition-colors font-semibold disabled:opacity-50"
+                >
+                  {isActing ? '...' : 'Accept'}
+                </button>
+                <button
+                  onClick={() => respond(trade.id, 'reject')}
+                  disabled={isActing}
+                  className="flex-1 text-xs bg-danger-bg border border-danger/20 text-danger hover:bg-danger hover:text-white py-2 rounded-xl transition-colors font-semibold disabled:opacity-50"
+                >
+                  {isActing ? '...' : 'Reject'}
+                </button>
+              </>
+            )}
+            {isOutgoing && (
+              <button
+                onClick={() => respond(trade.id, 'cancel')}
+                disabled={isActing}
+                className="text-xs bg-field border border-line text-copy-2 hover:bg-field-2 px-4 py-2 rounded-xl transition-colors font-medium disabled:opacity-50"
+              >
+                {isActing ? '...' : 'Cancel'}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  const isEmpty = trades.length === 0;
+
+  return (
+    <div className="space-y-6">
+      {isEmpty && (
+        <div className="text-center py-16 border border-dashed border-line rounded-2xl">
+          <p className="text-copy-3 text-sm">No trades yet. Propose one from the Roster tab.</p>
+        </div>
+      )}
+
+      {incoming.length > 0 && (
+        <div>
+          <h2 className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-3">Incoming · {incoming.length}</h2>
+          <div className="space-y-3">
+            {incoming.map(t => <TradeRow key={t.id} trade={t} />)}
+          </div>
+        </div>
+      )}
+
+      {outgoing.length > 0 && (
+        <div>
+          <h2 className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-3">Outgoing · {outgoing.length}</h2>
+          <div className="space-y-3">
+            {outgoing.map(t => <TradeRow key={t.id} trade={t} />)}
+          </div>
+        </div>
+      )}
+
+      {other.length > 0 && (
+        <div>
+          <h2 className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-3">Other Pending · {other.length}</h2>
+          <div className="space-y-3">
+            {other.map(t => <TradeRow key={t.id} trade={t} />)}
+          </div>
+        </div>
+      )}
+
+      {resolved.length > 0 && (
+        <div>
+          <h2 className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-3">History · {resolved.length}</h2>
+          <div className="space-y-3">
+            {[...resolved].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).map(t => (
+              <TradeRow key={t.id} trade={t} />
+            ))}
+          </div>
         </div>
       )}
     </div>
