@@ -191,11 +191,7 @@ export default function LeaguePage() {
                 {stateMeta.label}
               </span>
             </div>
-            <p className="text-copy-3 text-sm">
-              {league.startDate} – {league.endDate}
-              <span className="mx-2 text-line-2">·</span>
-              {members.length}{league.memberCap ? ` / ${league.memberCap}` : ''} members
-            </p>
+            <p className="text-copy-3 text-sm">{league.startDate} – {league.endDate}</p>
           </div>
           <div className="flex gap-2 flex-wrap">
             {league.state === 'auction' && (
@@ -217,12 +213,6 @@ export default function LeaguePage() {
               </button>
             )}
           </div>
-        </div>
-        {/* Sport tags */}
-        <div className="flex gap-1.5 flex-wrap">
-          {league.selectedSports.map(s => (
-            <span key={s} className="text-xs bg-field border border-line text-copy-3 px-2.5 py-0.5 rounded-lg">{formatLeagueName(s)}</span>
-          ))}
         </div>
       </div>
 
@@ -266,7 +256,7 @@ export default function LeaguePage() {
       )}
       {tab === 'history' && <HistoryTab previousLeagueId={league.previousLeagueId} />}
       {tab === 'settings' && (
-        <SettingsTab league={league} setLeague={setLeague} isCommissioner={isCommissioner} leagueId={id} />
+        <SettingsTab league={league} setLeague={setLeague} isCommissioner={isCommissioner} leagueId={id} memberCount={members.length} />
       )}
     </div>
   );
@@ -1967,12 +1957,13 @@ function HistoryTab({ previousLeagueId }: { previousLeagueId?: string }) {
 // ─── Settings Tab ─────────────────────────────────────────────────────────────
 
 function SettingsTab({
-  league, setLeague, isCommissioner, leagueId,
+  league, setLeague, isCommissioner, leagueId, memberCount,
 }: {
   league: League;
   setLeague: React.Dispatch<React.SetStateAction<League | null>>;
   isCommissioner: boolean;
   leagueId: string;
+  memberCount: number;
 }) {
   const router = useRouter();
   const [auctionForm, setAuctionForm] = useState({
@@ -2083,18 +2074,27 @@ function SettingsTab({
       {/* League info */}
       <div className="bg-card border border-line rounded-2xl p-5">
         <h2 className="text-sm font-semibold text-copy mb-4">League Info</h2>
-        <div className="grid grid-cols-2 gap-4 text-sm">
+        <div className="grid grid-cols-2 gap-4 text-sm mb-4">
           {[
             { label: 'League ID', value: <code className="text-xs font-mono text-copy-2">{league.id}</code> },
             { label: 'Visibility', value: <span className="text-copy">{league.isPublic ? 'Public' : 'Private'}</span> },
             { label: 'Start', value: <span className="text-copy">{league.startDate}</span> },
             { label: 'End', value: <span className="text-copy">{league.endDate}</span> },
+            { label: 'Members', value: <span className="text-copy">{memberCount}{league.memberCap ? ` / ${league.memberCap}` : ''}</span> },
           ].map(row => (
             <div key={row.label}>
               <p className="text-xs text-copy-3 mb-0.5">{row.label}</p>
               {row.value}
             </div>
           ))}
+        </div>
+        <div>
+          <p className="text-xs text-copy-3 mb-2">Sports</p>
+          <div className="flex gap-1.5 flex-wrap">
+            {league.selectedSports.map(s => (
+              <span key={s} className="text-xs bg-field border border-line text-copy-2 px-2.5 py-1 rounded-lg">{formatLeagueName(s)}</span>
+            ))}
+          </div>
         </div>
         {isCommissioner && (
           <div className="mt-4 pt-3 border-t border-line space-y-3">
