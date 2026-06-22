@@ -89,8 +89,8 @@ interface Trade {
   proposerUserId: string;
   receiverFantasyTeamId: string;
   receiverUserId: string;
-  offeredSportTeamId: string;
-  requestedSportTeamId: string;
+  offeredSportTeamIds: string[];
+  requestedSportTeamIds: string[];
   status: 'pending' | 'accepted' | 'rejected' | 'cancelled';
   createdAt: string;
   updatedAt: string;
@@ -453,8 +453,8 @@ function RosterTab({
     otherFtId: string;
     counterTradeId?: string;
   } | null>(null);
-  const [tradeOffered, setTradeOffered] = useState('');
-  const [tradeRequested, setTradeRequested] = useState('');
+  const [tradeOffered, setTradeOffered] = useState<string[]>([]);
+  const [tradeRequested, setTradeRequested] = useState<string[]>([]);
   const [tradeSubmitting, setTradeSubmitting] = useState(false);
   const [tradeMsg, setTradeMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [actingTrade, setActingTrade] = useState<string | null>(null);
@@ -573,10 +573,10 @@ function RosterTab({
       return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi) || (a as SportTeam).name.localeCompare((b as SportTeam).name);
     }) as SportTeam[];
 
-  const canProposeTrade = !viewingIsMe && !viewingTeam?.isPlaceholder && !!myFantasyTeam && myOwnedTeams.length > 0;
+  const canProposeTrade = !viewingIsMe && !!myFantasyTeam && myOwnedTeams.length > 0;
 
   async function submitTrade() {
-    if (!tradeModal || !tradeOffered || !tradeRequested) return;
+    if (!tradeModal || !tradeOffered.length || !tradeRequested.length) return;
     setTradeSubmitting(true);
     setTradeMsg(null);
     try {
@@ -584,8 +584,8 @@ function RosterTab({
         await api.post(`/leagues/${leagueId}/trades/${tradeModal.counterTradeId}/respond`, { action: 'reject' });
       }
       const created = await api.post<Trade>(`/leagues/${leagueId}/trades`, {
-        offeredSportTeamId: tradeOffered,
-        requestedSportTeamId: tradeRequested,
+        offeredSportTeamIds: tradeOffered,
+        requestedSportTeamIds: tradeRequested,
         receiverFantasyTeamId: tradeModal.otherFtId,
       });
       setTrades(prev => {
@@ -774,32 +774,40 @@ function RosterTab({
           </div>
           <div className="divide-y divide-line/50">
             {incomingTrades.map(trade => {
-              const offered = sportTeamById.get(trade.offeredSportTeamId);
-              const requested = sportTeamById.get(trade.requestedSportTeamId);
+              const offeredTeams = trade.offeredSportTeamIds.map(id => sportTeamById.get(id)).filter(Boolean) as SportTeam[];
+              const requestedTeams = trade.requestedSportTeamIds.map(id => sportTeamById.get(id)).filter(Boolean) as SportTeam[];
               const proposerFt = fantasyTeamById.get(trade.proposerFantasyTeamId);
               const isActing = actingTrade === trade.id;
               return (
                 <div key={trade.id} className="px-5 py-4">
                   <div className="flex items-start justify-between gap-3 flex-wrap">
-                    <div>
+                    <div className="min-w-0">
                       <p className="text-xs text-copy-3 mb-2">Incoming offer from <span className="font-semibold text-copy-2">{proposerFt?.displayName ?? '—'}</span></p>
-                      <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-2">
-                          {offered?.logoUrl && <img src={offered.logoUrl} alt={offered.name} className="w-8 h-8 object-contain" />}
-                          <div>
-                            <p className="text-sm font-semibold text-copy">{offered?.name ?? '—'}</p>
-                            <p className="text-xs text-copy-3">{offered ? formatLeagueName(offered.sportLeagueId) : ''}</p>
-                          </div>
+                      <div className="flex items-start gap-3">
+                        <div className="space-y-1.5">
+                          {offeredTeams.map(t => (
+                            <div key={t.id} className="flex items-center gap-2">
+                              {t.logoUrl && <img src={t.logoUrl} alt={t.name} className="w-7 h-7 object-contain flex-shrink-0" />}
+                              <div>
+                                <p className="text-sm font-semibold text-copy leading-tight">{t.name}</p>
+                                <p className="text-xs text-copy-3">{formatLeagueName(t.sportLeagueId)}</p>
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-copy-3 flex-shrink-0">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-copy-3 flex-shrink-0 mt-1.5">
                           <path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>
-                        <div className="flex items-center gap-2">
-                          {requested?.logoUrl && <img src={requested.logoUrl} alt={requested.name} className="w-8 h-8 object-contain" />}
-                          <div>
-                            <p className="text-sm font-semibold text-copy">{requested?.name ?? '—'}</p>
-                            <p className="text-xs text-copy-3">{requested ? formatLeagueName(requested.sportLeagueId) : ''}</p>
-                          </div>
+                        <div className="space-y-1.5">
+                          {requestedTeams.map(t => (
+                            <div key={t.id} className="flex items-center gap-2">
+                              {t.logoUrl && <img src={t.logoUrl} alt={t.name} className="w-7 h-7 object-contain flex-shrink-0" />}
+                              <div>
+                                <p className="text-sm font-semibold text-copy leading-tight">{t.name}</p>
+                                <p className="text-xs text-copy-3">{formatLeagueName(t.sportLeagueId)}</p>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     </div>
@@ -814,8 +822,8 @@ function RosterTab({
                       <button
                         onClick={() => {
                           setTradeModal({ mode: 'counter', otherFtId: trade.proposerFantasyTeamId, counterTradeId: trade.id });
-                          setTradeOffered(trade.requestedSportTeamId);
-                          setTradeRequested(trade.offeredSportTeamId);
+                          setTradeOffered([...trade.requestedSportTeamIds]);
+                          setTradeRequested([...trade.offeredSportTeamIds]);
                           setTradeMsg(null);
                         }}
                         disabled={isActing}
@@ -836,32 +844,40 @@ function RosterTab({
               );
             })}
             {outgoingTrades.map(trade => {
-              const offered = sportTeamById.get(trade.offeredSportTeamId);
-              const requested = sportTeamById.get(trade.requestedSportTeamId);
+              const offeredTeams = trade.offeredSportTeamIds.map(id => sportTeamById.get(id)).filter(Boolean) as SportTeam[];
+              const requestedTeams = trade.requestedSportTeamIds.map(id => sportTeamById.get(id)).filter(Boolean) as SportTeam[];
               const receiverFt = fantasyTeamById.get(trade.receiverFantasyTeamId);
               const isActing = actingTrade === trade.id;
               return (
                 <div key={trade.id} className="px-5 py-4">
                   <div className="flex items-start justify-between gap-3 flex-wrap">
-                    <div>
+                    <div className="min-w-0">
                       <p className="text-xs text-copy-3 mb-2">Offer sent to <span className="font-semibold text-copy-2">{receiverFt?.displayName ?? '—'}</span></p>
-                      <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-2">
-                          {offered?.logoUrl && <img src={offered.logoUrl} alt={offered.name} className="w-8 h-8 object-contain" />}
-                          <div>
-                            <p className="text-sm font-semibold text-copy">{offered?.name ?? '—'}</p>
-                            <p className="text-xs text-copy-3">{offered ? formatLeagueName(offered.sportLeagueId) : ''}</p>
-                          </div>
+                      <div className="flex items-start gap-3">
+                        <div className="space-y-1.5">
+                          {offeredTeams.map(t => (
+                            <div key={t.id} className="flex items-center gap-2">
+                              {t.logoUrl && <img src={t.logoUrl} alt={t.name} className="w-7 h-7 object-contain flex-shrink-0" />}
+                              <div>
+                                <p className="text-sm font-semibold text-copy leading-tight">{t.name}</p>
+                                <p className="text-xs text-copy-3">{formatLeagueName(t.sportLeagueId)}</p>
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-copy-3 flex-shrink-0">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-copy-3 flex-shrink-0 mt-1.5">
                           <path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>
-                        <div className="flex items-center gap-2">
-                          {requested?.logoUrl && <img src={requested.logoUrl} alt={requested.name} className="w-8 h-8 object-contain" />}
-                          <div>
-                            <p className="text-sm font-semibold text-copy">{requested?.name ?? '—'}</p>
-                            <p className="text-xs text-copy-3">{requested ? formatLeagueName(requested.sportLeagueId) : ''}</p>
-                          </div>
+                        <div className="space-y-1.5">
+                          {requestedTeams.map(t => (
+                            <div key={t.id} className="flex items-center gap-2">
+                              {t.logoUrl && <img src={t.logoUrl} alt={t.name} className="w-7 h-7 object-contain flex-shrink-0" />}
+                              <div>
+                                <p className="text-sm font-semibold text-copy leading-tight">{t.name}</p>
+                                <p className="text-xs text-copy-3">{formatLeagueName(t.sportLeagueId)}</p>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     </div>
@@ -903,8 +919,8 @@ function RosterTab({
                 type="button"
                 onClick={() => {
                   setTradeModal({ mode: 'propose', otherFtId: viewingId });
-                  setTradeOffered('');
-                  setTradeRequested('');
+                  setTradeOffered([]);
+                  setTradeRequested([]);
                   setTradeMsg(null);
                 }}
                 className="bg-brand/10 hover:bg-brand/20 border border-brand/30 text-brand text-sm font-semibold px-4 py-2 rounded-xl transition-colors whitespace-nowrap"
@@ -1292,27 +1308,30 @@ function RosterTab({
                 <div className="overflow-y-auto flex-1">
                   {modalOtherOwnedTeams.length === 0 ? (
                     <p className="text-xs text-copy-3 px-4 py-6 text-center">No teams</p>
-                  ) : modalOtherOwnedTeams.map(t => (
-                    <button
-                      key={t.id}
-                      type="button"
-                      onClick={() => setTradeRequested(t.id)}
-                      className={`w-full flex items-center gap-3 px-4 py-3 border-b border-line/30 transition-colors text-left ${
-                        tradeRequested === t.id ? 'bg-brand/10 border-l-2 border-l-brand' : 'hover:bg-field/50'
-                      }`}
-                    >
-                      {t.logoUrl && <img src={t.logoUrl} alt={t.name} className="w-8 h-8 object-contain flex-shrink-0" />}
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-copy truncate">{t.name}</p>
-                        <p className="text-xs text-copy-3">{formatLeagueName(t.sportLeagueId)}</p>
-                      </div>
-                      {tradeRequested === t.id && (
-                        <svg className="ml-auto text-brand flex-shrink-0" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                          <polyline points="20 6 9 17 4 12" />
-                        </svg>
-                      )}
-                    </button>
-                  ))}
+                  ) : modalOtherOwnedTeams.map(t => {
+                    const sel = tradeRequested.includes(t.id);
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => setTradeRequested(prev => sel ? prev.filter(id => id !== t.id) : [...prev, t.id])}
+                        className={`w-full flex items-center gap-3 px-4 py-3 border-b border-line/30 transition-colors text-left ${
+                          sel ? 'bg-brand/10 border-l-2 border-l-brand' : 'hover:bg-field/50'
+                        }`}
+                      >
+                        {t.logoUrl && <img src={t.logoUrl} alt={t.name} className="w-8 h-8 object-contain flex-shrink-0" />}
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-copy truncate">{t.name}</p>
+                          <p className="text-xs text-copy-3">{formatLeagueName(t.sportLeagueId)}</p>
+                        </div>
+                        {sel && (
+                          <svg className="ml-auto text-brand flex-shrink-0" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -1324,27 +1343,30 @@ function RosterTab({
                 <div className="overflow-y-auto flex-1">
                   {myOwnedTeams.length === 0 ? (
                     <p className="text-xs text-copy-3 px-4 py-6 text-center">No teams</p>
-                  ) : myOwnedTeams.map(t => (
-                    <button
-                      key={t.id}
-                      type="button"
-                      onClick={() => setTradeOffered(t.id)}
-                      className={`w-full flex items-center gap-3 px-4 py-3 border-b border-line/30 transition-colors text-left ${
-                        tradeOffered === t.id ? 'bg-brand/10 border-l-2 border-l-brand' : 'hover:bg-field/50'
-                      }`}
-                    >
-                      {t.logoUrl && <img src={t.logoUrl} alt={t.name} className="w-8 h-8 object-contain flex-shrink-0" />}
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-copy truncate">{t.name}</p>
-                        <p className="text-xs text-copy-3">{formatLeagueName(t.sportLeagueId)}</p>
-                      </div>
-                      {tradeOffered === t.id && (
-                        <svg className="ml-auto text-brand flex-shrink-0" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                          <polyline points="20 6 9 17 4 12" />
-                        </svg>
-                      )}
-                    </button>
-                  ))}
+                  ) : myOwnedTeams.map(t => {
+                    const sel = tradeOffered.includes(t.id);
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => setTradeOffered(prev => sel ? prev.filter(id => id !== t.id) : [...prev, t.id])}
+                        className={`w-full flex items-center gap-3 px-4 py-3 border-b border-line/30 transition-colors text-left ${
+                          sel ? 'bg-brand/10 border-l-2 border-l-brand' : 'hover:bg-field/50'
+                        }`}
+                      >
+                        {t.logoUrl && <img src={t.logoUrl} alt={t.name} className="w-8 h-8 object-contain flex-shrink-0" />}
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-copy truncate">{t.name}</p>
+                          <p className="text-xs text-copy-3">{formatLeagueName(t.sportLeagueId)}</p>
+                        </div>
+                        {sel && (
+                          <svg className="ml-auto text-brand flex-shrink-0" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -1354,9 +1376,9 @@ function RosterTab({
                 <p className={`text-xs ${tradeMsg.type === 'success' ? 'text-positive' : 'text-danger'}`}>{tradeMsg.text}</p>
               ) : (
                 <p className="text-xs text-copy-3">
-                  {tradeOffered && tradeRequested
-                    ? `Offering ${sportTeamById.get(tradeOffered)?.name ?? '—'} for ${sportTeamById.get(tradeRequested)?.name ?? '—'}`
-                    : 'Select one team from each column'}
+                  {tradeOffered.length > 0 && tradeRequested.length > 0
+                    ? `Offering ${tradeOffered.length} team${tradeOffered.length !== 1 ? 's' : ''} for ${tradeRequested.length} team${tradeRequested.length !== 1 ? 's' : ''}`
+                    : 'Select at least one team from each column'}
                 </p>
               )}
               <div className="flex gap-2 flex-shrink-0">
@@ -1370,7 +1392,7 @@ function RosterTab({
                 <button
                   type="button"
                   onClick={submitTrade}
-                  disabled={!tradeOffered || !tradeRequested || tradeSubmitting}
+                  disabled={!tradeOffered.length || !tradeRequested.length || tradeSubmitting}
                   className="bg-brand hover:bg-brand-2 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors"
                 >
                   {tradeSubmitting ? 'Sending...' : 'Send Offer'}
