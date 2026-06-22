@@ -68,6 +68,7 @@ export default function AdminPage() {
   const [bonusForm, setBonusForm] = useState({ teamId: '', seasonId: '', label: '', points: '' });
   const [awardStatus, setAwardStatus] = useState<{ status: 'idle' | 'loading' | 'success' | 'error'; message: string }>({ status: 'idle', message: '' });
   const [bonusList, setBonusList] = useState<BonusPoint[]>([]);
+  const [expandedSports, setExpandedSports] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetch(`${BASE}/sports/leagues`).then(r => r.json()).then(setSports).catch(() => {});
@@ -117,38 +118,23 @@ export default function AdminPage() {
     } catch { /* ignore */ }
   }
 
-  const filteredTeams = teams.filter(t => t.name.toLowerCase().includes(teamFilter.toLowerCase()));
+  const selectedTeamName = teams.find(t => t.id === bonusForm.teamId)?.name ?? '';
+  const filteredTeams = teams.filter(t =>
+    !teamFilter.trim() || t.name.toLowerCase().includes(teamFilter.toLowerCase())
+  );
 
-  // ── NCAAF Debug ────────────────────────────────────────────────────────────
-  const [ncaafSeason, setNcaafSeason] = useState('2024-2025');
-  const [ncaafTeam, setNcaafTeam] = useState('Texas Tech');
-  const [ncaafDebug, setNcaafDebug] = useState<{ status: 'idle' | 'loading' | 'success' | 'error'; data: any }>({ status: 'idle', data: null });
+  // Group bonus list by sport league
+  const bonusBySport = bonusList.reduce<Record<string, BonusPoint[]>>((acc, b) => {
+    (acc[b.sportLeagueId] ??= []).push(b);
+    return acc;
+  }, {});
 
-  async function runNcaafDebug() {
-    setNcaafDebug({ status: 'loading', data: null });
-    try {
-      const params = new URLSearchParams({ season: ncaafSeason, team: ncaafTeam });
-      const res = await api.get<any>(`/admin/ingestion/ncaaf-debug?${params}`);
-      setNcaafDebug({ status: 'success', data: res });
-    } catch (e: unknown) {
-      setNcaafDebug({ status: 'error', data: e instanceof Error ? e.message : 'Failed' });
-    }
-  }
-
-  // ── NCAAB Debug ────────────────────────────────────────────────────────────
-  const [ncaabSeason, setNcaabSeason] = useState('2024-2025');
-  const [ncaabTeam, setNcaabTeam] = useState('Connecticut');
-  const [ncaabDebug, setNcaabDebug] = useState<{ status: 'idle' | 'loading' | 'success' | 'error'; data: any }>({ status: 'idle', data: null });
-
-  async function runNcaabDebug() {
-    setNcaabDebug({ status: 'loading', data: null });
-    try {
-      const params = new URLSearchParams({ season: ncaabSeason, ...(ncaabTeam ? { team: ncaabTeam } : {}) });
-      const res = await api.get<any>(`/admin/ingestion/ncaab-debug?${params}`);
-      setNcaabDebug({ status: 'success', data: res });
-    } catch (e: unknown) {
-      setNcaabDebug({ status: 'error', data: e instanceof Error ? e.message : 'Failed' });
-    }
+  function toggleSport(sportId: string) {
+    setExpandedSports(prev => {
+      const next = new Set(prev);
+      if (next.has(sportId)) next.delete(sportId); else next.add(sportId);
+      return next;
+    });
   }
 
   // ── League Scoring ─────────────────────────────────────────────────────────
@@ -237,98 +223,6 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* ── NCAAF Debug ── */}
-        {tab === 'sync' && (
-          <div className="bg-card border border-line rounded-2xl p-5 mt-4">
-            <h2 className="text-sm font-semibold text-copy mb-1">NCAAF Records Debug</h2>
-            <p className="text-xs text-copy-3 mb-4">
-              Queries ESPN scoreboard and Firestore fixtures live. Shows how many games each source has and a sample filtered by team name.
-            </p>
-            <div className="space-y-2 mb-3">
-              <div>
-                <label className="block text-xs font-medium text-copy-2 mb-1">Season</label>
-                <input
-                  value={ncaafSeason}
-                  onChange={e => setNcaafSeason(e.target.value)}
-                  placeholder="2025-2026"
-                  className={inputCls}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-copy-2 mb-1">Team name filter (partial match)</label>
-                <input
-                  value={ncaafTeam}
-                  onChange={e => setNcaafTeam(e.target.value)}
-                  placeholder="e.g. Texas Tech"
-                  className={inputCls}
-                />
-              </div>
-            </div>
-            <button
-              onClick={runNcaafDebug}
-              disabled={ncaafDebug.status === 'loading'}
-              className="flex items-center gap-1.5 bg-field hover:bg-field-2 border border-line disabled:opacity-50 text-copy-2 text-xs px-3 py-1.5 rounded-lg transition-colors"
-            >
-              {ncaafDebug.status === 'loading' ? <Spinner /> : null}
-              {ncaafDebug.status === 'loading' ? 'Loading...' : 'Run Debug'}
-            </button>
-            {ncaafDebug.status === 'success' && (
-              <pre className="mt-3 bg-field rounded-xl p-3 text-xs text-copy overflow-x-auto whitespace-pre-wrap">
-                {JSON.stringify(ncaafDebug.data, null, 2)}
-              </pre>
-            )}
-            {ncaafDebug.status === 'error' && (
-              <p className="text-xs text-danger mt-2">{String(ncaafDebug.data)}</p>
-            )}
-          </div>
-        )}
-
-        {/* ── NCAAB Debug ── */}
-        {tab === 'sync' && (
-          <div className="bg-card border border-line rounded-2xl p-5 mt-4">
-            <h2 className="text-sm font-semibold text-copy mb-1">NCAAB Records Debug</h2>
-            <p className="text-xs text-copy-3 mb-4">
-              Shows raw ESPN event counts, the computed cutoff date, and how many events fall before vs. after it. Helps diagnose why tournament games might be leaking into records.
-            </p>
-            <div className="space-y-2 mb-3">
-              <div>
-                <label className="block text-xs font-medium text-copy-2 mb-1">Season</label>
-                <input
-                  value={ncaabSeason}
-                  onChange={e => setNcaabSeason(e.target.value)}
-                  placeholder="2024-2025"
-                  className={inputCls}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-copy-2 mb-1">Team name filter (partial match)</label>
-                <input
-                  value={ncaabTeam}
-                  onChange={e => setNcaabTeam(e.target.value)}
-                  placeholder="e.g. Connecticut"
-                  className={inputCls}
-                />
-              </div>
-            </div>
-            <button
-              onClick={runNcaabDebug}
-              disabled={ncaabDebug.status === 'loading'}
-              className="flex items-center gap-1.5 bg-field hover:bg-field-2 border border-line disabled:opacity-50 text-copy-2 text-xs px-3 py-1.5 rounded-lg transition-colors"
-            >
-              {ncaabDebug.status === 'loading' ? <Spinner /> : null}
-              {ncaabDebug.status === 'loading' ? 'Loading...' : 'Run Debug'}
-            </button>
-            {ncaabDebug.status === 'success' && (
-              <pre className="mt-3 bg-field rounded-xl p-3 text-xs text-copy overflow-x-auto whitespace-pre-wrap">
-                {JSON.stringify(ncaabDebug.data, null, 2)}
-              </pre>
-            )}
-            {ncaabDebug.status === 'error' && (
-              <p className="text-xs text-danger mt-2">{String(ncaabDebug.data)}</p>
-            )}
-          </div>
-        )}
-
         {/* ── Bonus Points ── */}
         {tab === 'bonus' && (
           <div className="space-y-4">
@@ -347,32 +241,45 @@ export default function AdminPage() {
                   <>
                     <div>
                       <label className="block text-xs font-medium text-copy-2 mb-1.5">
-                        Team{bonusForm.teamId && <span className="text-brand ml-1.5 font-semibold">✓ selected</span>}
+                        Team
+                        {selectedTeamName && (
+                          <span className="ml-2 text-brand font-semibold">{selectedTeamName}</span>
+                        )}
                       </label>
                       <input
                         value={teamFilter}
-                        onChange={e => setTeamFilter(e.target.value)}
-                        placeholder="Filter teams..."
-                        className={`${inputCls} mb-2`}
+                        onChange={e => {
+                          setTeamFilter(e.target.value);
+                          setBonusForm(f => ({ ...f, teamId: '' }));
+                        }}
+                        onKeyDown={e => { if (e.key === 'Enter') e.preventDefault(); }}
+                        placeholder="Search teams..."
+                        className={inputCls}
                       />
-                      <div className="max-h-44 overflow-y-auto border border-line-2 rounded-xl bg-field">
-                        {filteredTeams.length === 0 ? (
-                          <p className="text-copy-3 text-xs px-3 py-3">No teams found</p>
-                        ) : filteredTeams.map(t => (
-                          <button
-                            key={t.id}
-                            type="button"
-                            onClick={() => setBonusForm(f => ({ ...f, teamId: t.id }))}
-                            className={`w-full text-left px-3 py-2.5 text-sm transition-colors border-b border-line/50 last:border-0 ${
-                              bonusForm.teamId === t.id
-                                ? 'bg-brand text-white'
-                                : 'text-copy-2 hover:bg-field-2 hover:text-copy'
-                            }`}
-                          >
-                            {t.name}
-                          </button>
-                        ))}
-                      </div>
+                      {(teamFilter.trim() || !bonusForm.teamId) && (
+                        <div className="mt-1.5 max-h-52 overflow-y-auto border border-line-2 rounded-xl bg-field">
+                          {filteredTeams.length === 0 ? (
+                            <p className="text-copy-3 text-xs px-3 py-3">No teams found</p>
+                          ) : filteredTeams.map(t => (
+                            <button
+                              key={t.id}
+                              type="button"
+                              onMouseDown={e => {
+                                e.preventDefault();
+                                setBonusForm(f => ({ ...f, teamId: t.id }));
+                                setTeamFilter('');
+                              }}
+                              className={`w-full text-left px-3 py-2.5 text-sm transition-colors border-b border-line/50 last:border-0 ${
+                                bonusForm.teamId === t.id
+                                  ? 'bg-brand text-white'
+                                  : 'text-copy-2 hover:bg-field-2 hover:text-copy'
+                              }`}
+                            >
+                              {t.name}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
                     <div>
@@ -422,26 +329,57 @@ export default function AdminPage() {
               </form>
             </div>
 
+            {/* Awarded bonus points grouped by league */}
             <div className="bg-card border border-line rounded-2xl p-5">
               <h2 className="text-sm font-semibold text-copy mb-4">Awarded Bonus Points</h2>
               {bonusList.length === 0 ? (
                 <p className="text-copy-3 text-sm">No bonus points awarded yet.</p>
               ) : (
-                <div className="space-y-1">
-                  {bonusList.map(b => (
-                    <div key={b.id} className="flex items-center justify-between py-3 border-b border-line/50 last:border-0">
-                      <div>
-                        <p className="text-sm font-medium text-copy">{b.teamName} — {b.label}</p>
-                        <p className="text-xs text-copy-3 mt-0.5">{formatLeagueName(b.sportLeagueId)} · {b.seasonLabel} · +{b.points} pts</p>
+                <div className="space-y-2">
+                  {Object.entries(bonusBySport).sort(([a], [b]) => a.localeCompare(b)).map(([sportId, entries]) => {
+                    const isOpen = expandedSports.has(sportId);
+                    return (
+                      <div key={sportId} className="border border-line rounded-xl overflow-hidden">
+                        <button
+                          type="button"
+                          onClick={() => toggleSport(sportId)}
+                          className="w-full flex items-center justify-between px-4 py-3 bg-field/50 hover:bg-field transition-colors text-left"
+                        >
+                          <div className="flex items-center gap-2">
+                            <svg
+                              width="12" height="12" viewBox="0 0 24 24" fill="none"
+                              stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
+                              className={`text-copy-3 transition-transform ${isOpen ? 'rotate-90' : ''}`}
+                            >
+                              <polyline points="9 18 15 12 9 6" />
+                            </svg>
+                            <span className="text-sm font-medium text-copy">{formatLeagueName(sportId)}</span>
+                          </div>
+                          <span className="text-xs text-copy-3 bg-field border border-line px-2 py-0.5 rounded-full">
+                            {entries.length}
+                          </span>
+                        </button>
+                        {isOpen && (
+                          <div className="divide-y divide-line/50">
+                            {entries.map(b => (
+                              <div key={b.id} className="flex items-center justify-between px-4 py-3">
+                                <div>
+                                  <p className="text-sm font-medium text-copy">{b.teamName} — {b.label}</p>
+                                  <p className="text-xs text-copy-3 mt-0.5">{b.seasonLabel} · +{b.points} pts</p>
+                                </div>
+                                <button
+                                  onClick={() => deleteBonus(b.id)}
+                                  className="text-xs text-danger hover:text-danger/80 px-3 py-1.5 rounded-lg hover:bg-danger-bg transition-colors ml-4 flex-shrink-0"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                      <button
-                        onClick={() => deleteBonus(b.id)}
-                        className="text-xs text-danger hover:text-danger/80 px-3 py-1.5 rounded-lg hover:bg-danger-bg transition-colors ml-4 flex-shrink-0"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
