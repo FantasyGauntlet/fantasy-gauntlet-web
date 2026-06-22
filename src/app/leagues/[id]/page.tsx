@@ -897,8 +897,8 @@ function RosterTab({
               )}
             <p className="text-xs text-copy-3 mt-0.5">{viewingOwnedTeams.length} team{viewingOwnedTeams.length !== 1 ? 's' : ''}</p>
           </div>
-          {orderedTeams.length > 1 && (
-            <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2">
+            {orderedTeams.length > 1 && (
               <select
                 value={viewingId}
                 onChange={e => setViewingId(e.target.value)}
@@ -910,22 +910,22 @@ function RosterTab({
                   </option>
                 ))}
               </select>
-              {canProposeTrade && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTradeModal({ mode: 'propose', otherFtId: viewingId });
-                    setTradeOffered('');
-                    setTradeRequested('');
-                    setTradeMsg(null);
-                  }}
-                  className="bg-brand/10 hover:bg-brand/20 border border-brand/30 text-brand text-sm font-semibold px-4 py-2 rounded-xl transition-colors whitespace-nowrap"
-                >
-                  Trade
-                </button>
-              )}
-            </div>
-          )}
+            )}
+            {canProposeTrade && (
+              <button
+                type="button"
+                onClick={() => {
+                  setTradeModal({ mode: 'propose', otherFtId: viewingId });
+                  setTradeOffered('');
+                  setTradeRequested('');
+                  setTradeMsg(null);
+                }}
+                className="bg-brand/10 hover:bg-brand/20 border border-brand/30 text-brand text-sm font-semibold px-4 py-2 rounded-xl transition-colors whitespace-nowrap"
+              >
+                Trade
+              </button>
+            )}
+          </div>
         </div>
         {viewingOwnedTeams.length === 0 ? (
           <div className="px-5 py-8 text-center">
