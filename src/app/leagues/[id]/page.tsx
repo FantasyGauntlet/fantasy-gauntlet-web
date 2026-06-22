@@ -96,7 +96,7 @@ interface Trade {
   updatedAt: string;
 }
 
-type Tab = 'standings' | 'roster' | 'waivers' | 'history' | 'settings';
+type Tab = 'standings' | 'roster' | 'waivers' | 'settings';
 
 const STATE_META: Record<string, { label: string; cls: string }> = {
   draft:     { label: 'Draft',     cls: 'bg-warn-bg text-warn border-warn/20' },
@@ -175,7 +175,6 @@ export default function LeaguePage() {
     { key: 'standings', label: 'Standings' },
     { key: 'roster', label: 'Roster' },
     { key: 'waivers', label: 'Waivers' },
-    { key: 'history', label: 'History' },
     { key: 'settings', label: 'League' },
   ];
 
@@ -191,7 +190,6 @@ export default function LeaguePage() {
                 {stateMeta.label}
               </span>
             </div>
-            <p className="text-copy-3 text-sm">{league.startDate} – {league.endDate}</p>
           </div>
           <div className="flex gap-2 flex-wrap">
             {league.state === 'auction' && (
@@ -254,9 +252,8 @@ export default function LeaguePage() {
           selectedSports={league.selectedSports}
         />
       )}
-      {tab === 'history' && <HistoryTab previousLeagueId={league.previousLeagueId} />}
       {tab === 'settings' && (
-        <SettingsTab league={league} setLeague={setLeague} isCommissioner={isCommissioner} leagueId={id} memberCount={members.length} />
+        <SettingsTab league={league} setLeague={setLeague} isCommissioner={isCommissioner} leagueId={id} memberCount={members.length} previousLeagueId={league.previousLeagueId} />
       )}
     </div>
   );
@@ -1934,36 +1931,17 @@ function WaiversTab({
   );
 }
 
-// ─── History Tab ──────────────────────────────────────────────────────────────
-
-function HistoryTab({ previousLeagueId }: { previousLeagueId?: string }) {
-  return (
-    <div className="text-center py-16 border border-dashed border-line rounded-2xl">
-      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-copy-3 mx-auto mb-3">
-        <path d="M12 8v4l3 3" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M3.05 11a9 9 0 1 1 .5 4" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M3 16v-5h5" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-      <p className="text-copy-2 text-sm font-medium">No previous seasons on record.</p>
-      <p className="text-copy-3 text-xs mt-1">
-        {previousLeagueId
-          ? 'Previous season data will appear here once available.'
-          : 'This is the first season of this league.'}
-      </p>
-    </div>
-  );
-}
-
 // ─── Settings Tab ─────────────────────────────────────────────────────────────
 
 function SettingsTab({
-  league, setLeague, isCommissioner, leagueId, memberCount,
+  league, setLeague, isCommissioner, leagueId, memberCount, previousLeagueId,
 }: {
   league: League;
   setLeague: React.Dispatch<React.SetStateAction<League | null>>;
   isCommissioner: boolean;
   leagueId: string;
   memberCount: number;
+  previousLeagueId?: string;
 }) {
   const router = useRouter();
   const [auctionForm, setAuctionForm] = useState({
@@ -2136,6 +2114,24 @@ function SettingsTab({
             )}
           </div>
         )}
+      </div>
+
+      {/* Previous Season */}
+      <div className="bg-card border border-line rounded-2xl p-5">
+        <h2 className="text-sm font-semibold text-copy mb-4">Previous Season</h2>
+        <div className="text-center py-10 border border-dashed border-line rounded-xl">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-copy-3 mx-auto mb-3">
+            <path d="M12 8v4l3 3" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M3.05 11a9 9 0 1 1 .5 4" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M3 16v-5h5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <p className="text-copy-2 text-sm font-medium">No previous seasons on record.</p>
+          <p className="text-copy-3 text-xs mt-1">
+            {previousLeagueId
+              ? 'Previous season data will appear here once available.'
+              : 'This is the first season of this league.'}
+          </p>
+        </div>
       </div>
 
       {/* Auction config */}
