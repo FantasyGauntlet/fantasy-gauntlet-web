@@ -160,7 +160,7 @@ export default function LeaguePage() {
     { key: 'roster', label: 'Roster' },
     { key: 'waivers', label: 'Waivers' },
     { key: 'history', label: 'History' },
-    { key: 'settings', label: 'Settings' },
+    { key: 'settings', label: 'League' },
   ];
 
   return (
