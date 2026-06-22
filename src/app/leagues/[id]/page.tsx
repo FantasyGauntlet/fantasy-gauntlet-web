@@ -500,7 +500,7 @@ function RosterTab({
 
   const ownerMap: Record<string, FantasyTeam> = {};
   for (const ft of fantasyTeams) {
-    for (const tid of ft.ownedTeamIds) ownerMap[tid] = ft;
+    for (const tid of (ft.ownedTeamIds ?? [])) ownerMap[tid] = ft;
   }
 
   const allSportTeams = sportGroups.flatMap(g => g.teams);
@@ -766,8 +766,8 @@ function RosterTab({
           </div>
           <div className="divide-y divide-line/50">
             {incomingTrades.map(trade => {
-              const offeredTeams = trade.offeredSportTeamIds.map(id => sportTeamById.get(id)).filter(Boolean) as SportTeam[];
-              const requestedTeams = trade.requestedSportTeamIds.map(id => sportTeamById.get(id)).filter(Boolean) as SportTeam[];
+              const offeredTeams = (trade.offeredSportTeamIds ?? []).map(id => sportTeamById.get(id)).filter(Boolean) as SportTeam[];
+              const requestedTeams = (trade.requestedSportTeamIds ?? []).map(id => sportTeamById.get(id)).filter(Boolean) as SportTeam[];
               const proposerFt = fantasyTeamById.get(trade.proposerFantasyTeamId);
               const isActing = actingTrade === trade.id;
               return (
@@ -814,8 +814,8 @@ function RosterTab({
                       <button
                         onClick={() => {
                           setTradeModal({ mode: 'counter', otherFtId: trade.proposerFantasyTeamId, counterTradeId: trade.id });
-                          setTradeOffered([...trade.requestedSportTeamIds]);
-                          setTradeRequested([...trade.offeredSportTeamIds]);
+                          setTradeOffered([...(trade.requestedSportTeamIds ?? [])]);
+                          setTradeRequested([...(trade.offeredSportTeamIds ?? [])]);
                           setTradeMsg(null);
                         }}
                         disabled={isActing}
@@ -836,8 +836,8 @@ function RosterTab({
               );
             })}
             {outgoingTrades.map(trade => {
-              const offeredTeams = trade.offeredSportTeamIds.map(id => sportTeamById.get(id)).filter(Boolean) as SportTeam[];
-              const requestedTeams = trade.requestedSportTeamIds.map(id => sportTeamById.get(id)).filter(Boolean) as SportTeam[];
+              const offeredTeams = (trade.offeredSportTeamIds ?? []).map(id => sportTeamById.get(id)).filter(Boolean) as SportTeam[];
+              const requestedTeams = (trade.requestedSportTeamIds ?? []).map(id => sportTeamById.get(id)).filter(Boolean) as SportTeam[];
               const receiverFt = fantasyTeamById.get(trade.receiverFantasyTeamId);
               const isActing = actingTrade === trade.id;
               return (
