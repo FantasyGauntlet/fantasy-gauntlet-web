@@ -446,6 +446,7 @@ function RosterTab({
   const [coOwnerSaving, setCoOwnerSaving] = useState(false);
   const [coOwnerMsg, setCoOwnerMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [removingTeam, setRemovingTeam] = useState(false);
+  const [expandedRosterTeam, setExpandedRosterTeam] = useState<string | null>(null);
 
   const [trades, setTrades] = useState<Trade[]>([]);
   const [tradeModal, setTradeModal] = useState<{
@@ -521,9 +522,13 @@ function RosterTab({
   // Build per-team record/points from standings
   const teamStatsMap = new Map<string, TeamBreakdown>();
   const teamBonusMap = new Map<string, number>();
+  const teamBonusBreakdownMap = new Map<string, BonusBreakdownItem[]>();
   for (const s of standings) {
     for (const td of s.teamBreakdown) teamStatsMap.set(td.teamId, td);
-    for (const bd of s.bonusBreakdown) teamBonusMap.set(bd.teamId, (teamBonusMap.get(bd.teamId) ?? 0) + bd.points);
+    for (const bd of s.bonusBreakdown) {
+      teamBonusMap.set(bd.teamId, (teamBonusMap.get(bd.teamId) ?? 0) + bd.points);
+      teamBonusBreakdownMap.set(bd.teamId, [...(teamBonusBreakdownMap.get(bd.teamId) ?? []), bd]);
+    }
   }
 
   const viewingTeam = fantasyTeams.find(ft => ft.id === viewingId);
@@ -954,30 +959,61 @@ function RosterTab({
               const bonus = teamBonusMap.get(t.id) ?? 0;
               const total = (stats?.points ?? 0) + bonus;
               const isWildCard = viewingWildCardIds.has(t.id);
+              const bonusItems = teamBonusBreakdownMap.get(t.id) ?? [];
+              const isExpanded = expandedRosterTeam === t.id;
               return (
-                <div key={t.id} className="flex items-center justify-between px-5 py-3.5 hover:bg-field/30 transition-colors gap-3">
-                  <div className="flex items-center gap-3 min-w-0">
-                    {t.logoUrl && (
-                      <img src={t.logoUrl} alt={t.name} className="w-9 h-9 object-contain flex-shrink-0" />
-                    )}
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-medium text-copy truncate">{t.name}</p>
-                        {isWildCard && (
-                          <span className="text-xs bg-warn-bg text-warn border border-warn/20 px-1.5 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">Wild Card</span>
-                        )}
+                <div key={t.id}>
+                  <div
+                    onClick={() => stats && setExpandedRosterTeam(isExpanded ? null : t.id)}
+                    className={`flex items-center justify-between px-5 py-3.5 hover:bg-field/30 transition-colors gap-3 ${stats ? 'cursor-pointer' : ''}`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      {t.logoUrl && (
+                        <img src={t.logoUrl} alt={t.name} className="w-9 h-9 object-contain flex-shrink-0" />
+                      )}
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium text-copy truncate">{t.name}</p>
+                          {isWildCard && (
+                            <span className="text-xs bg-warn-bg text-warn border border-warn/20 px-1.5 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">Wild Card</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-copy-3 mt-0.5">{formatLeagueName(t.sportLeagueId)}</p>
                       </div>
-                      <p className="text-xs text-copy-3 mt-0.5">{formatLeagueName(t.sportLeagueId)}</p>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-3 flex-shrink-0">
                     {stats && (
-                      <div className="text-right">
-                        <p className="text-sm font-semibold text-copy">{total.toFixed(1)} pts{bonus > 0 && <span className="text-positive ml-1 text-xs">+{bonus}</span>}</p>
-                        <p className="text-xs text-copy-3 mt-0.5">{formatRecord(stats.wins, stats.draws, stats.losses, stats.sport)}</p>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <p className="text-sm font-semibold text-copy">{total.toFixed(1)} pts</p>
+                        <svg
+                          width="14" height="14" viewBox="0 0 24 24" fill="none"
+                          stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
+                          className={`text-copy-3 transition-transform flex-shrink-0 ${isExpanded ? 'rotate-90' : ''}`}
+                        >
+                          <polyline points="9 18 15 12 9 6" />
+                        </svg>
                       </div>
                     )}
                   </div>
+                  {isExpanded && stats && (
+                    <div className="px-5 pb-4 bg-field/20 border-t border-line/30">
+                      <div className="pl-12 pt-3 space-y-1.5">
+                        <div className="flex justify-between text-xs">
+                          <span className="text-copy-3">Season pts</span>
+                          <span className="text-copy">{stats.points.toFixed(1)}</span>
+                        </div>
+                        {bonusItems.map((b, i) => (
+                          <div key={i} className="flex justify-between text-xs">
+                            <span className="text-positive">{b.label}</span>
+                            <span className="text-positive font-semibold">+{b.points.toFixed(1)}</span>
+                          </div>
+                        ))}
+                        <div className="flex justify-between text-xs pt-1.5 border-t border-line/50">
+                          <span className="text-copy-3">{formatRecord(stats.wins, stats.draws, stats.losses, stats.sport)}</span>
+                          <span className="text-copy font-semibold">{total.toFixed(1)} total</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
