@@ -447,6 +447,7 @@ function RosterTab({
   const [editMsg, setEditMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [logoUploading, setLogoUploading] = useState(false);
   const [logoUploadProgress, setLogoUploadProgress] = useState(0);
+  const [logoDragging, setLogoDragging] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
 
   const [coOwners, setCoOwners] = useState<{ uid: string; email: string }[]>([]);
@@ -1096,37 +1097,61 @@ function RosterTab({
                 className="hidden"
                 onChange={e => { const f = e.target.files?.[0]; if (f) uploadLogo(f); e.target.value = ''; }}
               />
-              <div className="flex items-center gap-3">
-                {editLogoUrl && (
-                  <img
-                    src={editLogoUrl}
-                    alt="Team logo"
-                    className="w-12 h-12 object-contain border border-line rounded-xl bg-field flex-shrink-0"
-                    onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+              <div
+                onClick={() => !logoUploading && logoInputRef.current?.click()}
+                onDragOver={e => { e.preventDefault(); setLogoDragging(true); }}
+                onDragLeave={() => setLogoDragging(false)}
+                onDrop={e => {
+                  e.preventDefault();
+                  setLogoDragging(false);
+                  const f = e.dataTransfer.files[0];
+                  if (f && f.type.startsWith('image/')) uploadLogo(f);
+                }}
+                className={`relative border-2 border-dashed rounded-xl transition-colors ${logoUploading ? 'cursor-wait' : 'cursor-pointer'} ${
+                  logoDragging ? 'border-brand bg-brand/5' : 'border-line-2 hover:border-brand/40 hover:bg-field/40'
+                }`}
+              >
+                {editLogoUrl ? (
+                  <div className="flex flex-col items-center gap-2 py-4">
+                    <img
+                      src={editLogoUrl}
+                      alt="Team logo"
+                      className="w-16 h-16 object-contain rounded-lg"
+                      onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                    />
+                    <p className="text-xs text-copy-3">
+                      {logoUploading ? `Uploading ${logoUploadProgress}%…` : 'Drop a new image or click to replace'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-2 py-8">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-copy-3">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="17 8 12 3 7 8" />
+                      <line x1="12" y1="3" x2="12" y2="15" />
+                    </svg>
+                    <p className="text-sm font-medium text-copy-2">
+                      {logoUploading ? `Uploading ${logoUploadProgress}%…` : 'Drop your logo here'}
+                    </p>
+                    <p className="text-xs text-copy-3">or click to browse — PNG, JPG, SVG</p>
+                  </div>
+                )}
+                {logoUploading && (
+                  <div
+                    className="absolute bottom-0 left-0 h-1 bg-brand rounded-b-xl transition-all duration-200"
+                    style={{ width: `${logoUploadProgress}%` }}
                   />
                 )}
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => logoInputRef.current?.click()}
-                    disabled={logoUploading}
-                    className="bg-field hover:bg-field-2 border border-line-2 text-copy-2 text-xs font-medium px-3 py-2 rounded-xl transition-colors disabled:opacity-50"
-                  >
-                    {logoUploading
-                      ? `Uploading ${logoUploadProgress}%`
-                      : editLogoUrl ? 'Replace' : 'Upload Logo'}
-                  </button>
-                  {editLogoUrl && !logoUploading && (
-                    <button
-                      type="button"
-                      onClick={removeLogo}
-                      className="text-xs text-danger hover:text-danger/80 px-3 py-2 rounded-xl hover:bg-danger-bg transition-colors"
-                    >
-                      Remove
-                    </button>
-                  )}
-                </div>
               </div>
+              {editLogoUrl && !logoUploading && (
+                <button
+                  type="button"
+                  onClick={removeLogo}
+                  className="mt-1.5 text-xs text-danger hover:text-danger/80 transition-colors"
+                >
+                  Remove logo
+                </button>
+              )}
             </div>
             {editMsg && (
               <p className={`text-xs ${editMsg.type === 'success' ? 'text-positive' : 'text-danger'}`}>
