@@ -2824,45 +2824,67 @@ function SettingsTab({
       <div className="bg-card border border-line rounded-2xl p-5 space-y-6">
         <h2 className="text-sm font-semibold text-copy">League Rules</h2>
 
-        <section>
-          <h3 className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-3">General Rules</h3>
-          <ol className="space-y-2 list-decimal list-inside">
-            {(() => {
-              const ws = league.waiverSettings;
-              const wDay = ws?.processingDay ?? 'tuesday';
-              const wHour = ws?.processingHour ?? 10;
-              const wDayLabel = wDay.charAt(0).toUpperCase() + wDay.slice(1) + 's';
-              const wTimeLabel = wHour === 0 ? '12:00 AM' : wHour < 12 ? `${wHour}:00 AM` : wHour === 12 ? '12:00 PM' : `${wHour - 12}:00 PM`;
-              return [
-                'Every team must own at least 1 team per selected sport in the league.',
-                '2 Wildcard slots per roster — can be any team from any sport except the Premier League.',
-                'Maximum 2 teams per sport. Premier League is capped at 1 (wildcards are non-PL only).',
-                `Waivers are processed every ${wDayLabel} at ${wTimeLabel} EST. Priority is determined by reverse standings — the lowest-ranked team gets first pick.`,
-                'Trades are allowed as long as both teams maintain roster minimums and maximums after the swap. Transaction deadlines per sport are set by the admin panel.',
-                'Points are earned based on Wins, Draws, and Playoff performance. Bonus points are awarded for Conference and Division Champions. NCAAF awards bonus for Power 4 teams (SEC, Big Ten, ACC, Big 12); NCAAB for Power 5 (Power 4 + Big East).',
-                'Buy-in is $100. Payout details are listed under the Payout Rules tab.',
-              ];
-            })().map((rule, i) => (
-              <li key={i} className="text-sm text-copy-2 leading-relaxed pl-1">{rule}</li>
-            ))}
-          </ol>
+        <section className="space-y-5">
+          <h3 className="text-xs font-semibold text-copy-3 uppercase tracking-widest">General Rules</h3>
+
+          {/* Roster */}
+          <div>
+            <p className="text-xs font-semibold text-copy-2 uppercase tracking-wide mb-2">Roster</p>
+            <ul className="space-y-1.5 list-disc list-inside">
+              {[
+                'Minimum 1 team owned per sport',
+                '2 Wildcard Teams — additional team in any sport but Premier League',
+                'Limits: 1 EPL team per player, max 2 teams in any given sport',
+              ].map((r, i) => <li key={i} className="text-sm text-copy-2 leading-relaxed pl-1">{r}</li>)}
+            </ul>
+          </div>
+
+          {/* Points */}
+          <div>
+            <p className="text-xs font-semibold text-copy-2 uppercase tracking-wide mb-2">Points</p>
+            <ul className="space-y-1.5 list-disc list-inside">
+              <li className="text-sm text-copy-2 leading-relaxed pl-1">Points are based on Wins, Draws and Playoffs. The Table is based on the total accumulation throughout the season.</li>
+              <li className="text-sm text-copy-2 leading-relaxed pl-1">A bonus is given for Conference and Division Champions. (See &ldquo;Points&rdquo; tab for criteria)</li>
+              <li className="text-sm text-copy-2 leading-relaxed pl-1">NCAAF bonus points will only be given out for Power 4 teams; NCAAB bonus will only be given out for Power 5 teams</li>
+              <li className="text-sm text-copy-2 leading-relaxed pl-1">Power 4 = SEC, Big Ten, ACC, Big 12</li>
+              <li className="text-sm text-copy-2 leading-relaxed pl-1">Power 5 = Power 4 + Big East</li>
+            </ul>
+          </div>
+
+          {/* Transactions */}
+          <div>
+            <p className="text-xs font-semibold text-copy-2 uppercase tracking-wide mb-2">Transactions</p>
+            <ul className="space-y-1.5 list-disc list-inside">
+              {(() => {
+                const ws = league.waiverSettings;
+                const wDay = ws?.processingDay ?? 'tuesday';
+                const wHour = ws?.processingHour ?? 10;
+                const wDayLabel = wDay.charAt(0).toUpperCase() + wDay.slice(1);
+                const wTimeLabel = wHour === 0 ? '12:00 AM' : wHour < 12 ? `${wHour}:00 AM` : wHour === 12 ? '12:00 PM' : `${wHour - 12}:00 PM`;
+                return [
+                  'Teams are added and removed by submitting a waiver request on the "Waivers" tab.',
+                  `Waivers are processed every ${wDayLabel} morning at ${wTimeLabel} EST by standard rule sets.`,
+                  'Tiebreaker order is reverse current standings (Lowest in the standings is #1 priority.)',
+                  'Trades are allowed to be made as long as both teams are upholding roster limits.',
+                  'Every sport has a deadline for transactions, this is set by the Admin panel.',
+                ];
+              })().map((r, i) => <li key={i} className="text-sm text-copy-2 leading-relaxed pl-1">{r}</li>)}
+            </ul>
+          </div>
         </section>
 
         <div className="border-t border-line" />
 
-        <section>
-          <h3 className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-3">Auction Rules</h3>
-          <ol className="space-y-2 list-decimal list-inside">
+        <section className="space-y-3">
+          <h3 className="text-xs font-semibold text-copy-3 uppercase tracking-widest">Draft Rules</h3>
+          <ul className="space-y-1.5 list-disc list-inside">
             {[
-              'Each player has $1,000 to spend — this is a hard cap.',
-              'Teams are presented in randomized order.',
-              'Each team has a 15-second bidding window. The timer resets with every new bid.',
-              'Teams not won at auction become free agent teams available on waivers.',
-              'College Football (NCAAF) and College Basketball (NCAAB) only include the preseason top 25. Additional teams may be acquired through the waiver wire.',
-            ].map((rule, i) => (
-              <li key={i} className="text-sm text-copy-2 leading-relaxed pl-1">{rule}</li>
-            ))}
-          </ol>
+              '3 options for Drafts: Randomized order Auction, Nomination Auction, Snake draft',
+              'For Auction: Players will have $1,000 to bid on all their teams — this is a hard cap.',
+              'Players will have 15 seconds to bid on a team; once a bid is placed the 15-second timer restarts until it expires.',
+              'Teams not drafted during the auction will become free agent teams available on waivers.',
+            ].map((r, i) => <li key={i} className="text-sm text-copy-2 leading-relaxed pl-1">{r}</li>)}
+          </ul>
         </section>
 
         <div className="border-t border-line" />
