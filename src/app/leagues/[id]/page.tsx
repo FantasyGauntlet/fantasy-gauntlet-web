@@ -231,7 +231,7 @@ export default function LeaguePage() {
         ))}
       </div>
 
-      {tab === 'standings' && <StandingsTab leagueId={id} userId={user?.uid} />}
+      {tab === 'standings' && <StandingsTab leagueId={id} userId={user?.uid} fantasyTeams={fantasyTeams} />}
       {tab === 'roster' && (
         <RosterTab
           leagueId={id}
@@ -261,11 +261,13 @@ export default function LeaguePage() {
 
 // ─── Standings Tab ────────────────────────────────────────────────────────────
 
-function StandingsTab({ leagueId, userId }: { leagueId: string; userId?: string }) {
+function StandingsTab({ leagueId, userId, fantasyTeams }: { leagueId: string; userId?: string; fantasyTeams: FantasyTeam[] }) {
   const [standings, setStandings] = useState<Standing[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [expandedTeam, setExpandedTeam] = useState<string | null>(null);
+
+  const logoByUserId = new Map(fantasyTeams.map(ft => [ft.userId, ft.logoUrl ?? null]));
 
   useEffect(() => {
     setLoading(true);
@@ -313,8 +315,17 @@ function StandingsTab({ leagueId, userId }: { leagueId: string; userId?: string 
                     </span>
                   </td>
                   <td className="px-4 py-3.5">
-                    <span className="text-sm font-medium text-copy">{s.displayName}</span>
-                    {isMe && <span className="ml-2 text-xs text-brand font-medium">you</span>}
+                    <div className="flex items-center gap-2.5">
+                      {logoByUserId.get(s.userId) ? (
+                        <img src={logoByUserId.get(s.userId)!} alt={s.displayName} className="w-7 h-7 object-contain rounded-md flex-shrink-0" />
+                      ) : (
+                        <div className="w-7 h-7 rounded-md bg-field border border-line flex-shrink-0" />
+                      )}
+                      <div>
+                        <span className="text-sm font-medium text-copy">{s.displayName}</span>
+                        {isMe && <span className="ml-2 text-xs text-brand font-medium">you</span>}
+                      </div>
+                    </div>
                   </td>
                   <td className="px-4 py-3.5 text-right">
                     <span className="text-sm font-bold text-copy">{s.totalPoints.toFixed(1)}</span>
@@ -891,19 +902,26 @@ function RosterTab({
       {/* ── Roster viewer ── */}
       <div className="bg-card border border-line rounded-2xl overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-line">
-          <div>
-            <p className="text-sm font-semibold text-copy">
-              {viewingTeam?.displayName ?? '—'}
-              {viewingTeam?.isPlaceholder && (
-                <span className="ml-2 text-xs bg-warn-bg text-warn border border-warn/20 px-2 py-0.5 rounded-full align-middle">placeholder</span>
-              )}
-            </p>
-            {viewingIsMe && (
+          <div className="flex items-center gap-3 min-w-0">
+            {viewingTeam?.logoUrl ? (
+              <img src={viewingTeam.logoUrl} alt={viewingTeam.displayName} className="w-10 h-10 object-contain rounded-lg flex-shrink-0" />
+            ) : (
+              <div className="w-10 h-10 rounded-lg bg-field border border-line flex-shrink-0" />
+            )}
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-copy">
+                {viewingTeam?.displayName ?? '—'}
+                {viewingTeam?.isPlaceholder && (
+                  <span className="ml-2 text-xs bg-warn-bg text-warn border border-warn/20 px-2 py-0.5 rounded-full align-middle">placeholder</span>
+                )}
+              </p>
+              {viewingIsMe && (
                 <p className="text-xs text-brand mt-0.5">
                   {viewingIsPrimaryOwner ? 'Your team' : 'Your team (co-owner)'}
                 </p>
               )}
-            <p className="text-xs text-copy-3 mt-0.5">{viewingOwnedTeams.length} team{viewingOwnedTeams.length !== 1 ? 's' : ''}</p>
+              <p className="text-xs text-copy-3 mt-0.5">{viewingOwnedTeams.length} team{viewingOwnedTeams.length !== 1 ? 's' : ''}</p>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             {canProposeTrade && (
