@@ -29,6 +29,7 @@ interface League {
   previousLeagueId?: string;
   topZone?: number | null;
   bottomZone?: number | null;
+  waiverSettings?: { processingDay: string; processingHour: number } | null;
 }
 
 interface Member { id: string; userId: string; role: 'commissioner' | 'member'; joinedAt: string; }
@@ -1589,11 +1590,12 @@ const WAIVER_STATUS_CLS: Record<string, string> = {
 };
 
 function ClaimCard({
-  claim, isCommissioner, teamMap, reviewing, denyingId, denyReason,
+  claim, isCommissioner, userId, teamMap, reviewing, denyingId, denyReason,
   onApprove, onStartDeny, onDenyReasonChange, onConfirmDeny, onCancelDeny,
 }: {
   claim: WaiverClaim;
   isCommissioner: boolean;
+  userId?: string;
   teamMap: Map<string, TeamWithRecord>;
   reviewing: string | null;
   denyingId: string | null;
@@ -1608,6 +1610,7 @@ function ClaimCard({
   const addTeam  = teamMap.get(claim.addTeamId);
   const isReviewing = reviewing === claim.id;
   const isDenying   = denyingId === claim.id;
+  const showClaimant = isCommissioner || claim.claimantUserId === userId;
 
   return (
     <div className="bg-card border border-line rounded-2xl p-4">
@@ -1615,7 +1618,7 @@ function ClaimCard({
         <div className="flex-1 min-w-0">
           {/* Header */}
           <div className="flex items-center gap-2 flex-wrap mb-3">
-            <span className="font-semibold text-copy text-sm">{claim.claimantDisplayName}</span>
+            <span className="font-semibold text-copy text-sm">{showClaimant ? claim.claimantDisplayName : 'Anonymous'}</span>
             {claim.claimantRank > 0 && (
               <span className="text-xs bg-field border border-line text-copy-3 px-2 py-0.5 rounded-full">
                 #{claim.claimantRank} in standings
@@ -1766,6 +1769,7 @@ function WaiversTab({
   const [denyingId, setDenyingId] = useState<string | null>(null);
   const [denyReason, setDenyReason] = useState('');
   const [reviewing, setReviewing] = useState<string | null>(null);
+  const [processing, setProcessing] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -1854,10 +1858,22 @@ function WaiversTab({
     finally { setReviewing(null); }
   }
 
+  async function processWaivers() {
+    setProcessing(true);
+    try {
+      const result = await api.post<{ approved: number; denied: number }>(`/leagues/${leagueId}/waivers/process`);
+      const fresh = await api.get<WaiverClaim[]>(`/leagues/${leagueId}/waivers`);
+      setClaims(fresh);
+      alert(`Processing complete: ${result.approved} approved, ${result.denied} denied.`);
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Failed to process waivers');
+    } finally { setProcessing(false); }
+  }
+
   if (loading) return <div className="flex justify-center py-12"><Spinner /></div>;
 
   const claimCardProps = {
-    isCommissioner, teamMap, reviewing, denyingId, denyReason,
+    isCommissioner, userId, teamMap, reviewing, denyingId, denyReason,
     onApprove: approve,
     onStartDeny: (id: string) => { setDenyingId(id); setDenyReason(''); },
     onDenyReasonChange: setDenyReason,
@@ -1872,14 +1888,25 @@ function WaiversTab({
         <div>
           <h2 className="text-sm font-semibold text-copy">Waiver Claims</h2>
         </div>
-        {canSubmit && !showForm && (
-          <button
-            onClick={() => setShowForm(true)}
-            className="bg-brand hover:bg-brand-2 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors"
-          >
-            + Submit Claim
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {isCommissioner && pending.length > 0 && (
+            <button
+              onClick={processWaivers}
+              disabled={processing}
+              className="bg-positive hover:bg-positive/90 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors"
+            >
+              {processing ? 'Processing...' : 'Process Waivers'}
+            </button>
+          )}
+          {canSubmit && !showForm && (
+            <button
+              onClick={() => setShowForm(true)}
+              className="bg-brand hover:bg-brand-2 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors"
+            >
+              + Submit Claim
+            </button>
+          )}
+        </div>
       </div>
 
       {submitSuccess && (
@@ -2119,6 +2146,10 @@ function SettingsTab({
   const [bottomZoneCount, setBottomZoneCount] = useState(league.bottomZone ?? 3);
   const [zonesSaving, setZonesSaving] = useState(false);
 
+  const [waiverDay, setWaiverDay] = useState(league.waiverSettings?.processingDay ?? 'tuesday');
+  const [waiverHour, setWaiverHour] = useState(league.waiverSettings?.processingHour ?? 10);
+  const [waiverSettingsSaving, setWaiverSettingsSaving] = useState(false);
+
   const [transactions, setTransactions] = useState<TxEvent[]>([]);
   const [txLoading, setTxLoading] = useState(true);
   const [allSportTeams, setAllSportTeams] = useState<SportTeam[]>([]);
@@ -2209,6 +2240,21 @@ function SettingsTab({
       alert(e instanceof Error ? e.message : 'Failed to save');
     } finally {
       setZonesSaving(false);
+    }
+  }
+
+  async function saveWaiverSettings() {
+    setWaiverSettingsSaving(true);
+    try {
+      const updated = await api.patch<League>(`/leagues/${leagueId}/waiver-settings`, {
+        processingDay: waiverDay,
+        processingHour: waiverHour,
+      });
+      setLeague(updated);
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Failed to save waiver settings');
+    } finally {
+      setWaiverSettingsSaving(false);
     }
   }
 
@@ -2669,6 +2715,43 @@ function SettingsTab({
             </div>
           </div>
 
+          {/* Waiver Processing */}
+          <div className="bg-card border border-line rounded-2xl p-5">
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div>
+                <h2 className="text-sm font-semibold text-copy">Waiver Processing</h2>
+                <p className="text-xs text-copy-3 mt-0.5">Configure when pending claims are automatically processed.</p>
+              </div>
+              <button
+                onClick={saveWaiverSettings}
+                disabled={waiverSettingsSaving}
+                className="flex-shrink-0 bg-brand hover:bg-brand-2 disabled:opacity-50 text-white text-xs font-semibold px-3 py-2 rounded-xl transition-colors whitespace-nowrap"
+              >
+                {waiverSettingsSaving ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-copy-2 mb-1.5">Processing Day</label>
+                <select value={waiverDay} onChange={e => setWaiverDay(e.target.value)} className={inputCls}>
+                  {['sunday','monday','tuesday','wednesday','thursday','friday','saturday'].map(d => (
+                    <option key={d} value={d}>{d.charAt(0).toUpperCase() + d.slice(1)}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-copy-2 mb-1.5">Processing Time (EST)</label>
+                <select value={waiverHour} onChange={e => setWaiverHour(Number(e.target.value))} className={inputCls}>
+                  {Array.from({ length: 24 }, (_, i) => (
+                    <option key={i} value={i}>
+                      {i === 0 ? '12:00 AM' : i < 12 ? `${i}:00 AM` : i === 12 ? '12:00 PM' : `${i - 12}:00 PM`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
           <div className="bg-card border border-line rounded-2xl p-5">
             <h2 className="text-sm font-semibold text-copy mb-1">Auction Settings</h2>
             <p className="text-xs text-copy-3 mb-5">Must be configured before starting the auction.</p>
@@ -2743,13 +2826,22 @@ function SettingsTab({
         <section>
           <h3 className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-3">General Rules</h3>
           <ol className="space-y-2 list-decimal list-inside">
-            {[
-              'Each manager has a roster of 11 total teams, with a minimum of 1 team per sport in the league.',
-              '2 Wildcard Teams per roster — can be from any sport.',
-              'Limits: maximum 1 EPL team per manager; maximum 2 teams in any single sport.',
-              'Points are earned based on Wins, Draws, and Playoff performance. Bonus points are awarded for Conference and Division Champions. NCAAF awards bonus for Power 4 teams (SEC, Big Ten, ACC, Big 12); NCAAB for Power 5 (Power 4 + Big East).',
-              'Buy-in is $100. Payout details are listed under the Payout Rules tab.',
-            ].map((rule, i) => (
+            {(() => {
+              const ws = league.waiverSettings;
+              const wDay = ws?.processingDay ?? 'tuesday';
+              const wHour = ws?.processingHour ?? 10;
+              const wDayLabel = wDay.charAt(0).toUpperCase() + wDay.slice(1) + 's';
+              const wTimeLabel = wHour === 0 ? '12:00 AM' : wHour < 12 ? `${wHour}:00 AM` : wHour === 12 ? '12:00 PM' : `${wHour - 12}:00 PM`;
+              return [
+                'Every team must own at least 1 team per selected sport in the league.',
+                '2 Wildcard slots per roster — can be any team from any sport except the Premier League.',
+                'Maximum 2 teams per sport. Premier League is capped at 1 (wildcards are non-PL only).',
+                `Waivers are processed every ${wDayLabel} at ${wTimeLabel} EST. Priority is determined by reverse standings — the lowest-ranked team gets first pick.`,
+                'Trades are allowed as long as both teams maintain roster minimums and maximums after the swap. Transaction deadlines per sport are set by the admin panel.',
+                'Points are earned based on Wins, Draws, and Playoff performance. Bonus points are awarded for Conference and Division Champions. NCAAF awards bonus for Power 4 teams (SEC, Big Ten, ACC, Big 12); NCAAB for Power 5 (Power 4 + Big East).',
+                'Buy-in is $100. Payout details are listed under the Payout Rules tab.',
+              ];
+            })().map((rule, i) => (
               <li key={i} className="text-sm text-copy-2 leading-relaxed pl-1">{rule}</li>
             ))}
           </ol>
