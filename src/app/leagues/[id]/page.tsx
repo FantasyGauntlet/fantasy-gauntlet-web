@@ -323,10 +323,8 @@ function StandingsTab({ leagueId, userId, fantasyTeams }: { leagueId: string; us
                   </td>
                   <td className="px-4 py-3.5">
                     <div className="flex items-center gap-2.5">
-                      {logoByUserId.get(s.userId) ? (
+                      {logoByUserId.get(s.userId) && (
                         <img src={logoByUserId.get(s.userId)!} alt={s.displayName} className="w-7 h-7 object-contain rounded-md flex-shrink-0" />
-                      ) : (
-                        <div className="w-7 h-7 rounded-md bg-field border border-line flex-shrink-0" />
                       )}
                       <div>
                         <span className="text-sm font-medium text-copy">{s.displayName}</span>
@@ -910,10 +908,8 @@ function RosterTab({
       <div className="bg-card border border-line rounded-2xl overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-line">
           <div className="flex items-center gap-3 min-w-0">
-            {viewingTeam?.logoUrl ? (
+            {viewingTeam?.logoUrl && (
               <img src={viewingTeam.logoUrl} alt={viewingTeam.displayName} className="w-10 h-10 object-contain rounded-lg flex-shrink-0" />
-            ) : (
-              <div className="w-10 h-10 rounded-lg bg-field border border-line flex-shrink-0" />
             )}
             <div className="min-w-0">
               <p className="text-sm font-semibold text-copy">
