@@ -98,6 +98,20 @@ interface Trade {
   updatedAt: string;
 }
 
+interface Announcement {
+  id: string; leagueId: string; authorUserId: string;
+  authorDisplayName: string; content: string; createdAt: string;
+}
+
+interface LeagueMessage {
+  id: string; leagueId: string; authorUserId: string;
+  authorDisplayName: string; content: string; createdAt: string;
+}
+
+type TxEvent =
+  | { type: 'trade'; id: string; date: string; proposerFantasyTeamId: string; receiverFantasyTeamId: string; offeredSportTeamIds: string[]; requestedSportTeamIds: string[]; }
+  | { type: 'waiver'; id: string; date: string; claimantUserId: string; claimantDisplayName: string; addTeamId: string; dropTeamId: string; };
+
 type Tab = 'standings' | 'roster' | 'waivers' | 'settings';
 
 const STATE_META: Record<string, { label: string; cls: string }> = {
@@ -125,6 +139,17 @@ function formatRecord(wins: number, draws: number, losses: number, sport: string
   const parts = [`${wins}W`, `${losses}L`];
   if (draws > 0) parts.push(`${draws}D`);
   return parts.join(' ');
+}
+
+function timeAgo(dateStr: string): string {
+  const m = Math.floor((Date.now() - new Date(dateStr).getTime()) / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  if (d < 7) return `${d}d ago`;
+  return new Date(dateStr).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
 function Spinner({ size = 'md' }: { size?: 'sm' | 'md' }) {
@@ -255,7 +280,7 @@ export default function LeaguePage() {
         />
       )}
       {tab === 'settings' && (
-        <SettingsTab league={league} setLeague={setLeague} isCommissioner={isCommissioner} leagueId={id} memberCount={members.length} previousLeagueId={league.previousLeagueId} />
+        <SettingsTab league={league} setLeague={setLeague} isCommissioner={isCommissioner} leagueId={id} memberCount={members.length} previousLeagueId={league.previousLeagueId} userId={user?.uid} fantasyTeams={fantasyTeams} />
       )}
     </div>
   );
@@ -2054,7 +2079,7 @@ function WaiversTab({
 // ─── Settings Tab ─────────────────────────────────────────────────────────────
 
 function SettingsTab({
-  league, setLeague, isCommissioner, leagueId, memberCount, previousLeagueId,
+  league, setLeague, isCommissioner, leagueId, memberCount, previousLeagueId, userId, fantasyTeams,
 }: {
   league: League;
   setLeague: React.Dispatch<React.SetStateAction<League | null>>;
@@ -2062,8 +2087,12 @@ function SettingsTab({
   leagueId: string;
   memberCount: number;
   previousLeagueId?: string;
+  userId?: string;
+  fantasyTeams: FantasyTeam[];
 }) {
   const router = useRouter();
+  const msgEndRef = useRef<HTMLDivElement>(null);
+
   const [auctionForm, setAuctionForm] = useState({
     startingBudget:   league.auctionConfig?.startingBudget   ?? 100,
     minOpeningBid:    league.auctionConfig?.minOpeningBid    ?? 1,
@@ -2077,6 +2106,43 @@ function SettingsTab({
   const [deleteInput, setDeleteInput] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [renewing, setRenewing] = useState(false);
+
+  const [transactions, setTransactions] = useState<TxEvent[]>([]);
+  const [txLoading, setTxLoading] = useState(true);
+  const [allSportTeams, setAllSportTeams] = useState<SportTeam[]>([]);
+
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [newAnnouncement, setNewAnnouncement] = useState('');
+  const [announcementSaving, setAnnouncementSaving] = useState(false);
+  const [showAnnounceForm, setShowAnnounceForm] = useState(false);
+
+  const [messages, setMessages] = useState<LeagueMessage[]>([]);
+  const [newMessage, setNewMessage] = useState('');
+  const [messageSending, setMessageSending] = useState(false);
+
+  useEffect(() => {
+    Promise.all([
+      api.get<TxEvent[]>(`/leagues/${leagueId}/transactions`).catch(() => [] as TxEvent[]),
+      api.get<SportGroup[]>(`/leagues/${leagueId}/sport-teams`).catch(() => [] as SportGroup[]),
+      api.get<Announcement[]>(`/leagues/${leagueId}/announcements`).catch(() => [] as Announcement[]),
+      api.get<LeagueMessage[]>(`/leagues/${leagueId}/messages`).catch(() => [] as LeagueMessage[]),
+    ]).then(([txs, groups, anns, msgs]) => {
+      setTransactions(txs);
+      setAllSportTeams(groups.flatMap(g => g.teams));
+      setAnnouncements(anns);
+      setMessages(msgs);
+    }).finally(() => setTxLoading(false));
+  }, [leagueId]);
+
+  const sportTeamById = useMemo(
+    () => new Map(allSportTeams.map(t => [t.id, t])),
+    [allSportTeams],
+  );
+
+  const ftById = useMemo(
+    () => new Map(fantasyTeams.map(ft => [ft.id, ft])),
+    [fantasyTeams],
+  );
 
   const inputCls = 'w-full bg-field border border-line-2 rounded-xl px-4 py-2.5 text-copy text-sm focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors';
 
@@ -2119,8 +2185,58 @@ function SettingsTab({
     }
   }
 
+  async function handleAddAnnouncement(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newAnnouncement.trim()) return;
+    setAnnouncementSaving(true);
+    try {
+      const ann = await api.post<Announcement>(`/leagues/${leagueId}/announcements`, { content: newAnnouncement.trim() });
+      setAnnouncements(prev => [ann, ...prev]);
+      setNewAnnouncement('');
+      setShowAnnounceForm(false);
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Failed to post');
+    } finally {
+      setAnnouncementSaving(false);
+    }
+  }
+
+  async function handleDeleteAnnouncement(id: string) {
+    try {
+      await api.delete(`/leagues/${leagueId}/announcements/${id}`);
+      setAnnouncements(prev => prev.filter(a => a.id !== id));
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Failed to delete');
+    }
+  }
+
+  async function handleSendMessage(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newMessage.trim()) return;
+    setMessageSending(true);
+    try {
+      const msg = await api.post<LeagueMessage>(`/leagues/${leagueId}/messages`, { content: newMessage.trim() });
+      setMessages(prev => [...prev, msg]);
+      setNewMessage('');
+      setTimeout(() => msgEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Failed to send');
+    } finally {
+      setMessageSending(false);
+    }
+  }
+
+  async function handleDeleteMessage(id: string) {
+    try {
+      await api.delete(`/leagues/${leagueId}/messages/${id}`);
+      setMessages(prev => prev.filter(m => m.id !== id));
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Failed to delete');
+    }
+  }
+
   return (
-    <div className="space-y-4 max-w-xl">
+    <div className="space-y-4">
       {/* Delete modal */}
       {showDeleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -2169,10 +2285,206 @@ function SettingsTab({
         </div>
       )}
 
-      {/* League info */}
+      {/* ── Message Board ──────────────────────────────────────────────────────── */}
+      <div className="bg-card border border-line rounded-2xl overflow-hidden">
+        <div className="px-5 py-4 border-b border-line">
+          <p className="text-sm font-semibold text-copy">Message Board</p>
+          <p className="text-xs text-copy-3 mt-0.5">Share thoughts, predictions, and trash talk with your league.</p>
+        </div>
+        <div className="divide-y divide-line/30 max-h-72 overflow-y-auto">
+          {messages.length === 0 ? (
+            <div className="text-center py-10">
+              <p className="text-copy-3 text-sm">No messages yet — say something!</p>
+            </div>
+          ) : messages.map(msg => {
+            const isOwn = msg.authorUserId === userId;
+            return (
+              <div key={msg.id} className={`px-5 py-3 flex items-start gap-3 group ${isOwn ? 'bg-brand-dim/20' : ''}`}>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-baseline gap-2 flex-wrap mb-0.5">
+                    <span className="text-xs font-semibold text-copy">{msg.authorDisplayName}</span>
+                    {isOwn && <span className="text-xs text-brand">you</span>}
+                    <span className="text-xs text-copy-3">{timeAgo(msg.createdAt)}</span>
+                  </div>
+                  <p className="text-sm text-copy-2 break-words">{msg.content}</p>
+                </div>
+                {(isOwn || isCommissioner) && (
+                  <button
+                    onClick={() => handleDeleteMessage(msg.id)}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity text-copy-3 hover:text-danger flex-shrink-0 p-1 mt-0.5"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                      <path d="M18 6L6 18M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+            );
+          })}
+          <div ref={msgEndRef} />
+        </div>
+        <div className="px-5 py-3 border-t border-line">
+          <form onSubmit={handleSendMessage} className="flex gap-2">
+            <input
+              value={newMessage}
+              onChange={e => setNewMessage(e.target.value)}
+              placeholder="Send a message..."
+              maxLength={500}
+              className="flex-1 bg-field border border-line-2 rounded-xl px-4 py-2 text-copy text-sm placeholder-copy-3 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors"
+            />
+            <button
+              type="submit"
+              disabled={!newMessage.trim() || messageSending}
+              className="bg-brand hover:bg-brand-2 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors whitespace-nowrap"
+            >
+              {messageSending ? '...' : 'Send'}
+            </button>
+          </form>
+        </div>
+      </div>
+
+      {/* ── Commissioner Board ─────────────────────────────────────────────────── */}
+      <div className="bg-card border border-line rounded-2xl overflow-hidden">
+        <div className="px-5 py-4 border-b border-line flex items-start justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold text-copy">Commissioner Board</p>
+            <p className="text-xs text-copy-3 mt-0.5">Custom rules and announcements from the commissioner.</p>
+          </div>
+          {isCommissioner && (
+            <button
+              onClick={() => setShowAnnounceForm(v => !v)}
+              className="flex-shrink-0 bg-field hover:bg-field-2 border border-line text-copy-2 text-xs font-medium px-3 py-1.5 rounded-xl transition-colors"
+            >
+              {showAnnounceForm ? 'Cancel' : '+ Post'}
+            </button>
+          )}
+        </div>
+        {isCommissioner && showAnnounceForm && (
+          <form onSubmit={handleAddAnnouncement} className="px-5 py-4 border-b border-line bg-field/30 space-y-2">
+            <textarea
+              value={newAnnouncement}
+              onChange={e => setNewAnnouncement(e.target.value)}
+              placeholder="Write an announcement or custom rule..."
+              rows={3}
+              maxLength={1000}
+              className="w-full bg-card border border-line-2 rounded-xl px-4 py-2.5 text-copy text-sm placeholder-copy-3 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors resize-none"
+            />
+            <div className="flex justify-end">
+              <button
+                type="submit"
+                disabled={!newAnnouncement.trim() || announcementSaving}
+                className="bg-brand hover:bg-brand-2 disabled:opacity-50 text-white text-xs font-semibold px-4 py-2 rounded-xl transition-colors"
+              >
+                {announcementSaving ? 'Posting...' : 'Post Announcement'}
+              </button>
+            </div>
+          </form>
+        )}
+        {announcements.length === 0 ? (
+          <div className="text-center py-10">
+            <p className="text-copy-3 text-sm">No announcements yet.</p>
+            {isCommissioner && <p className="text-xs text-copy-3 mt-1">Post custom rules or notes for your league.</p>}
+          </div>
+        ) : (
+          <div className="divide-y divide-line/30">
+            {announcements.map(ann => (
+              <div key={ann.id} className="px-5 py-4 flex items-start gap-3 group">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-baseline gap-2 flex-wrap mb-1">
+                    <span className="text-xs font-semibold text-copy-2">{ann.authorDisplayName}</span>
+                    <span className="text-xs text-copy-3">{timeAgo(ann.createdAt)}</span>
+                  </div>
+                  <p className="text-sm text-copy leading-relaxed break-words">{ann.content}</p>
+                </div>
+                {isCommissioner && (
+                  <button
+                    onClick={() => handleDeleteAnnouncement(ann.id)}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity text-copy-3 hover:text-danger flex-shrink-0 p-1 mt-0.5"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                      <path d="M18 6L6 18M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Transaction History ────────────────────────────────────────────────── */}
+      <div className="bg-card border border-line rounded-2xl overflow-hidden">
+        <div className="px-5 py-4 border-b border-line">
+          <p className="text-sm font-semibold text-copy">Transaction History</p>
+          <p className="text-xs text-copy-3 mt-0.5">Accepted trades and approved waiver pickups.</p>
+        </div>
+        {txLoading ? (
+          <div className="flex justify-center py-8"><Spinner size="sm" /></div>
+        ) : transactions.length === 0 ? (
+          <div className="text-center py-10">
+            <p className="text-copy-3 text-sm">No transactions yet.</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-line/30">
+            {transactions.map(tx => {
+              if (tx.type === 'trade') {
+                const proposerFt = ftById.get(tx.proposerFantasyTeamId);
+                const receiverFt = ftById.get(tx.receiverFantasyTeamId);
+                const offeredNames = tx.offeredSportTeamIds.map(id => sportTeamById.get(id)?.name ?? id);
+                const requestedNames = tx.requestedSportTeamIds.map(id => sportTeamById.get(id)?.name ?? id);
+                return (
+                  <div key={tx.id} className="px-5 py-3.5 flex items-start gap-3">
+                    <div className="w-6 h-6 rounded-full bg-info-bg border border-info/30 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="text-info">
+                        <path d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4" />
+                      </svg>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-copy-3 mb-0.5">{timeAgo(tx.date)}</p>
+                      <p className="text-sm text-copy leading-snug">
+                        <span className="font-semibold">{proposerFt?.displayName ?? '—'}</span>
+                        <span className="text-copy-3"> traded </span>
+                        <span className="text-danger font-medium">{offeredNames.join(', ')}</span>
+                        <span className="text-copy-3"> to </span>
+                        <span className="font-semibold">{receiverFt?.displayName ?? '—'}</span>
+                        <span className="text-copy-3"> for </span>
+                        <span className="text-positive font-medium">{requestedNames.join(', ')}</span>
+                      </p>
+                    </div>
+                  </div>
+                );
+              } else {
+                const addTeamName = sportTeamById.get(tx.addTeamId)?.name ?? tx.addTeamId;
+                const dropTeamName = sportTeamById.get(tx.dropTeamId)?.name ?? tx.dropTeamId;
+                return (
+                  <div key={tx.id} className="px-5 py-3.5 flex items-start gap-3">
+                    <div className="w-6 h-6 rounded-full bg-warn-bg border border-warn/30 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="text-warn">
+                        <path d="M8 7h12M8 12h12M8 17h12M4 7h.01M4 12h.01M4 17h.01" />
+                      </svg>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-copy-3 mb-0.5">{timeAgo(tx.date)}</p>
+                      <p className="text-sm text-copy leading-snug">
+                        <span className="font-semibold">{tx.claimantDisplayName}</span>
+                        <span className="text-copy-3"> added </span>
+                        <span className="text-positive font-medium">{addTeamName}</span>
+                        <span className="text-copy-3"> and dropped </span>
+                        <span className="text-danger font-medium">{dropTeamName}</span>
+                      </p>
+                    </div>
+                  </div>
+                );
+              }
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ── League Info ────────────────────────────────────────────────────────── */}
       <div className="bg-card border border-line rounded-2xl p-5">
         <h2 className="text-sm font-semibold text-copy mb-4">League Info</h2>
-        <div className="grid grid-cols-2 gap-4 text-sm mb-4">
+        <div className="grid grid-cols-2 gap-3 text-sm mb-4">
           {[
             { label: 'League ID', value: <code className="text-xs font-mono text-copy-2">{league.id}</code> },
             { label: 'Visibility', value: <span className="text-copy">{league.isPublic ? 'Public' : 'Private'}</span> },
@@ -2194,52 +2506,12 @@ function SettingsTab({
             ))}
           </div>
         </div>
-        {isCommissioner && (
-          <div className="mt-4 pt-3 border-t border-line space-y-3">
-            <p className="text-xs text-brand">You are the commissioner of this league.</p>
-            {league.state === 'draft' && (
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs font-medium text-copy">Skip auction &amp; go live</p>
-                  <p className="text-xs text-copy-3 mt-0.5">Transition directly to active without running an auction.</p>
-                </div>
-                <button
-                  onClick={async () => {
-                    if (!confirm('Set league to active? This skips the auction and cannot be undone.')) return;
-                    try {
-                      const updated = await api.patch<League>(`/leagues/${leagueId}/state`, { state: 'active' });
-                      setLeague(updated);
-                    } catch (e: unknown) { alert(e instanceof Error ? e.message : 'Failed'); }
-                  }}
-                  className="flex-shrink-0 bg-brand hover:bg-brand-2 text-white text-xs font-semibold px-3 py-2 rounded-xl transition-colors whitespace-nowrap"
-                >
-                  Set Active
-                </button>
-              </div>
-            )}
-            {league.state === 'completed' && (
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs font-medium text-copy">Renew this league</p>
-                  <p className="text-xs text-copy-3 mt-0.5">Start a new season. Members carry over; a new draft league is created.</p>
-                </div>
-                <button
-                  onClick={handleRenew}
-                  disabled={renewing}
-                  className="flex-shrink-0 bg-brand hover:bg-brand-2 disabled:opacity-50 text-white text-xs font-semibold px-3 py-2 rounded-xl transition-colors whitespace-nowrap"
-                >
-                  {renewing ? 'Creating...' : 'Renew League'}
-                </button>
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
-      {/* Previous Season */}
+      {/* ── Previous Season ────────────────────────────────────────────────────── */}
       <div className="bg-card border border-line rounded-2xl p-5">
         <h2 className="text-sm font-semibold text-copy mb-4">Previous Season</h2>
-        <div className="text-center py-10 border border-dashed border-line rounded-xl">
+        <div className="text-center py-8 border border-dashed border-line rounded-xl">
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-copy-3 mx-auto mb-3">
             <path d="M12 8v4l3 3" strokeLinecap="round" strokeLinejoin="round" />
             <path d="M3.05 11a9 9 0 1 1 .5 4" strokeLinecap="round" strokeLinejoin="round" />
@@ -2254,91 +2526,118 @@ function SettingsTab({
         </div>
       </div>
 
-      {/* Auction config */}
+      {/* ── Commissioner Tools ─────────────────────────────────────────────────── */}
       {isCommissioner && (
-        <div className="bg-card border border-line rounded-2xl p-5">
-          <h2 className="text-sm font-semibold text-copy mb-1">Auction Settings</h2>
-          <p className="text-xs text-copy-3 mb-5">Must be configured before starting the auction.</p>
-          <form onSubmit={saveAuctionConfig} className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-copy-2 mb-1.5">Starting Budget ($)</label>
-                <input
-                  type="number" min={1} required value={auctionForm.startingBudget}
-                  onChange={e => setAuctionForm(f => ({ ...f, startingBudget: Number(e.target.value) }))}
-                  className={inputCls}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-copy-2 mb-1.5">Min Opening Bid ($)</label>
-                <input
-                  type="number" min={1} required value={auctionForm.minOpeningBid}
-                  onChange={e => setAuctionForm(f => ({ ...f, minOpeningBid: Number(e.target.value) }))}
-                  className={inputCls}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-copy-2 mb-1.5">Min Bid Increment ($)</label>
-                <input
-                  type="number" min={1} required value={auctionForm.minBidIncrement}
-                  onChange={e => setAuctionForm(f => ({ ...f, minBidIncrement: Number(e.target.value) }))}
-                  className={inputCls}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-copy-2 mb-1.5">Countdown (sec)</label>
-                <input
-                  type="number" min={5} max={120} required value={auctionForm.countdownSeconds}
-                  onChange={e => setAuctionForm(f => ({ ...f, countdownSeconds: Number(e.target.value) }))}
-                  className={inputCls}
-                />
-              </div>
+        <>
+          {(league.state === 'draft' || league.state === 'completed') && (
+            <div className="bg-card border border-line rounded-2xl p-5">
+              <h2 className="text-sm font-semibold text-copy mb-4">Commissioner Controls</h2>
+              {league.state === 'draft' && (
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-medium text-copy">Skip auction &amp; go live</p>
+                    <p className="text-xs text-copy-3 mt-0.5">Transition directly to active without running an auction.</p>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      if (!confirm('Set league to active? This skips the auction and cannot be undone.')) return;
+                      try {
+                        const updated = await api.patch<League>(`/leagues/${leagueId}/state`, { state: 'active' });
+                        setLeague(updated);
+                      } catch (e: unknown) { alert(e instanceof Error ? e.message : 'Failed'); }
+                    }}
+                    className="flex-shrink-0 bg-brand hover:bg-brand-2 text-white text-xs font-semibold px-3 py-2 rounded-xl transition-colors whitespace-nowrap"
+                  >
+                    Set Active
+                  </button>
+                </div>
+              )}
+              {league.state === 'completed' && (
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-medium text-copy">Renew this league</p>
+                    <p className="text-xs text-copy-3 mt-0.5">Start a new season. Members carry over; a new draft league is created.</p>
+                  </div>
+                  <button
+                    onClick={handleRenew}
+                    disabled={renewing}
+                    className="flex-shrink-0 bg-brand hover:bg-brand-2 disabled:opacity-50 text-white text-xs font-semibold px-3 py-2 rounded-xl transition-colors whitespace-nowrap"
+                  >
+                    {renewing ? 'Creating...' : 'Renew League'}
+                  </button>
+                </div>
+              )}
             </div>
-            <div>
-              <label className="block text-xs font-medium text-copy-2 mb-1.5">Nomination Mode</label>
-              <select
-                value={auctionForm.nominationMode}
-                onChange={e => setAuctionForm(f => ({ ...f, nominationMode: e.target.value }))}
-                className={inputCls}
-              >
-                <option value="manual">Manual — commissioner picks who nominates</option>
-                <option value="random-disclosed">Random (disclosed) — order shown to all</option>
-                <option value="random-hidden">Random (hidden) — revealed one at a time</option>
-                <option value="defined">Defined — set order in advance</option>
-              </select>
-            </div>
-            <button
-              type="submit"
-              disabled={saving}
-              className="bg-brand hover:bg-brand-2 disabled:opacity-50 text-white font-semibold px-5 py-2.5 rounded-xl transition-colors text-sm"
-            >
-              {saving ? 'Saving...' : saved ? '✓ Saved' : 'Save Auction Settings'}
-            </button>
-          </form>
-        </div>
-      )}
+          )}
 
-      {/* Danger Zone */}
-      {isCommissioner && (
-        <div className="bg-card border border-danger/20 rounded-2xl p-5">
-          <h2 className="text-sm font-semibold text-danger mb-1">Danger Zone</h2>
-          <p className="text-xs text-copy-3 mb-4">Destructive actions that cannot be reversed.</p>
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-sm font-medium text-copy">Delete this league</p>
-              <p className="text-xs text-copy-3 mt-0.5">Permanently removes all members, rosters, and data.</p>
-            </div>
-            <button
-              onClick={() => setShowDeleteModal(true)}
-              className="flex-shrink-0 bg-danger/10 hover:bg-danger/20 border border-danger/30 text-danger text-sm font-semibold px-4 py-2 rounded-xl transition-colors whitespace-nowrap"
-            >
-              Delete League
-            </button>
+          <div className="bg-card border border-line rounded-2xl p-5">
+            <h2 className="text-sm font-semibold text-copy mb-1">Auction Settings</h2>
+            <p className="text-xs text-copy-3 mb-5">Must be configured before starting the auction.</p>
+            <form onSubmit={saveAuctionConfig} className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-copy-2 mb-1.5">Starting Budget ($)</label>
+                  <input type="number" min={1} required value={auctionForm.startingBudget}
+                    onChange={e => setAuctionForm(f => ({ ...f, startingBudget: Number(e.target.value) }))}
+                    className={inputCls} />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-copy-2 mb-1.5">Min Opening Bid ($)</label>
+                  <input type="number" min={1} required value={auctionForm.minOpeningBid}
+                    onChange={e => setAuctionForm(f => ({ ...f, minOpeningBid: Number(e.target.value) }))}
+                    className={inputCls} />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-copy-2 mb-1.5">Min Bid Increment ($)</label>
+                  <input type="number" min={1} required value={auctionForm.minBidIncrement}
+                    onChange={e => setAuctionForm(f => ({ ...f, minBidIncrement: Number(e.target.value) }))}
+                    className={inputCls} />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-copy-2 mb-1.5">Countdown (sec)</label>
+                  <input type="number" min={5} max={120} required value={auctionForm.countdownSeconds}
+                    onChange={e => setAuctionForm(f => ({ ...f, countdownSeconds: Number(e.target.value) }))}
+                    className={inputCls} />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-copy-2 mb-1.5">Nomination Mode</label>
+                <select value={auctionForm.nominationMode}
+                  onChange={e => setAuctionForm(f => ({ ...f, nominationMode: e.target.value }))}
+                  className={inputCls}>
+                  <option value="manual">Manual — commissioner picks who nominates</option>
+                  <option value="random-disclosed">Random (disclosed) — order shown to all</option>
+                  <option value="random-hidden">Random (hidden) — revealed one at a time</option>
+                  <option value="defined">Defined — set order in advance</option>
+                </select>
+              </div>
+              <button type="submit" disabled={saving}
+                className="bg-brand hover:bg-brand-2 disabled:opacity-50 text-white font-semibold px-5 py-2.5 rounded-xl transition-colors text-sm">
+                {saving ? 'Saving...' : saved ? '✓ Saved' : 'Save Auction Settings'}
+              </button>
+            </form>
           </div>
-        </div>
+
+          <div className="bg-card border border-danger/20 rounded-2xl p-5">
+            <h2 className="text-sm font-semibold text-danger mb-1">Danger Zone</h2>
+            <p className="text-xs text-copy-3 mb-4">Destructive actions that cannot be reversed.</p>
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-copy">Delete this league</p>
+                <p className="text-xs text-copy-3 mt-0.5">Permanently removes all members, rosters, and data.</p>
+              </div>
+              <button
+                onClick={() => setShowDeleteModal(true)}
+                className="flex-shrink-0 bg-danger/10 hover:bg-danger/20 border border-danger/30 text-danger text-sm font-semibold px-4 py-2 rounded-xl transition-colors whitespace-nowrap"
+              >
+                Delete League
+              </button>
+            </div>
+          </div>
+        </>
       )}
 
-      {/* League Rules */}
+      {/* ── League Rules ──────────────────────────────────────────────────────── */}
       <div className="bg-card border border-line rounded-2xl p-5 space-y-6">
         <h2 className="text-sm font-semibold text-copy">League Rules</h2>
 
