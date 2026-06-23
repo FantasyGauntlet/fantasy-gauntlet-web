@@ -27,6 +27,8 @@ interface League {
     countdownSeconds: number;
   } | null;
   previousLeagueId?: string;
+  topZone?: number | null;
+  bottomZone?: number | null;
 }
 
 interface Member { id: string; userId: string; role: 'commissioner' | 'member'; joinedAt: string; }
@@ -258,7 +260,7 @@ export default function LeaguePage() {
         ))}
       </div>
 
-      {tab === 'standings' && <StandingsTab leagueId={id} userId={user?.uid} fantasyTeams={fantasyTeams} />}
+      {tab === 'standings' && <StandingsTab leagueId={id} userId={user?.uid} fantasyTeams={fantasyTeams} topZone={league.topZone} bottomZone={league.bottomZone} />}
       {tab === 'roster' && (
         <RosterTab
           leagueId={id}
@@ -288,7 +290,7 @@ export default function LeaguePage() {
 
 // ─── Standings Tab ────────────────────────────────────────────────────────────
 
-function StandingsTab({ leagueId, userId, fantasyTeams }: { leagueId: string; userId?: string; fantasyTeams: FantasyTeam[] }) {
+function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone }: { leagueId: string; userId?: string; fantasyTeams: FantasyTeam[]; topZone?: number | null; bottomZone?: number | null; }) {
   const [standings, setStandings] = useState<Standing[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -336,15 +338,19 @@ function StandingsTab({ leagueId, userId, fantasyTeams }: { leagueId: string; us
             const totalWins = s.teamBreakdown.reduce((sum, t) => sum + t.wins, 0);
             const isExpanded = expanded === s.userId;
             const isMe = myTeamOwnerIds.has(s.userId);
+            const inTopZone = !!topZone && s.rank <= topZone;
+            const inBottomZone = !!bottomZone && s.rank > standings.length - bottomZone;
             return (
               <>
                 <tr
                   key={s.userId}
                   onClick={() => setExpanded(isExpanded ? null : s.userId)}
-                  className={`border-b border-line/50 cursor-pointer hover:bg-field/40 transition-colors ${isMe ? 'bg-brand-dim/30' : ''}`}
+                  className={`border-b border-line/50 cursor-pointer hover:bg-field/40 transition-colors ${
+                    isMe ? 'bg-brand-dim/30' : inTopZone ? 'bg-positive-bg/20' : inBottomZone ? 'bg-danger-bg/20' : ''
+                  }`}
                 >
-                  <td className="px-4 py-3.5">
-                    <span className={`text-sm font-bold ${s.rank <= 3 ? 'text-brand' : 'text-copy-2'}`}>
+                  <td className={`px-4 py-3.5 ${inTopZone ? 'border-l-2 border-l-positive' : inBottomZone ? 'border-l-2 border-l-danger' : 'border-l-2 border-l-transparent'}`}>
+                    <span className={`text-sm font-bold ${inTopZone ? 'text-positive' : inBottomZone ? 'text-danger' : 'text-copy-2'}`}>
                       #{s.rank}
                     </span>
                   </td>
@@ -2107,6 +2113,12 @@ function SettingsTab({
   const [deleting, setDeleting] = useState(false);
   const [renewing, setRenewing] = useState(false);
 
+  const [topZoneEnabled, setTopZoneEnabled] = useState(!!(league.topZone));
+  const [topZoneCount, setTopZoneCount] = useState(league.topZone ?? 4);
+  const [bottomZoneEnabled, setBottomZoneEnabled] = useState(!!(league.bottomZone));
+  const [bottomZoneCount, setBottomZoneCount] = useState(league.bottomZone ?? 3);
+  const [zonesSaving, setZonesSaving] = useState(false);
+
   const [transactions, setTransactions] = useState<TxEvent[]>([]);
   const [txLoading, setTxLoading] = useState(true);
   const [allSportTeams, setAllSportTeams] = useState<SportTeam[]>([]);
@@ -2182,6 +2194,21 @@ function SettingsTab({
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : 'Failed to renew league');
       setRenewing(false);
+    }
+  }
+
+  async function saveTableZones() {
+    setZonesSaving(true);
+    try {
+      const updated = await api.patch<League>(`/leagues/${leagueId}/table-zones`, {
+        topZone: topZoneEnabled ? topZoneCount : null,
+        bottomZone: bottomZoneEnabled ? bottomZoneCount : null,
+      });
+      setLeague(updated);
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Failed to save');
+    } finally {
+      setZonesSaving(false);
     }
   }
 
@@ -2569,6 +2596,78 @@ function SettingsTab({
               )}
             </div>
           )}
+
+          {/* Table Zones */}
+          <div className="bg-card border border-line rounded-2xl p-5">
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div>
+                <h2 className="text-sm font-semibold text-copy">Table Zones</h2>
+                <p className="text-xs text-copy-3 mt-0.5">Highlight positions on the standings table.</p>
+              </div>
+              <button
+                onClick={saveTableZones}
+                disabled={zonesSaving}
+                className="flex-shrink-0 bg-brand hover:bg-brand-2 disabled:opacity-50 text-white text-xs font-semibold px-3 py-2 rounded-xl transition-colors whitespace-nowrap"
+              >
+                {zonesSaving ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <label className="flex items-center gap-2.5 cursor-pointer select-none flex-1">
+                  <input
+                    type="checkbox"
+                    checked={topZoneEnabled}
+                    onChange={e => setTopZoneEnabled(e.target.checked)}
+                    className="w-4 h-4 rounded accent-positive"
+                  />
+                  <div>
+                    <p className="text-xs font-medium text-copy">Top Zone</p>
+                    <p className="text-xs text-copy-3">Highlighted in green — qualification / prize spots</p>
+                  </div>
+                </label>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <input
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={topZoneCount}
+                    disabled={!topZoneEnabled}
+                    onChange={e => setTopZoneCount(Math.max(1, Number(e.target.value)))}
+                    className="w-14 bg-field border border-line-2 rounded-lg px-2 py-1 text-xs text-copy text-center focus:outline-none focus:border-brand disabled:opacity-40 transition-colors"
+                  />
+                  <span className="text-xs text-copy-3">teams</span>
+                </div>
+              </div>
+              <div className="h-px bg-line" />
+              <div className="flex items-center justify-between gap-3">
+                <label className="flex items-center gap-2.5 cursor-pointer select-none flex-1">
+                  <input
+                    type="checkbox"
+                    checked={bottomZoneEnabled}
+                    onChange={e => setBottomZoneEnabled(e.target.checked)}
+                    className="w-4 h-4 rounded accent-danger"
+                  />
+                  <div>
+                    <p className="text-xs font-medium text-copy">Relegation Zone</p>
+                    <p className="text-xs text-copy-3">Highlighted in red — bottom of the table</p>
+                  </div>
+                </label>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <input
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={bottomZoneCount}
+                    disabled={!bottomZoneEnabled}
+                    onChange={e => setBottomZoneCount(Math.max(1, Number(e.target.value)))}
+                    className="w-14 bg-field border border-line-2 rounded-lg px-2 py-1 text-xs text-copy text-center focus:outline-none focus:border-brand disabled:opacity-40 transition-colors"
+                  />
+                  <span className="text-xs text-copy-3">teams</span>
+                </div>
+              </div>
+            </div>
+          </div>
 
           <div className="bg-card border border-line rounded-2xl p-5">
             <h2 className="text-sm font-semibold text-copy mb-1">Auction Settings</h2>
