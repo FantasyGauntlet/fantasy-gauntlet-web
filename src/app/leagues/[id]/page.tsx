@@ -1,10 +1,12 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { ref as storageRef, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
+import { storage } from '@/lib/firebase';
 
 interface League {
   id: string;
@@ -443,6 +445,9 @@ function RosterTab({
   const [editLogoUrl, setEditLogoUrl] = useState('');
   const [editSaving, setEditSaving] = useState(false);
   const [editMsg, setEditMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [logoUploadProgress, setLogoUploadProgress] = useState(0);
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   const [coOwners, setCoOwners] = useState<{ uid: string; email: string }[]>([]);
   const [coOwnerEmail, setCoOwnerEmail] = useState('');
@@ -752,6 +757,45 @@ function RosterTab({
     }
   }
 
+  async function uploadLogo(file: File) {
+    if (!userId) return;
+    setLogoUploading(true);
+    setLogoUploadProgress(0);
+    setEditMsg(null);
+    try {
+      const ext = file.name.split('.').pop() ?? 'png';
+      const path = `team-logos/${leagueId}_${userId}.${ext}`;
+      const sRef = storageRef(storage, path);
+      await new Promise<void>((resolve, reject) => {
+        const task = uploadBytesResumable(sRef, file, { contentType: file.type });
+        task.on('state_changed',
+          snap => setLogoUploadProgress(Math.round((snap.bytesTransferred / snap.totalBytes) * 100)),
+          reject,
+          () => resolve(),
+        );
+      });
+      const url = await getDownloadURL(sRef);
+      const updated = await api.patch<FantasyTeam>(`/leagues/${leagueId}/teams/my`, { logoUrl: url });
+      setFantasyTeams(prev => prev.map(ft => ft.id === updated.id ? updated : ft));
+      setEditLogoUrl(url);
+      setEditMsg({ type: 'success', text: 'Logo uploaded!' });
+      setTimeout(() => setEditMsg(null), 3000);
+    } catch (e: unknown) {
+      setEditMsg({ type: 'error', text: e instanceof Error ? e.message : 'Upload failed' });
+    } finally {
+      setLogoUploading(false);
+      setLogoUploadProgress(0);
+    }
+  }
+
+  async function removeLogo() {
+    const updated = await api.patch<FantasyTeam>(`/leagues/${leagueId}/teams/my`, { logoUrl: null }).catch(() => null);
+    if (updated) {
+      setFantasyTeams(prev => prev.map(ft => ft.id === updated.id ? updated : ft));
+      setEditLogoUrl('');
+    }
+  }
+
   async function sendInvite(fantasyTeamId: string) {
     const email = (inviteEmails[fantasyTeamId] ?? '').trim();
     if (!email) return;
@@ -1044,24 +1088,45 @@ function RosterTab({
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-copy-2 mb-1.5">Logo URL</label>
+              <label className="block text-xs font-medium text-copy-2 mb-1.5">Team Logo</label>
               <input
-                value={editLogoUrl}
-                onChange={e => setEditLogoUrl(e.target.value)}
-                placeholder="https://example.com/logo.png"
-                className="w-full bg-field border border-line-2 rounded-xl px-4 py-2.5 text-copy text-sm placeholder-copy-3 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors"
+                ref={logoInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) uploadLogo(f); e.target.value = ''; }}
               />
-              {editLogoUrl && (
-                <div className="mt-2 flex items-center gap-2">
+              <div className="flex items-center gap-3">
+                {editLogoUrl && (
                   <img
                     src={editLogoUrl}
-                    alt="Logo preview"
-                    className="w-10 h-10 object-contain border border-line rounded-lg bg-field"
+                    alt="Team logo"
+                    className="w-12 h-12 object-contain border border-line rounded-xl bg-field flex-shrink-0"
                     onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
                   />
-                  <p className="text-xs text-copy-3">Preview</p>
+                )}
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => logoInputRef.current?.click()}
+                    disabled={logoUploading}
+                    className="bg-field hover:bg-field-2 border border-line-2 text-copy-2 text-xs font-medium px-3 py-2 rounded-xl transition-colors disabled:opacity-50"
+                  >
+                    {logoUploading
+                      ? `Uploading ${logoUploadProgress}%`
+                      : editLogoUrl ? 'Replace' : 'Upload Logo'}
+                  </button>
+                  {editLogoUrl && !logoUploading && (
+                    <button
+                      type="button"
+                      onClick={removeLogo}
+                      className="text-xs text-danger hover:text-danger/80 px-3 py-2 rounded-xl hover:bg-danger-bg transition-colors"
+                    >
+                      Remove
+                    </button>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
             {editMsg && (
               <p className={`text-xs ${editMsg.type === 'success' ? 'text-positive' : 'text-danger'}`}>
