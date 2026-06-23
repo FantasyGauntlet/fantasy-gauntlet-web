@@ -1590,12 +1590,11 @@ const WAIVER_STATUS_CLS: Record<string, string> = {
 };
 
 function ClaimCard({
-  claim, isCommissioner, userId, teamMap, reviewing, denyingId, denyReason,
+  claim, isCommissioner, teamMap, reviewing, denyingId, denyReason,
   onApprove, onStartDeny, onDenyReasonChange, onConfirmDeny, onCancelDeny,
 }: {
   claim: WaiverClaim;
   isCommissioner: boolean;
-  userId?: string;
   teamMap: Map<string, TeamWithRecord>;
   reviewing: string | null;
   denyingId: string | null;
@@ -1610,7 +1609,6 @@ function ClaimCard({
   const addTeam  = teamMap.get(claim.addTeamId);
   const isReviewing = reviewing === claim.id;
   const isDenying   = denyingId === claim.id;
-  const showClaimant = isCommissioner || claim.claimantUserId === userId;
 
   return (
     <div className="bg-card border border-line rounded-2xl p-4">
@@ -1618,7 +1616,7 @@ function ClaimCard({
         <div className="flex-1 min-w-0">
           {/* Header */}
           <div className="flex items-center gap-2 flex-wrap mb-3">
-            <span className="font-semibold text-copy text-sm">{showClaimant ? claim.claimantDisplayName : 'Anonymous'}</span>
+            <span className="font-semibold text-copy text-sm">{claim.claimantDisplayName}</span>
             {claim.claimantRank > 0 && (
               <span className="text-xs bg-field border border-line text-copy-3 px-2 py-0.5 rounded-full">
                 #{claim.claimantRank} in standings
@@ -1816,7 +1814,10 @@ function WaiversTab({
     .map(id => teamMap.get(id)).filter(Boolean) as TeamWithRecord[];
 
   const pending = claims.filter(c => c.status === 'pending');
-  const history = claims.filter(c => c.status !== 'pending');
+  // Non-commissioners only see approved claims; pending and denied are commissioner-only
+  const history = isCommissioner
+    ? claims.filter(c => c.status !== 'pending')
+    : claims.filter(c => c.status === 'approved');
   const canSubmit = !!myTeam;
 
   function closeForm() {
@@ -1873,7 +1874,7 @@ function WaiversTab({
   if (loading) return <div className="flex justify-center py-12"><Spinner /></div>;
 
   const claimCardProps = {
-    isCommissioner, userId, teamMap, reviewing, denyingId, denyReason,
+    isCommissioner, teamMap, reviewing, denyingId, denyReason,
     onApprove: approve,
     onStartDeny: (id: string) => { setDenyingId(id); setDenyReason(''); },
     onDenyReasonChange: setDenyReason,
@@ -2066,8 +2067,8 @@ function WaiversTab({
         </div>
       )}
 
-      {/* Pending */}
-      {pending.length > 0 && (
+      {/* Pending — commissioner only */}
+      {isCommissioner && pending.length > 0 && (
         <div>
           <p className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-2">
             Pending · {pending.length}
