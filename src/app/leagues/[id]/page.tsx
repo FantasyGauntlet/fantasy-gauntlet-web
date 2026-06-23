@@ -269,6 +269,13 @@ function StandingsTab({ leagueId, userId, fantasyTeams }: { leagueId: string; us
 
   const logoByUserId = new Map(fantasyTeams.map(ft => [ft.userId, ft.logoUrl ?? null]));
 
+  // Set of primary-owner userIds where the current user is owner or co-owner
+  const myTeamOwnerIds = new Set(
+    fantasyTeams
+      .filter(ft => ft.userId === userId || (ft.coOwnerIds ?? []).includes(userId ?? ''))
+      .map(ft => ft.userId)
+  );
+
   useEffect(() => {
     setLoading(true);
     api.get<Standing[]>(`/leagues/${leagueId}/standings`)
@@ -301,7 +308,7 @@ function StandingsTab({ leagueId, userId, fantasyTeams }: { leagueId: string; us
           {standings.map(s => {
             const totalWins = s.teamBreakdown.reduce((sum, t) => sum + t.wins, 0);
             const isExpanded = expanded === s.userId;
-            const isMe = s.userId === userId;
+            const isMe = myTeamOwnerIds.has(s.userId);
             return (
               <>
                 <tr
