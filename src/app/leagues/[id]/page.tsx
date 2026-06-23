@@ -2910,28 +2910,66 @@ function SettingsTab({
             <section>
               <h3 className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-3">Scoring Breakdown</h3>
               <div className="overflow-x-auto rounded-xl border border-line">
-                <table className="w-full text-sm">
+                <table className="w-full text-sm min-w-max">
                   <thead>
                     <tr className="bg-field/60 border-b border-line">
-                      <th className="text-left px-4 py-2.5 text-xs font-semibold text-copy-3">Sport</th>
-                      <th className="text-right px-4 py-2.5 text-xs font-semibold text-copy-3">Win</th>
-                      <th className="text-right px-4 py-2.5 text-xs font-semibold text-copy-3">Draw</th>
-                      <th className="text-right px-4 py-2.5 text-xs font-semibold text-copy-3">Bonus Scale</th>
+                      <th className="text-left px-4 py-2.5 text-xs font-semibold text-copy-3 min-w-[140px]"></th>
+                      {league.seasonRefs.map(ref => (
+                        <th key={ref.sportLeagueId} className="text-center px-4 py-2.5 text-xs font-semibold text-copy-3 whitespace-nowrap">
+                          {formatLeagueName(ref.sportLeagueId)}
+                        </th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {league.seasonRefs.map((ref, i) => (
-                      <tr key={ref.sportLeagueId} className={i > 0 ? 'border-t border-line/50' : ''}>
-                        <td className="px-4 py-2.5 font-medium text-copy">{formatLeagueName(ref.sportLeagueId)}</td>
-                        <td className="px-4 py-2.5 text-right text-copy-2">{ref.winValue}</td>
-                        <td className="px-4 py-2.5 text-right text-copy-2">{ref.drawValue ?? '—'}</td>
-                        <td className="px-4 py-2.5 text-right text-copy-2">{ref.scalingValue}×</td>
+                    {/* Points per section */}
+                    <tr className="border-t border-line/50 bg-field/30">
+                      <td colSpan={league.seasonRefs.length + 1} className="px-4 py-1.5 text-xs font-semibold text-copy-3">
+                        Points per:
+                      </td>
+                    </tr>
+                    <tr className="border-t border-line/50">
+                      <td className="px-4 py-2.5 font-medium text-copy">Win</td>
+                      {league.seasonRefs.map(ref => (
+                        <td key={ref.sportLeagueId} className="px-4 py-2.5 text-center text-copy-2">
+                          {ref.winValue.toFixed(1)}
+                        </td>
+                      ))}
+                    </tr>
+                    <tr className="border-t border-line/50">
+                      <td className="px-4 py-2.5 font-medium text-copy">Draw / OT Loss</td>
+                      {league.seasonRefs.map(ref => (
+                        <td key={ref.sportLeagueId} className="px-4 py-2.5 text-center text-copy-2">
+                          {(ref.drawValue ?? 0).toFixed(1)}
+                        </td>
+                      ))}
+                    </tr>
+
+                    {/* Playoff structure section */}
+                    <tr className="border-t-2 border-line bg-field/30">
+                      <td colSpan={league.seasonRefs.length + 1} className="px-4 py-1.5 text-xs font-semibold text-copy-3">
+                        Playoff structure:
+                      </td>
+                    </tr>
+                    {[
+                      { label: '1st round winner', pts: 10 },
+                      { label: '2nd round winner', pts: 15 },
+                      { label: '3rd round winner', pts: 25 },
+                      { label: 'Champion',          pts: 50 },
+                      { label: 'Max playoff points', pts: 100 },
+                    ].map(({ label, pts }, i) => (
+                      <tr key={label} className={`border-t border-line/50${i === 3 ? ' font-semibold' : ''}`}>
+                        <td className={`px-4 py-2.5 text-copy ${i === 3 ? 'font-semibold' : 'font-medium'}`}>{label}</td>
+                        {league.seasonRefs.map(ref => (
+                          <td key={ref.sportLeagueId} className={`px-4 py-2.5 text-center ${i === 3 ? 'text-copy font-semibold' : 'text-copy-2'}`}>
+                            {pts}
+                          </td>
+                        ))}
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-              <p className="text-xs text-copy-3 mt-2">Bonus Scale applies to playoff and championship bonus points.</p>
             </section>
           </>
         )}
