@@ -760,6 +760,10 @@ function RosterTab({
 
   async function uploadLogo(file: File) {
     if (!userId) return;
+    if (!storage) {
+      setEditMsg({ type: 'error', text: 'Firebase Storage not initialized.' });
+      return;
+    }
     setLogoUploading(true);
     setLogoUploadProgress(0);
     setEditMsg(null);
@@ -769,10 +773,15 @@ function RosterTab({
       const sRef = storageRef(storage, path);
       await new Promise<void>((resolve, reject) => {
         const task = uploadBytesResumable(sRef, file, { contentType: file.type });
-        task.on('state_changed',
+        const timeout = setTimeout(() => {
+          task.cancel();
+          reject(new Error('Upload timed out — make sure Firebase Storage is enabled and rules allow writes.'));
+        }, 20000);
+        task.on(
+          'state_changed',
           snap => setLogoUploadProgress(Math.round((snap.bytesTransferred / snap.totalBytes) * 100)),
-          reject,
-          () => resolve(),
+          err => { clearTimeout(timeout); reject(err); },
+          () => { clearTimeout(timeout); resolve(); },
         );
       });
       const url = await getDownloadURL(sRef);
