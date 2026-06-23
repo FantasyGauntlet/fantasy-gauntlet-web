@@ -28,7 +28,6 @@ interface League {
   } | null;
   previousLeagueId?: string;
   topZone?: number | null;
-  wildCardZone?: number | null;
   bottomZone?: number | null;
   waiverSettings?: { processingDay: string; processingHour: number } | null;
 }
@@ -262,7 +261,7 @@ export default function LeaguePage() {
         ))}
       </div>
 
-      {tab === 'standings' && <StandingsTab leagueId={id} userId={user?.uid} fantasyTeams={fantasyTeams} topZone={league.topZone} wildCardZone={league.wildCardZone} bottomZone={league.bottomZone} />}
+      {tab === 'standings' && <StandingsTab leagueId={id} userId={user?.uid} fantasyTeams={fantasyTeams} topZone={league.topZone} bottomZone={league.bottomZone} />}
       {tab === 'roster' && (
         <RosterTab
           leagueId={id}
@@ -292,7 +291,7 @@ export default function LeaguePage() {
 
 // ─── Standings Tab ────────────────────────────────────────────────────────────
 
-function StandingsTab({ leagueId, userId, fantasyTeams, topZone, wildCardZone, bottomZone }: { leagueId: string; userId?: string; fantasyTeams: FantasyTeam[]; topZone?: number | null; wildCardZone?: number | null; bottomZone?: number | null; }) {
+function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone }: { leagueId: string; userId?: string; fantasyTeams: FantasyTeam[]; topZone?: number | null; bottomZone?: number | null; }) {
   const [standings, setStandings] = useState<Standing[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -341,7 +340,6 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, wildCardZone, b
             const isExpanded = expanded === s.userId;
             const isMe = myTeamOwnerIds.has(s.userId);
             const inTopZone = !!topZone && s.rank <= topZone;
-            const inWildCardZone = !inTopZone && !!wildCardZone && s.rank > (topZone ?? 0) && s.rank <= (topZone ?? 0) + wildCardZone;
             const inBottomZone = !!bottomZone && s.rank > standings.length - bottomZone;
             return (
               <>
@@ -349,14 +347,13 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, wildCardZone, b
                   key={s.userId}
                   onClick={() => setExpanded(isExpanded ? null : s.userId)}
                   className={`border-b border-line/50 cursor-pointer hover:bg-field/40 transition-colors ${
-                    isMe ? 'bg-brand-dim/30' : inTopZone ? 'bg-positive-bg/20' : inWildCardZone ? 'bg-warn-bg/20' : inBottomZone ? 'bg-danger-bg/20' : ''
+                    isMe ? 'bg-brand-dim/30' : inTopZone ? 'bg-positive-bg/20' : inBottomZone ? 'bg-danger-bg/20' : ''
                   }`}
                 >
-                  <td className={`px-4 py-3.5 ${inTopZone ? 'border-l-2 border-l-positive' : inWildCardZone ? 'border-l-2 border-l-warn' : inBottomZone ? 'border-l-2 border-l-danger' : 'border-l-2 border-l-transparent'}`}>
-                    <span className={`text-sm font-bold ${inTopZone ? 'text-positive' : inWildCardZone ? 'text-warn' : inBottomZone ? 'text-danger' : 'text-copy-2'}`}>
+                  <td className={`px-4 py-3.5 ${inTopZone ? 'border-l-2 border-l-positive' : inBottomZone ? 'border-l-2 border-l-danger' : 'border-l-2 border-l-transparent'}`}>
+                    <span className={`text-sm font-bold ${inTopZone ? 'text-positive' : inBottomZone ? 'text-danger' : 'text-copy-2'}`}>
                       #{s.rank}
                     </span>
-                    {inWildCardZone && <span className="ml-1 text-[10px] font-semibold text-warn bg-warn-bg px-1 py-0.5 rounded">WC</span>}
                   </td>
                   <td className="px-4 py-3.5">
                     <div className="flex items-center gap-2.5">
@@ -379,7 +376,14 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, wildCardZone, b
                     <span className="text-sm text-positive">{s.bonusPoints > 0 ? `+${s.bonusPoints.toFixed(1)}` : '—'}</span>
                   </td>
                 </tr>
-                {isExpanded && s.teamBreakdown.length > 0 && (
+                {isExpanded && s.teamBreakdown.length > 0 && (() => {
+                  const wcIds = new Set<string>();
+                  const seen = new Set<string>();
+                  for (const t of s.teamBreakdown) {
+                    if (seen.has(t.sportLeagueId)) wcIds.add(t.teamId);
+                    else seen.add(t.sportLeagueId);
+                  }
+                  return (
                   <tr key={`${s.userId}-bd`} className="border-b border-line/50 bg-field/20">
                     <td colSpan={5} className="px-6 py-4 space-y-3">
                       <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
@@ -390,6 +394,7 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, wildCardZone, b
                           const teamKey = `${s.userId}_${t.teamId}`;
                           const isTeamExpanded = expandedTeam === teamKey;
                           const hasBonus = teamBonuses.length > 0;
+                          const isWildCard = wcIds.has(t.teamId);
                           return (
                             <div
                               key={t.teamId}
@@ -407,6 +412,7 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, wildCardZone, b
                                     <div className="flex items-center gap-1">
                                       <p className="text-xs font-medium text-copy truncate">{t.teamName}</p>
                                       {hasBonus && <span className="text-positive text-xs flex-shrink-0">★</span>}
+                                      {isWildCard && <span className="text-xs bg-warn-bg text-warn border border-warn/20 px-1.5 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">Wild Card</span>}
                                     </div>
                                     <p className="text-xs text-copy-3 mt-0.5">{formatLeagueName(t.sportLeagueId)}</p>
                                   </div>
@@ -441,7 +447,8 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, wildCardZone, b
                       </div>
                     </td>
                   </tr>
-                )}
+                  );
+                })()}
               </>
             );
           })}
@@ -2146,8 +2153,6 @@ function SettingsTab({
 
   const [topZoneEnabled, setTopZoneEnabled] = useState(!!(league.topZone));
   const [topZoneCount, setTopZoneCount] = useState(league.topZone ?? 4);
-  const [wildCardZoneEnabled, setWildCardZoneEnabled] = useState(!!(league.wildCardZone));
-  const [wildCardZoneCount, setWildCardZoneCount] = useState(league.wildCardZone ?? 2);
   const [bottomZoneEnabled, setBottomZoneEnabled] = useState(!!(league.bottomZone));
   const [bottomZoneCount, setBottomZoneCount] = useState(league.bottomZone ?? 3);
   const [zonesSaving, setZonesSaving] = useState(false);
@@ -2239,7 +2244,6 @@ function SettingsTab({
     try {
       const updated = await api.patch<League>(`/leagues/${leagueId}/table-zones`, {
         topZone: topZoneEnabled ? topZoneCount : null,
-        wildCardZone: wildCardZoneEnabled ? wildCardZoneCount : null,
         bottomZone: bottomZoneEnabled ? bottomZoneCount : null,
       });
       setLeague(updated);
@@ -2687,33 +2691,6 @@ function SettingsTab({
                     value={topZoneCount}
                     disabled={!topZoneEnabled}
                     onChange={e => setTopZoneCount(Math.max(1, Number(e.target.value)))}
-                    className="w-14 bg-field border border-line-2 rounded-lg px-2 py-1 text-xs text-copy text-center focus:outline-none focus:border-brand disabled:opacity-40 transition-colors"
-                  />
-                  <span className="text-xs text-copy-3">teams</span>
-                </div>
-              </div>
-              <div className="h-px bg-line" />
-              <div className="flex items-center justify-between gap-3">
-                <label className="flex items-center gap-2.5 cursor-pointer select-none flex-1">
-                  <input
-                    type="checkbox"
-                    checked={wildCardZoneEnabled}
-                    onChange={e => setWildCardZoneEnabled(e.target.checked)}
-                    className="w-4 h-4 rounded accent-warn"
-                  />
-                  <div>
-                    <p className="text-xs font-medium text-copy">Wild Card Zone</p>
-                    <p className="text-xs text-copy-3">Highlighted in amber — playoff wild card spots</p>
-                  </div>
-                </label>
-                <div className="flex items-center gap-1.5 flex-shrink-0">
-                  <input
-                    type="number"
-                    min={1}
-                    max={20}
-                    value={wildCardZoneCount}
-                    disabled={!wildCardZoneEnabled}
-                    onChange={e => setWildCardZoneCount(Math.max(1, Number(e.target.value)))}
                     className="w-14 bg-field border border-line-2 rounded-lg px-2 py-1 text-xs text-copy text-center focus:outline-none focus:border-brand disabled:opacity-40 transition-colors"
                   />
                   <span className="text-xs text-copy-3">teams</span>
