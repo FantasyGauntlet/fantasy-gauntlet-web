@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
+import NotificationBell from './NotificationBell';
 
 function SunIcon() {
   return (
@@ -79,6 +80,9 @@ export default function NavBar() {
 
         {/* Right side */}
         <div className="flex items-center gap-2">
+          {/* Notifications */}
+          {user && <NotificationBell />}
+
           {/* Theme toggle */}
           <button
             onClick={toggle}
