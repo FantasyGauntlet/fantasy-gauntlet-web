@@ -351,7 +351,7 @@ function StandingsTab({ leagueId, userId, fantasyTeams }: { leagueId: string; us
                   <td className="px-4 py-3.5">
                     <div className="flex items-center gap-2.5">
                       {logoByUserId.get(s.userId) && (
-                        <img src={logoByUserId.get(s.userId)!} alt={s.displayName} className="w-7 h-7 object-contain rounded-md flex-shrink-0" />
+                        <img src={logoByUserId.get(s.userId)!} alt={s.displayName} className="w-7 h-7 object-cover rounded-full flex-shrink-0" />
                       )}
                       <div>
                         <span className="text-sm font-medium text-copy">{s.displayName}</span>
@@ -988,7 +988,7 @@ function RosterTab({
         <div className="flex items-center justify-between px-5 py-4 border-b border-line">
           <div className="flex items-center gap-3 min-w-0">
             {viewingTeam?.logoUrl && (
-              <img src={viewingTeam.logoUrl} alt={viewingTeam.displayName} className="w-10 h-10 object-contain rounded-lg flex-shrink-0" />
+              <img src={viewingTeam.logoUrl} alt={viewingTeam.displayName} className="w-10 h-10 object-cover rounded-full flex-shrink-0" />
             )}
             <div className="min-w-0">
               <p className="text-sm font-semibold text-copy">
@@ -1150,7 +1150,7 @@ function RosterTab({
                     <img
                       src={editLogoUrl}
                       alt="Team logo"
-                      className="w-16 h-16 object-contain rounded-lg"
+                      className="w-16 h-16 object-cover rounded-full"
                       onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
                     />
                     <p className="text-xs text-copy-3">
