@@ -69,11 +69,11 @@ function TeamLogo({ logoUrl, name, size = 10 }: { logoUrl: string | null; name: 
   );
 }
 
-function TimerRing({ remaining, total }: { remaining: number; total: number }) {
+function TimerRing({ remaining, total, paused }: { remaining: number; total: number; paused?: boolean }) {
   const pct = total > 0 ? Math.max(0, Math.min(1, remaining / total)) : 0;
   const offset = TIMER_CIRC * (1 - pct);
-  const strokeColor = pct > 0.5 ? '#22c55e' : pct > 0.25 ? '#f59e0b' : '#ef4444';
-  const textCls = pct > 0.5 ? 'text-positive' : pct > 0.25 ? 'text-warn' : 'text-danger';
+  const strokeColor = paused ? '#8b5cf6' : (pct > 0.5 ? '#22c55e' : pct > 0.25 ? '#f59e0b' : '#ef4444');
+  const textCls = paused ? 'text-copy-2' : (pct > 0.5 ? 'text-positive' : pct > 0.25 ? 'text-warn' : 'text-danger');
   return (
     <div className="relative w-24 h-24 flex items-center justify-center flex-shrink-0">
       <svg width="96" height="96" className="absolute inset-0 -rotate-90">
@@ -81,10 +81,19 @@ function TimerRing({ remaining, total }: { remaining: number; total: number }) {
         <circle
           cx="48" cy="48" r={TIMER_R} fill="none" stroke={strokeColor} strokeWidth="5"
           strokeDasharray={TIMER_CIRC} strokeDashoffset={offset} strokeLinecap="round"
-          style={{ transition: 'stroke-dashoffset 0.9s linear, stroke 0.3s' }}
+          style={{ transition: paused ? 'none' : 'stroke-dashoffset 0.9s linear', stroke: strokeColor }}
         />
       </svg>
-      <span className={`relative z-10 text-2xl font-bold tabular-nums ${textCls}`}>{remaining}</span>
+      {paused ? (
+        <span className="relative z-10 flex flex-col items-center gap-0.5">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-copy-3">
+            <rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>
+          </svg>
+          <span className="text-[10px] font-bold text-copy-3 leading-none">{remaining}s</span>
+        </span>
+      ) : (
+        <span className={`relative z-10 text-2xl font-bold tabular-nums ${textCls}`}>{remaining}</span>
+      )}
     </div>
   );
 }
@@ -134,6 +143,7 @@ export default function AuctionPage() {
   const [minBidIncrement, setMinBidIncrement] = useState(1);
   const [minOpeningBid, setMinOpeningBid] = useState(1);
   const [lotFlash, setLotFlash] = useState<'sold' | 'passed' | null>(null);
+  const [paused, setPaused] = useState(false);
 
   // ── UI ────────────────────────────────────────────────────────────────────
   const [bidInput, setBidInput] = useState('');
@@ -217,6 +227,7 @@ export default function AuctionPage() {
         if (!session) { setStatus('waiting'); return; }
 
         setStatus(session.status as AuctionStatus);
+        setPaused(session.paused ?? false);
         if (session.minBidIncrement) setMinBidIncrement(session.minBidIncrement);
         if (session.minOpeningBid) setMinOpeningBid(session.minOpeningBid);
         if (session.nominationMode) setNominationMode(session.nominationMode);
@@ -286,9 +297,24 @@ export default function AuctionPage() {
         });
         setStatus('active');
         setLotFlash(null);
+        setPaused(false);
         setBidInput('');
         setBidError('');
         setUpcomingQueue(q => q.filter(tid => tid !== data.teamId));
+      });
+
+      socket.on('lot_paused', (data: any) => {
+        setPaused(true);
+        if (data.timerRemaining !== undefined) {
+          setCurrentLot(prev => prev ? { ...prev, timerRemaining: data.timerRemaining } : prev);
+        }
+      });
+
+      socket.on('lot_resumed', (data: any) => {
+        setPaused(false);
+        if (data.timerRemaining !== undefined) {
+          setCurrentLot(prev => prev ? { ...prev, timerRemaining: data.timerRemaining } : prev);
+        }
       });
 
       socket.on('new_high_bid', (data: any) => {
@@ -576,7 +602,7 @@ export default function AuctionPage() {
                       </span>
                     )}
                   </div>
-                  <TimerRing remaining={currentLot.timerRemaining} total={currentLot.totalSeconds} />
+                  <TimerRing remaining={currentLot.timerRemaining} total={currentLot.totalSeconds} paused={paused} />
                 </div>
 
                 {/* Bid info */}
@@ -662,14 +688,48 @@ export default function AuctionPage() {
                       Start Auction
                     </button>
                   )}
-                  {/* Skip current lot */}
+                  {/* Active-lot controls */}
                   {status === 'active' && currentLot && (
-                    <button
-                      onClick={skipLot}
-                      className="bg-field hover:bg-field-2 border border-line text-copy-2 text-sm font-medium px-4 py-2 rounded-xl transition-colors"
-                    >
-                      Skip / Pass Team
-                    </button>
+                    <>
+                      {/* Pause / Resume */}
+                      <button
+                        onClick={() => socketRef.current?.emit(paused ? 'commissioner_resume' : 'commissioner_pause')}
+                        className={`text-sm font-medium px-4 py-2 rounded-xl transition-colors border ${
+                          paused
+                            ? 'bg-brand/10 border-brand/30 text-brand hover:bg-brand/20'
+                            : 'bg-field hover:bg-field-2 border-line text-copy-2'
+                        }`}
+                      >
+                        {paused ? 'Resume Clock' : 'Pause Clock'}
+                      </button>
+                      {/* Add time */}
+                      <button
+                        onClick={() => socketRef.current?.emit('commissioner_add_time', { seconds: 30 })}
+                        className="bg-field hover:bg-field-2 border border-line text-copy-2 text-sm font-medium px-3 py-2 rounded-xl transition-colors"
+                      >
+                        +30s
+                      </button>
+                      <button
+                        onClick={() => socketRef.current?.emit('commissioner_add_time', { seconds: 60 })}
+                        className="bg-field hover:bg-field-2 border border-line text-copy-2 text-sm font-medium px-3 py-2 rounded-xl transition-colors"
+                      >
+                        +60s
+                      </button>
+                      {/* Reset timer to full countdown */}
+                      <button
+                        onClick={() => socketRef.current?.emit('commissioner_reset_timer')}
+                        className="bg-field hover:bg-field-2 border border-line text-copy-2 text-sm font-medium px-4 py-2 rounded-xl transition-colors"
+                      >
+                        Reset Timer
+                      </button>
+                      {/* Skip/pass team */}
+                      <button
+                        onClick={skipLot}
+                        className="bg-field hover:bg-field-2 border border-line text-copy-2 text-sm font-medium px-4 py-2 rounded-xl transition-colors"
+                      >
+                        Skip / Pass Team
+                      </button>
+                    </>
                   )}
                   {/* Manual mode: pick next team */}
                   {nominationMode === 'manual' && status === 'waiting' && league?.state === 'auction' && (
