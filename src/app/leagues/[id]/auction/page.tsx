@@ -141,6 +141,7 @@ export default function AuctionPage() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [nominating, setNominating] = useState(false);
   const [selectedNomination, setSelectedNomination] = useState('');
+  const [auctionErrorMsg, setAuctionErrorMsg] = useState('');
 
   const socketRef = useRef<Socket | null>(null);
   const toastId = useRef(0);
@@ -383,6 +384,11 @@ export default function AuctionPage() {
       socket.on('error', (data: any) => {
         toast('error', data.message ?? 'An error occurred');
       });
+
+      socket.on('auction_error', (data: any) => {
+        setAuctionErrorMsg(data.message ?? 'An error occurred');
+        toast('error', data.message ?? 'An error occurred');
+      });
     })();
 
     return () => { socket?.disconnect(); socketRef.current = null; };
@@ -422,6 +428,16 @@ export default function AuctionPage() {
       toast('info', 'Auction started!');
     } catch (e: unknown) {
       toast('error', e instanceof Error ? e.message : 'Failed to start auction');
+    }
+  }
+
+  async function handleRestartAuction() {
+    try {
+      setAuctionErrorMsg('');
+      await api.post(`/leagues/${id}/auction/restart`);
+      toast('info', 'Auction session restarted.');
+    } catch (e: unknown) {
+      toast('error', e instanceof Error ? e.message : 'Failed to restart auction');
     }
   }
 
@@ -492,6 +508,25 @@ export default function AuctionPage() {
                 <Link href={`/leagues/${id}`} className="inline-block mt-4 bg-brand hover:bg-brand-2 text-white font-medium px-6 py-2 rounded-xl transition-colors text-sm">
                   View League
                 </Link>
+              </div>
+            )}
+
+            {/* Persistent auction error banner */}
+            {auctionErrorMsg && (
+              <div className="bg-danger-bg/30 border border-danger/30 rounded-2xl p-4 flex items-start gap-3">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-danger flex-shrink-0 mt-0.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-danger">Auction Error</p>
+                  <p className="text-xs text-copy-3 mt-0.5">{auctionErrorMsg}</p>
+                </div>
+                {isCommissioner && (
+                  <button onClick={handleRestartAuction} className="flex-shrink-0 bg-danger/10 hover:bg-danger/20 text-danger text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors">
+                    Restart Auction
+                  </button>
+                )}
+                <button onClick={() => setAuctionErrorMsg('')} className="flex-shrink-0 text-copy-3 hover:text-copy">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
               </div>
             )}
 
@@ -646,13 +681,22 @@ export default function AuctionPage() {
                       </button>
                     </div>
                   )}
-                  {/* Auto modes: force-advance if stuck (e.g. after server restart) */}
-                  {nominationMode !== 'manual' && status === 'waiting' && league?.state === 'auction' && (
+                  {/* Auto/manual modes: force-advance if stuck (e.g. after server restart) */}
+                  {status === 'waiting' && league?.state === 'auction' && (
                     <button
                       onClick={forceNextLot}
                       className="bg-field hover:bg-field-2 border border-line text-copy-2 text-sm font-medium px-4 py-2 rounded-xl transition-colors"
                     >
                       Force Next Team
+                    </button>
+                  )}
+                  {/* Restart button — rebuilds the session if it's unrecoverable */}
+                  {status === 'waiting' && league?.state === 'auction' && (
+                    <button
+                      onClick={handleRestartAuction}
+                      className="bg-field hover:bg-field-2 border border-danger/30 text-danger text-sm font-medium px-4 py-2 rounded-xl transition-colors"
+                    >
+                      Restart Auction
                     </button>
                   )}
                 </div>
