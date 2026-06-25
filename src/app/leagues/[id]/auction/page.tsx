@@ -152,6 +152,7 @@ export default function AuctionPage() {
   const [nominating, setNominating] = useState(false);
   const [selectedNomination, setSelectedNomination] = useState('');
   const [auctionErrorMsg, setAuctionErrorMsg] = useState('');
+  const [confirmReset, setConfirmReset] = useState(false);
 
   const socketRef = useRef<Socket | null>(null);
   const toastId = useRef(0);
@@ -408,6 +409,11 @@ export default function AuctionPage() {
         toast('info', 'The auction has ended.');
       });
 
+      socket.on('auction_reset', () => {
+        // Auction wiped — redirect everyone back to the league page
+        router.replace(`/leagues/${id}`);
+      });
+
       socket.on('bid_accepted', (data: any) => {
         toast('success', `Bid of $${data.amount} placed`);
         setBidInput('');
@@ -476,6 +482,16 @@ export default function AuctionPage() {
       toast('info', 'Auction session restarted.');
     } catch (e: unknown) {
       toast('error', e instanceof Error ? e.message : 'Failed to restart auction');
+    }
+  }
+
+  async function handleResetAuction() {
+    try {
+      setConfirmReset(false);
+      await api.post(`/leagues/${id}/auction/reset`);
+      // auction_reset socket event will redirect all clients
+    } catch (e: unknown) {
+      toast('error', e instanceof Error ? e.message : 'Failed to reset auction');
     }
   }
 
@@ -763,16 +779,44 @@ export default function AuctionPage() {
                     </button>
                   )}
                 </div>
-                {/* Restart — always visible during an active auction */}
+                {/* Recovery / reset tools — always visible during an active auction */}
                 {league?.state === 'auction' && (
-                  <div className="border-t border-line pt-3">
+                  <div className="border-t border-line pt-3 space-y-2">
                     <button
                       onClick={handleRestartAuction}
-                      className="w-full bg-field hover:bg-danger/10 border border-danger/30 text-danger text-sm font-medium px-4 py-2 rounded-xl transition-colors text-left"
+                      className="w-full bg-field hover:bg-field-2 border border-line text-copy-2 text-sm font-medium px-4 py-2 rounded-xl transition-colors text-left"
                     >
                       Restart Auction
-                      <span className="block text-xs font-normal text-copy-3 mt-0.5">Rebuilds the session if the auction gets stuck</span>
+                      <span className="block text-xs font-normal text-copy-3 mt-0.5">Recovers a stuck session without wiping data</span>
                     </button>
+
+                    {!confirmReset ? (
+                      <button
+                        onClick={() => setConfirmReset(true)}
+                        className="w-full bg-field hover:bg-danger/10 border border-danger/30 text-danger text-sm font-medium px-4 py-2 rounded-xl transition-colors text-left"
+                      >
+                        Reset Auction
+                        <span className="block text-xs font-normal text-danger/60 mt-0.5">Wipe all bids &amp; assignments — start over from draft</span>
+                      </button>
+                    ) : (
+                      <div className="bg-danger/10 border border-danger/30 rounded-xl p-3 space-y-2">
+                        <p className="text-xs font-semibold text-danger">This will permanently delete all lots, bids, and team assignments. Everyone is sent back to draft.</p>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={handleResetAuction}
+                            className="flex-1 bg-danger text-white text-xs font-bold py-1.5 rounded-lg hover:bg-danger/80 transition-colors"
+                          >
+                            Yes, Reset Everything
+                          </button>
+                          <button
+                            onClick={() => setConfirmReset(false)}
+                            className="flex-1 bg-field border border-line text-copy-2 text-xs font-medium py-1.5 rounded-lg hover:bg-field-2 transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
