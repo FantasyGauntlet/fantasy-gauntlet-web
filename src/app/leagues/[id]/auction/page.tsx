@@ -145,6 +145,7 @@ export default function AuctionPage() {
 
   const socketRef = useRef<Socket | null>(null);
   const toastId = useRef(0);
+  const lotFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Derived ───────────────────────────────────────────────────────────────
   const isCommissioner = league?.commissionerId === user?.uid;
@@ -267,6 +268,11 @@ export default function AuctionPage() {
       });
 
       socket.on('lot_opened', (data: any) => {
+        // Cancel any pending "clear lot" timeout from team_sold / team_passed
+        if (lotFlashTimerRef.current) {
+          clearTimeout(lotFlashTimerRef.current);
+          lotFlashTimerRef.current = null;
+        }
         const info = teamInfo(data.teamId);
         setCurrentLot({
           teamId: data.teamId,
@@ -323,7 +329,10 @@ export default function AuctionPage() {
         if (data.winnerId === userRef.current?.uid) {
           toast('success', `You won ${info?.name ?? data.teamId} for $${data.winningBid}!`);
         }
-        setTimeout(() => { setLotFlash(null); setCurrentLot(null); setStatus('waiting'); }, 1800);
+        lotFlashTimerRef.current = setTimeout(() => {
+          lotFlashTimerRef.current = null;
+          setLotFlash(null); setCurrentLot(null); setStatus('waiting');
+        }, 1800);
       });
 
       socket.on('team_passed', (data: any) => {
@@ -336,7 +345,10 @@ export default function AuctionPage() {
           winnerId: null, winnerName: null, winningBid: 0, passed: true,
         };
         setSoldLots(prev => [passed, ...prev]);
-        setTimeout(() => { setLotFlash(null); setCurrentLot(null); setStatus('waiting'); }, 1800);
+        lotFlashTimerRef.current = setTimeout(() => {
+          lotFlashTimerRef.current = null;
+          setLotFlash(null); setCurrentLot(null); setStatus('waiting');
+        }, 1800);
       });
 
       socket.on('team_assigned', (data: any) => {
