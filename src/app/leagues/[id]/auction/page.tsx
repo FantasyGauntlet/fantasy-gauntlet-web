@@ -260,6 +260,7 @@ export default function AuctionPage() {
       socket.on('auction_started', (data: any) => {
         setStatus('waiting');
         if (data.nominationMode) setNominationMode(data.nominationMode);
+        // Queue is sent for manual and disclosed modes; null for random-hidden
         if (data.queue) setUpcomingQueue(data.queue);
         toast('info', 'The auction has started!');
       });
@@ -405,12 +406,23 @@ export default function AuctionPage() {
 
   function skipLot() { socketRef.current?.emit('commissioner_skip'); }
 
+  function forceNextLot() { socketRef.current?.emit('commissioner_advance'); }
+
   function handleNominate() {
     if (!selectedNomination) return;
     setNominating(true);
     socketRef.current?.emit('commissioner_nominate', { teamId: selectedNomination });
     setSelectedNomination('');
     setTimeout(() => setNominating(false), 800);
+  }
+
+  async function handleStartAuction() {
+    try {
+      await api.post(`/leagues/${id}/auction/start`);
+      toast('info', 'Auction started!');
+    } catch (e: unknown) {
+      toast('error', e instanceof Error ? e.message : 'Failed to start auction');
+    }
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -486,8 +498,9 @@ export default function AuctionPage() {
             {/* Waiting for lot */}
             {status === 'waiting' && (
               <div className="bg-card border border-line rounded-2xl p-6 text-center">
+                <div className="w-6 h-6 border-2 border-brand border-t-transparent rounded-full animate-spin mx-auto mb-3" />
                 <p className="text-copy-2 text-sm mb-1">
-                  {nominationMode === 'manual' ? 'Waiting for commissioner to nominate a team' : 'Waiting for next team…'}
+                  {nominationMode === 'manual' ? 'Waiting for commissioner to nominate a team…' : 'Preparing next team…'}
                 </p>
                 {nominationMode === 'manual' && !isCommissioner && (
                   <p className="text-copy-3 text-xs mt-1">The commissioner will pick the next team to auction.</p>
@@ -591,6 +604,18 @@ export default function AuctionPage() {
               <div className="bg-card border border-line rounded-2xl p-4">
                 <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide mb-3">Commissioner</p>
                 <div className="flex flex-wrap gap-2">
+                  {/* Start auction if not yet started */}
+                  {status === 'waiting' && connected && league?.state === 'draft' && (
+                    <button
+                      onClick={handleStartAuction}
+                      disabled={!league.auctionConfig}
+                      title={!league.auctionConfig ? 'Configure auction settings first' : undefined}
+                      className="bg-brand hover:bg-brand-2 disabled:opacity-40 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors"
+                    >
+                      Start Auction
+                    </button>
+                  )}
+                  {/* Skip current lot */}
                   {status === 'active' && currentLot && (
                     <button
                       onClick={skipLot}
@@ -599,7 +624,8 @@ export default function AuctionPage() {
                       Skip / Pass Team
                     </button>
                   )}
-                  {nominationMode === 'manual' && status === 'waiting' && (
+                  {/* Manual mode: pick next team */}
+                  {nominationMode === 'manual' && status === 'waiting' && league?.state === 'auction' && (
                     <div className="flex gap-2 w-full">
                       <select
                         value={selectedNomination}
@@ -619,6 +645,15 @@ export default function AuctionPage() {
                         {nominating ? 'Nominating…' : 'Nominate'}
                       </button>
                     </div>
+                  )}
+                  {/* Auto modes: force-advance if stuck (e.g. after server restart) */}
+                  {nominationMode !== 'manual' && status === 'waiting' && league?.state === 'auction' && (
+                    <button
+                      onClick={forceNextLot}
+                      className="bg-field hover:bg-field-2 border border-line text-copy-2 text-sm font-medium px-4 py-2 rounded-xl transition-colors"
+                    >
+                      Force Next Team
+                    </button>
                   )}
                 </div>
               </div>
