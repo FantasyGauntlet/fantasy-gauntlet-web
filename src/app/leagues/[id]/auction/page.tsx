@@ -674,8 +674,8 @@ export default function AuctionPage() {
 
             {/* Commissioner controls */}
             {isCommissioner && (
-              <div className="bg-card border border-line rounded-2xl p-4">
-                <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide mb-3">Commissioner</p>
+              <div className="bg-card border border-line rounded-2xl p-4 space-y-3">
+                <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide">Commissioner</p>
                 <div className="flex flex-wrap gap-2">
                   {/* Start auction if not yet started */}
                   {status === 'waiting' && connected && league?.state === 'draft' && (
@@ -753,7 +753,7 @@ export default function AuctionPage() {
                       </button>
                     </div>
                   )}
-                  {/* Auto/manual modes: force-advance if stuck (e.g. after server restart) */}
+                  {/* Force-advance if stuck between lots */}
                   {status === 'waiting' && league?.state === 'auction' && (
                     <button
                       onClick={forceNextLot}
@@ -762,16 +762,19 @@ export default function AuctionPage() {
                       Force Next Team
                     </button>
                   )}
-                  {/* Restart button — rebuilds the session if it's unrecoverable */}
-                  {status === 'waiting' && league?.state === 'auction' && (
+                </div>
+                {/* Restart — always visible during an active auction */}
+                {league?.state === 'auction' && (
+                  <div className="border-t border-line pt-3">
                     <button
                       onClick={handleRestartAuction}
-                      className="bg-field hover:bg-field-2 border border-danger/30 text-danger text-sm font-medium px-4 py-2 rounded-xl transition-colors"
+                      className="w-full bg-field hover:bg-danger/10 border border-danger/30 text-danger text-sm font-medium px-4 py-2 rounded-xl transition-colors text-left"
                     >
                       Restart Auction
+                      <span className="block text-xs font-normal text-copy-3 mt-0.5">Rebuilds the session if the auction gets stuck</span>
                     </button>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
             )}
 
