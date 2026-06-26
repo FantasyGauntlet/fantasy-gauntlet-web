@@ -37,7 +37,8 @@ type AuctionStatus = 'connecting' | 'waiting' | 'active' | 'closed' | 'error';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const ACRONYMS = new Set(['nhl', 'nba', 'nfl', 'mlb', 'ucl', 'ncaa', 'mls', 'fifa', 'ufc']);
+const ACRONYMS = new Set(['nhl', 'nba', 'nfl', 'mlb', 'ucl', 'ncaa', 'ncaaf', 'ncaab', 'mls', 'fifa', 'ufc']);
+const SPORT_ORDER = ['nfl', 'nba', 'nhl', 'mlb', 'ncaaf', 'ncaab', 'premier-league', 'ucl'];
 const fln = (id: string) =>
   id.split('-').map(w => ACRONYMS.has(w.toLowerCase()) ? w.toUpperCase() : w[0]?.toUpperCase() + w.slice(1).toLowerCase()).join(' ');
 
@@ -149,6 +150,7 @@ export default function AuctionPage() {
   const [bidInput, setBidInput] = useState('');
   const [bidError, setBidError] = useState('');
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [rosterView, setRosterView] = useState(''); // empty = current user
   const [nominating, setNominating] = useState(false);
   const [selectedNomination, setSelectedNomination] = useState('');
   const [auctionErrorMsg, setAuctionErrorMsg] = useState('');
@@ -504,6 +506,23 @@ export default function AuctionPage() {
   const sortedParticipants = [...fantasyTeams]
     .filter(ft => !ft.isPlaceholder)
     .sort((a, b) => b.remainingBudget - a.remainingBudget);
+
+  // Roster viewer — compute sport groups for the selected participant
+  const rosterUserId = rosterView || user?.uid || '';
+  const ownedLots = soldLots.filter(l => !l.passed && l.winnerId === rosterUserId);
+  const rosterSportGroups: { sport: string; teams: SoldLot[] }[] = [];
+  const seenRosterSports = new Set<string>();
+  for (const sport of SPORT_ORDER) {
+    const teams = ownedLots.filter(l => teamMapRef.current.get(l.teamId)?.sportLeagueId === sport);
+    if (teams.length > 0) { rosterSportGroups.push({ sport, teams }); seenRosterSports.add(sport); }
+  }
+  for (const lot of ownedLots) {
+    const sport = teamMapRef.current.get(lot.teamId)?.sportLeagueId ?? '';
+    if (sport && !seenRosterSports.has(sport)) {
+      rosterSportGroups.push({ sport, teams: ownedLots.filter(l => teamMapRef.current.get(l.teamId)?.sportLeagueId === sport) });
+      seenRosterSports.add(sport);
+    }
+  }
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -891,6 +910,50 @@ export default function AuctionPage() {
                 />
               </div>
               <p className="text-xs text-copy-3 mt-1">of ${startingBudget} remaining</p>
+            </div>
+
+            {/* Roster viewer */}
+            <div className="bg-card border border-line rounded-2xl p-4">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide">Roster</p>
+                <select
+                  value={rosterView}
+                  onChange={e => setRosterView(e.target.value)}
+                  className="text-xs bg-field border border-line-2 rounded-lg px-2 py-1 text-copy focus:outline-none focus:border-brand max-w-[130px]"
+                >
+                  <option value="">You</option>
+                  {sortedParticipants
+                    .filter(ft => ft.userId !== user?.uid)
+                    .map(ft => <option key={ft.userId} value={ft.userId}>{ft.displayName}</option>)}
+                </select>
+              </div>
+              {rosterSportGroups.length === 0 ? (
+                <p className="text-xs text-copy-3 text-center py-3">No teams won yet</p>
+              ) : (
+                <div className="space-y-3">
+                  {rosterSportGroups.map(({ sport, teams }) => (
+                    <div key={sport}>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <p className="text-xs font-semibold text-copy-2">{fln(sport)}</p>
+                        <span className="text-[10px] text-copy-3">{teams.length} team{teams.length !== 1 ? 's' : ''}</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {teams.map(t => {
+                          const info = teamMapRef.current.get(t.teamId);
+                          return (
+                            <div key={t.teamId} title={t.teamName} className="flex flex-col items-center gap-0.5 w-10">
+                              <TeamLogo logoUrl={t.logoUrl} name={t.teamName} size={8} />
+                              <p className="text-[10px] text-copy-3 text-center leading-tight w-full truncate">
+                                {info?.shortName ?? t.teamName.split(' ').pop() ?? ''}
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Participants */}
