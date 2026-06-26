@@ -23,7 +23,7 @@ interface SportGroup { sport: string; teams: SportTeam[]; }
 
 interface CurrentLot {
   teamId: string; teamName: string; logoUrl: string | null; sportLeagueId: string;
-  currentBid: number; currentBidderId: string | null; timerRemaining: number; totalSeconds: number;
+  currentBid: number; currentBidderId: string | null; totalSeconds: number;
 }
 
 interface SoldLot {
@@ -145,6 +145,8 @@ export default function AuctionPage() {
   const [minOpeningBid, setMinOpeningBid] = useState(1);
   const [lotFlash, setLotFlash] = useState<'sold' | 'passed' | null>(null);
   const [paused, setPaused] = useState(false);
+  // Separated from currentLot so timer ticks only re-render the TimerRing, not the whole lot card
+  const [timerRemaining, setTimerRemaining] = useState(0);
 
   // ── UI ────────────────────────────────────────────────────────────────────
   const [bidInput, setBidInput] = useState('');
@@ -250,9 +252,9 @@ export default function AuctionPage() {
             sportLeagueId: info?.sportLeagueId ?? '',
             currentBid,
             currentBidderId,
-            timerRemaining,
             totalSeconds: session.countdownSeconds ?? 30,
           });
+          setTimerRemaining(timerRemaining ?? session.countdownSeconds ?? 30);
         }
 
         // Reconstruct completed lots
@@ -288,6 +290,7 @@ export default function AuctionPage() {
           lotFlashTimerRef.current = null;
         }
         const info = teamInfo(data.teamId);
+        const lotTimer = data.timerSeconds ?? 30;
         setCurrentLot({
           teamId: data.teamId,
           teamName: data.teamName ?? info?.name ?? data.teamId,
@@ -295,9 +298,9 @@ export default function AuctionPage() {
           sportLeagueId: data.sportLeagueId ?? info?.sportLeagueId ?? '',
           currentBid: data.openingBid ?? minOpeningBid,
           currentBidderId: null,
-          timerRemaining: data.timerSeconds ?? 30,
-          totalSeconds: data.timerSeconds ?? 30,
+          totalSeconds: lotTimer,
         });
+        setTimerRemaining(lotTimer);
         setStatus('active');
         setLotFlash(null);
         setPaused(false);
@@ -308,16 +311,12 @@ export default function AuctionPage() {
 
       socket.on('lot_paused', (data: any) => {
         setPaused(true);
-        if (data.timerRemaining !== undefined) {
-          setCurrentLot(prev => prev ? { ...prev, timerRemaining: data.timerRemaining } : prev);
-        }
+        if (data.timerRemaining !== undefined) setTimerRemaining(data.timerRemaining);
       });
 
       socket.on('lot_resumed', (data: any) => {
         setPaused(false);
-        if (data.timerRemaining !== undefined) {
-          setCurrentLot(prev => prev ? { ...prev, timerRemaining: data.timerRemaining } : prev);
-        }
+        if (data.timerRemaining !== undefined) setTimerRemaining(data.timerRemaining);
       });
 
       socket.on('new_high_bid', (data: any) => {
@@ -326,12 +325,13 @@ export default function AuctionPage() {
           const wasMe = prev.currentBidderId === userRef.current?.uid;
           const isNowMe = data.bidderId === userRef.current?.uid;
           if (wasMe && !isNowMe) toast('warn', `Outbid! New high bid: $${data.amount}`);
-          return { ...prev, currentBid: data.amount, currentBidderId: data.bidderId, timerRemaining: data.timerRemaining };
+          return { ...prev, currentBid: data.amount, currentBidderId: data.bidderId };
         });
+        if (data.timerRemaining !== undefined) setTimerRemaining(data.timerRemaining);
       });
 
       socket.on('timer_update', (data: any) => {
-        setCurrentLot(prev => prev ? { ...prev, timerRemaining: data.remaining } : prev);
+        setTimerRemaining(data.remaining);
       });
 
       socket.on('team_sold', (data: any) => {
@@ -637,7 +637,7 @@ export default function AuctionPage() {
                       </span>
                     )}
                   </div>
-                  <TimerRing remaining={currentLot.timerRemaining} total={currentLot.totalSeconds} paused={paused} />
+                  <TimerRing remaining={timerRemaining} total={currentLot.totalSeconds} paused={paused} />
                 </div>
 
                 {/* Bid info */}
