@@ -261,8 +261,10 @@ export default function AuctionPage() {
         if (session.minOpeningBid) setMinOpeningBid(session.minOpeningBid);
         if (session.nominationMode) setNominationMode(session.nominationMode);
 
-        // Remaining queue: everything after the current index
-        const remaining: string[] = session.queue?.slice((session.currentIndex ?? -1) + 1) ?? [];
+        // Remaining queue: only revealed for non-hidden modes
+        const remaining: string[] = session.nominationMode !== 'random-hidden'
+          ? (session.queue?.slice((session.currentIndex ?? -1) + 1) ?? [])
+          : [];
         setUpcomingQueue(remaining);
 
         // Reconstruct current lot if in-progress
@@ -887,8 +889,8 @@ export default function AuctionPage() {
               </div>
             )}
 
-            {/* Up Next queue */}
-            {upcomingQueue.length > 0 && (
+            {/* Up Next queue — hidden for random-hidden nomination mode */}
+            {upcomingQueue.length > 0 && nominationMode !== 'random-hidden' && (
               <div className="bg-card border border-line rounded-2xl p-4">
                 <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide mb-3">
                   Up Next — {upcomingQueue.length} remaining
