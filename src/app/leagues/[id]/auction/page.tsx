@@ -161,6 +161,7 @@ export default function AuctionPage() {
   const [confirmReset, setConfirmReset] = useState(false);
   const [bidFlash, setBidFlash] = useState(false);
   const [pendingBidAmt, setPendingBidAmt] = useState<number | null>(null);
+  const [availableFilter, setAvailableFilter] = useState('');
 
   const socketRef = useRef<Socket | null>(null);
   const toastId = useRef(0);
@@ -567,6 +568,15 @@ export default function AuctionPage() {
     return sport === 'premier-league' ? 1 : 2;
   }
 
+  const soldOrPassedIds = new Set(soldLots.map(l => l.teamId));
+  const allAuctionTeams = [...teamMapRef.current.values()];
+  const availableTeams = allAuctionTeams
+    .filter(t => !soldOrPassedIds.has(t.id) && t.id !== currentLot?.teamId)
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const filteredAvailableTeams = availableFilter
+    ? availableTeams.filter(t => t.sportLeagueId === availableFilter)
+    : availableTeams;
+
   return (
     <div className="max-w-6xl mx-auto">
       <ToastStack toasts={toasts} />
@@ -940,6 +950,58 @@ export default function AuctionPage() {
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+            {/* Available Teams */}
+            {allAuctionTeams.length > 0 && status !== 'closed' && (
+              <div className="bg-card border border-line rounded-2xl p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide">Available Teams</p>
+                  <span className="text-xs text-copy-3">{availableTeams.length} remaining</span>
+                </div>
+
+                {/* Sport filter tabs */}
+                {orderedLeagueSports.length > 1 && (
+                  <div className="flex gap-1.5 flex-wrap mb-3">
+                    <button
+                      onClick={() => setAvailableFilter('')}
+                      className={`text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${
+                        availableFilter === '' ? 'bg-brand text-white' : 'bg-field text-copy-2 hover:bg-field-2'
+                      }`}
+                    >
+                      All
+                    </button>
+                    {orderedLeagueSports.map(sport => {
+                      const count = availableTeams.filter(t => t.sportLeagueId === sport).length;
+                      return (
+                        <button
+                          key={sport}
+                          onClick={() => setAvailableFilter(sport)}
+                          className={`text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${
+                            availableFilter === sport ? 'bg-brand text-white' : 'bg-field text-copy-2 hover:bg-field-2'
+                          }`}
+                        >
+                          {fln(sport)} <span className="opacity-70">({count})</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {filteredAvailableTeams.length > 0 ? (
+                  <div className="grid gap-1.5 max-h-72 overflow-y-auto" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(56px, 1fr))' }}>
+                    {filteredAvailableTeams.map(team => (
+                      <div key={team.id} className="flex flex-col items-center gap-1 p-1.5 rounded-lg hover:bg-field transition-colors" title={team.name}>
+                        <TeamLogo logoUrl={team.logoUrl} name={team.name} size={8} />
+                        <p className="text-[10px] text-copy-3 text-center leading-tight w-full truncate">{team.shortName}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-copy-3 text-center py-4">
+                    {availableFilter ? `No ${fln(availableFilter)} teams remaining` : 'All teams have been auctioned'}
+                  </p>
+                )}
               </div>
             )}
           </div>
