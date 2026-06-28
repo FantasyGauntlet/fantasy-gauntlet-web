@@ -125,10 +125,10 @@ export default function AdminPage() {
 
   const [bonusYearFilter, setBonusYearFilter] = useState('');
 
-  const bonusYears = [...new Set(bonusList.map(b => new Date(b.awardedAt).getFullYear().toString()))].sort((a, b) => b.localeCompare(a));
+  const bonusYears = [...new Set(bonusList.map(b => b.seasonLabel))].sort((a, b) => b.localeCompare(a));
 
   const filteredBonusList = bonusYearFilter
-    ? bonusList.filter(b => new Date(b.awardedAt).getFullYear().toString() === bonusYearFilter)
+    ? bonusList.filter(b => b.seasonLabel === bonusYearFilter)
     : bonusList;
 
   const bonusBySport = filteredBonusList.reduce<Record<string, BonusPoint[]>>((acc, b) => {
