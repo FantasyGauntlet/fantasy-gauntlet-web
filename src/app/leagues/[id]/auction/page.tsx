@@ -15,7 +15,7 @@ interface League {
   rosterRules: { maxPerSport: Record<string, number | null> };
   auctionConfig: {
     startingBudget: number; minOpeningBid: number; minBidIncrement: number;
-    nominationMode: string; countdownSeconds: number;
+    nominationMode: string; countdownSeconds: number; maxWildcard?: number;
   } | null;
 }
 
@@ -1400,55 +1400,104 @@ export default function AuctionPage() {
             )}
 
             {/* Roster viewer */}
-            <div className="bg-card border border-line rounded-2xl p-4">
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide">Roster</p>
-                <select
-                  value={rosterView}
-                  onChange={e => setRosterView(e.target.value)}
-                  className="text-xs bg-field border border-line-2 rounded-lg px-2 py-1 text-copy focus:outline-none focus:border-brand max-w-[130px]"
-                >
-                  <option value="">You</option>
-                  {sortedParticipants
-                    .filter(ft => ft.userId !== user?.uid)
-                    .map(ft => <option key={ft.userId} value={ft.userId}>{ft.displayName}</option>)}
-                </select>
-              </div>
-              <div className="space-y-3">
-                {orderedLeagueSports.map(sport => {
+            {(() => {
+              const maxWildcard = league?.auctionConfig?.maxWildcard ?? 0;
+              // Compute wildcard lots: teams that fill slots beyond each sport's per-sport max
+              const wildcardLots: typeof ownedLots = [];
+              const normalLotsByLot = new Set<string>();
+              if (maxWildcard > 0) {
+                const bySport: Record<string, typeof ownedLots> = {};
+                for (const l of ownedLots) {
+                  const sport = teamMapRef.current.get(l.teamId)?.sportLeagueId ?? '';
+                  (bySport[sport] ??= []).push(l);
+                }
+                for (const [sport, lots] of Object.entries(bySport)) {
                   const max = getMaxForSport(sport);
-                  const wonInSport = ownedLots.filter(l => teamMapRef.current.get(l.teamId)?.sportLeagueId === sport);
-                  const emptyCount = Math.max(0, max - wonInSport.length);
-                  const isFull = wonInSport.length >= max;
-                  return (
-                    <div key={sport}>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <p className="text-xs font-semibold text-copy-2">{fln(sport)}</p>
-                        <span className={`text-[10px] font-medium ${isFull ? 'text-positive' : 'text-copy-3'}`}>
-                          {wonInSport.length}/{max}
-                        </span>
+                  lots.slice(0, max).forEach(l => normalLotsByLot.add(l.teamId));
+                  lots.slice(max).forEach(l => wildcardLots.push(l));
+                }
+              }
+              return (
+                <div className="bg-card border border-line rounded-2xl p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide">Roster</p>
+                    <select
+                      value={rosterView}
+                      onChange={e => setRosterView(e.target.value)}
+                      className="text-xs bg-field border border-line-2 rounded-lg px-2 py-1 text-copy focus:outline-none focus:border-brand max-w-[130px]"
+                    >
+                      <option value="">You</option>
+                      {sortedParticipants
+                        .filter(ft => ft.userId !== user?.uid)
+                        .map(ft => <option key={ft.userId} value={ft.userId}>{ft.displayName}</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-3">
+                    {orderedLeagueSports.map(sport => {
+                      const max = getMaxForSport(sport);
+                      const allInSport = ownedLots.filter(l => teamMapRef.current.get(l.teamId)?.sportLeagueId === sport);
+                      const wonInSport = maxWildcard > 0 ? allInSport.slice(0, max) : allInSport;
+                      const emptyCount = Math.max(0, max - wonInSport.length);
+                      const isFull = wonInSport.length >= max;
+                      return (
+                        <div key={sport}>
+                          <div className="flex items-center justify-between mb-1.5">
+                            <p className="text-xs font-semibold text-copy-2">{fln(sport)}</p>
+                            <span className={`text-[10px] font-medium ${isFull ? 'text-positive' : 'text-copy-3'}`}>
+                              {wonInSport.length}/{max}
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {wonInSport.map(t => {
+                              const info = teamMapRef.current.get(t.teamId);
+                              return (
+                                <div key={t.teamId} title={t.teamName} className="flex flex-col items-center gap-0.5 w-10">
+                                  <TeamLogo logoUrl={t.logoUrl} name={t.teamName} size={8} />
+                                  <p className="text-[10px] text-copy-3 text-center leading-tight w-full truncate">
+                                    {info?.shortName ?? t.teamName.split(' ').pop() ?? ''}
+                                  </p>
+                                </div>
+                              );
+                            })}
+                            {Array.from({ length: emptyCount }).map((_, i) => (
+                              <div key={`empty-${i}`} className="w-8 h-8 rounded-lg border-2 border-dashed border-line flex-shrink-0" />
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {/* Wildcard slots */}
+                    {maxWildcard > 0 && (
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <p className="text-xs font-semibold text-copy-2">Wildcard</p>
+                          <span className={`text-[10px] font-medium ${wildcardLots.length >= maxWildcard ? 'text-positive' : 'text-copy-3'}`}>
+                            {wildcardLots.length}/{maxWildcard}
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {wildcardLots.map(t => {
+                            const info = teamMapRef.current.get(t.teamId);
+                            return (
+                              <div key={t.teamId} title={`${t.teamName} (${fln(info?.sportLeagueId ?? '')})`} className="flex flex-col items-center gap-0.5 w-10">
+                                <TeamLogo logoUrl={t.logoUrl} name={t.teamName} size={8} />
+                                <p className="text-[10px] text-copy-3 text-center leading-tight w-full truncate">
+                                  {info?.shortName ?? t.teamName.split(' ').pop() ?? ''}
+                                </p>
+                              </div>
+                            );
+                          })}
+                          {Array.from({ length: Math.max(0, maxWildcard - wildcardLots.length) }).map((_, i) => (
+                            <div key={`wc-empty-${i}`} className="w-8 h-8 rounded-lg border-2 border-dashed border-warn/40 flex-shrink-0" />
+                          ))}
+                        </div>
                       </div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {wonInSport.map(t => {
-                          const info = teamMapRef.current.get(t.teamId);
-                          return (
-                            <div key={t.teamId} title={t.teamName} className="flex flex-col items-center gap-0.5 w-10">
-                              <TeamLogo logoUrl={t.logoUrl} name={t.teamName} size={8} />
-                              <p className="text-[10px] text-copy-3 text-center leading-tight w-full truncate">
-                                {info?.shortName ?? t.teamName.split(' ').pop() ?? ''}
-                              </p>
-                            </div>
-                          );
-                        })}
-                        {Array.from({ length: emptyCount }).map((_, i) => (
-                          <div key={`empty-${i}`} className="w-8 h-8 rounded-lg border-2 border-dashed border-line flex-shrink-0" />
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Participants */}
             <div className="bg-card border border-line rounded-2xl p-4">

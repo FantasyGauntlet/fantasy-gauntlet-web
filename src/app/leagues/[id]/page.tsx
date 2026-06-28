@@ -26,6 +26,7 @@ interface League {
     minBidIncrement: number;
     nominationMode: string;
     countdownSeconds: number;
+    maxWildcard?: number;
   } | null;
   previousLeagueId?: string;
   topZone?: number | null;
@@ -2145,6 +2146,7 @@ function SettingsTab({
     minBidIncrement:  league.auctionConfig?.minBidIncrement  ?? 1,
     nominationMode:   league.auctionConfig?.nominationMode   ?? 'manual',
     countdownSeconds: league.auctionConfig?.countdownSeconds ?? 30,
+    maxWildcard:      league.auctionConfig?.maxWildcard      ?? 0,
   });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -2800,6 +2802,13 @@ function SettingsTab({
                       <input type="number" min={5} max={300} required value={auctionForm.countdownSeconds}
                         onChange={e => setAuctionForm(f => ({ ...f, countdownSeconds: Number(e.target.value) }))}
                         className={inputCls} />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-copy-2 mb-1.5">Wildcard Slots</label>
+                      <input type="number" min={0} max={20} value={auctionForm.maxWildcard}
+                        onChange={e => setAuctionForm(f => ({ ...f, maxWildcard: Number(e.target.value) }))}
+                        className={inputCls} />
+                      <p className="text-[10px] text-copy-3 mt-1">Extra team slots beyond per-sport limits. 0 = none.</p>
                     </div>
                   </div>
                 );
