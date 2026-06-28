@@ -30,9 +30,7 @@ const TYPE_ICON: Record<string, string> = {
   waiverUpdated: '📋',
   leagueInvite:  '✉️',
   auctionStarting: '🏁',
-  outbid:        '🔔',
   gameFinal:     '🏆',
-  gameStarted:   '⚽',
 };
 
 export default function NotificationBell() {
