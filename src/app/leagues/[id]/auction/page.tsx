@@ -11,6 +11,8 @@ import { io, type Socket } from 'socket.io-client';
 
 interface League {
   id: string; name: string; commissionerId: string; state: string;
+  selectedSports: string[];
+  rosterRules: { maxPerSport: Record<string, number | null> };
   auctionConfig: {
     startingBudget: number; minOpeningBid: number; minBidIncrement: number;
     nominationMode: string; countdownSeconds: number;
@@ -542,21 +544,17 @@ export default function AuctionPage() {
     .filter(ft => !ft.isPlaceholder)
     .sort((a, b) => b.remainingBudget - a.remainingBudget);
 
-  // Roster viewer — compute sport groups for the selected participant
+  // Roster viewer — sport-ordered slots with empty placeholders
   const rosterUserId = rosterView || user?.uid || '';
   const ownedLots = soldLots.filter(l => !l.passed && l.winnerId === rosterUserId);
-  const rosterSportGroups: { sport: string; teams: SoldLot[] }[] = [];
-  const seenRosterSports = new Set<string>();
-  for (const sport of SPORT_ORDER) {
-    const teams = ownedLots.filter(l => teamMapRef.current.get(l.teamId)?.sportLeagueId === sport);
-    if (teams.length > 0) { rosterSportGroups.push({ sport, teams }); seenRosterSports.add(sport); }
-  }
-  for (const lot of ownedLots) {
-    const sport = teamMapRef.current.get(lot.teamId)?.sportLeagueId ?? '';
-    if (sport && !seenRosterSports.has(sport)) {
-      rosterSportGroups.push({ sport, teams: ownedLots.filter(l => teamMapRef.current.get(l.teamId)?.sportLeagueId === sport) });
-      seenRosterSports.add(sport);
-    }
+  const leagueSports = league?.selectedSports ?? [];
+  const orderedLeagueSports = SPORT_ORDER
+    .filter(s => leagueSports.includes(s))
+    .concat(leagueSports.filter(s => !SPORT_ORDER.includes(s)));
+  function getMaxForSport(sport: string): number {
+    const configured = league?.rosterRules?.maxPerSport?.[sport];
+    if (configured !== null && configured !== undefined) return configured;
+    return sport === 'premier-league' ? 1 : 2;
   }
 
   return (
@@ -962,18 +960,22 @@ export default function AuctionPage() {
                     .map(ft => <option key={ft.userId} value={ft.userId}>{ft.displayName}</option>)}
                 </select>
               </div>
-              {rosterSportGroups.length === 0 ? (
-                <p className="text-xs text-copy-3 text-center py-3">No teams won yet</p>
-              ) : (
-                <div className="space-y-3">
-                  {rosterSportGroups.map(({ sport, teams }) => (
+              <div className="space-y-3">
+                {orderedLeagueSports.map(sport => {
+                  const max = getMaxForSport(sport);
+                  const wonInSport = ownedLots.filter(l => teamMapRef.current.get(l.teamId)?.sportLeagueId === sport);
+                  const emptyCount = Math.max(0, max - wonInSport.length);
+                  const isFull = wonInSport.length >= max;
+                  return (
                     <div key={sport}>
                       <div className="flex items-center justify-between mb-1.5">
                         <p className="text-xs font-semibold text-copy-2">{fln(sport)}</p>
-                        <span className="text-[10px] text-copy-3">{teams.length} team{teams.length !== 1 ? 's' : ''}</span>
+                        <span className={`text-[10px] font-medium ${isFull ? 'text-positive' : 'text-copy-3'}`}>
+                          {wonInSport.length}/{max}
+                        </span>
                       </div>
                       <div className="flex flex-wrap gap-1.5">
-                        {teams.map(t => {
+                        {wonInSport.map(t => {
                           const info = teamMapRef.current.get(t.teamId);
                           return (
                             <div key={t.teamId} title={t.teamName} className="flex flex-col items-center gap-0.5 w-10">
@@ -984,11 +986,14 @@ export default function AuctionPage() {
                             </div>
                           );
                         })}
+                        {Array.from({ length: emptyCount }).map((_, i) => (
+                          <div key={`empty-${i}`} className="w-8 h-8 rounded-lg border-2 border-dashed border-line flex-shrink-0" />
+                        ))}
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
+                  );
+                })}
+              </div>
             </div>
 
             {/* Participants */}

@@ -270,8 +270,6 @@ export default function LeaguePage() {
           fantasyTeams={fantasyTeams}
           setFantasyTeams={setFantasyTeams}
           isCommissioner={isCommissioner}
-          selectedSports={league.selectedSports}
-          rosterRules={league.rosterRules}
           userId={user?.uid}
         />
       )}
@@ -463,15 +461,13 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone }: {
 // ─── Roster Tab ───────────────────────────────────────────────────────────────
 
 function RosterTab({
-  leagueId, leagueState, fantasyTeams, setFantasyTeams, isCommissioner, selectedSports, rosterRules, userId,
+  leagueId, leagueState, fantasyTeams, setFantasyTeams, isCommissioner, userId,
 }: {
   leagueId: string;
   leagueState: string;
   fantasyTeams: FantasyTeam[];
   setFantasyTeams: React.Dispatch<React.SetStateAction<FantasyTeam[]>>;
   isCommissioner: boolean;
-  selectedSports: string[];
-  rosterRules?: { maxPerSport: Record<string, number | null> };
   userId?: string;
 }) {
   const [sportGroups, setSportGroups] = useState<SportGroup[]>([]);
@@ -606,18 +602,6 @@ function RosterTab({
       if (seen.has(t.sportLeagueId)) viewingWildCardIds.add(t.id);
       else seen.add(t.sportLeagueId);
     }
-  }
-
-  // Sports ordered by SPORT_ORDER, filtered to what this league has selected
-  const orderedSelectedSports = SPORT_ORDER
-    .filter(s => selectedSports.includes(s))
-    .concat(selectedSports.filter(s => !SPORT_ORDER.includes(s)));
-
-  // Max slots per sport: use rosterRules if set, otherwise same defaults as waivers
-  function getMaxForSport(sport: string): number {
-    const configured = rosterRules?.maxPerSport?.[sport];
-    if (configured !== null && configured !== undefined) return configured;
-    return sport === 'premier-league' ? 1 : 2;
   }
 
   const myFantasyTeam = fantasyTeams.find(ft => isMyTeam(ft));
@@ -1068,94 +1052,75 @@ function RosterTab({
           </div>
         </div>
         <div className="divide-y divide-line/50">
-          {orderedSelectedSports.map(sport => {
-            const max = getMaxForSport(sport);
-            const ownedInSport = viewingOwnedTeams.filter(t => t.sportLeagueId === sport);
-            const emptySlots = Math.max(0, max - ownedInSport.length);
-            const isFull = ownedInSport.length >= max;
+          {viewingOwnedTeams.length === 0 && (
+            <div className="px-5 py-8 text-center">
+              <p className="text-copy-3 text-sm">No teams yet</p>
+            </div>
+          )}
+          {viewingOwnedTeams.map(t => {
+            const stats = teamStatsMap.get(t.id);
+            const bonus = teamBonusMap.get(t.id) ?? 0;
+            const total = (stats?.points ?? 0) + bonus;
+            const isWildCard = viewingWildCardIds.has(t.id);
+            const bonusItems = teamBonusBreakdownMap.get(t.id) ?? [];
+            const isExpanded = expandedRosterTeam === t.id;
             return (
-              <div key={sport}>
-                {/* Sport section header */}
-                <div className="flex items-center justify-between px-5 py-2 bg-field/40 border-b border-line/50">
-                  <p className="text-xs font-semibold text-copy-3 uppercase tracking-wider">{formatLeagueName(sport)}</p>
-                  <span className={`text-xs font-medium tabular-nums ${isFull ? 'text-positive' : 'text-copy-3'}`}>
-                    {ownedInSport.length}/{max}
-                  </span>
-                </div>
-                {/* Filled slots */}
-                {ownedInSport.map(t => {
-                  const stats = teamStatsMap.get(t.id);
-                  const bonus = teamBonusMap.get(t.id) ?? 0;
-                  const total = (stats?.points ?? 0) + bonus;
-                  const isWildCard = viewingWildCardIds.has(t.id);
-                  const bonusItems = teamBonusBreakdownMap.get(t.id) ?? [];
-                  const isExpanded = expandedRosterTeam === t.id;
-                  return (
-                    <div key={t.id}>
-                      <div
-                        onClick={() => stats && setExpandedRosterTeam(isExpanded ? null : t.id)}
-                        className={`flex items-center justify-between px-5 py-3.5 hover:bg-field/30 transition-colors gap-3 ${stats ? 'cursor-pointer' : ''}`}
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          {t.logoUrl ? (
-                            <img src={t.logoUrl} alt={t.name} className="w-9 h-9 object-contain flex-shrink-0" />
-                          ) : (
-                            <div className="w-9 h-9 rounded-lg bg-field-2 border border-line flex items-center justify-center text-copy-3 text-xs font-bold flex-shrink-0">
-                              {t.shortName?.slice(0, 2).toUpperCase() ?? '??'}
-                            </div>
-                          )}
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <p className="text-sm font-medium text-copy truncate">{t.name}</p>
-                              {isWildCard && (
-                                <span className="text-xs bg-warn-bg text-warn border border-warn/20 px-1.5 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">Wild Card</span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        {stats && (
-                          <div className="flex items-center gap-2 flex-shrink-0">
-                            <p className="text-sm font-semibold text-copy">{total.toFixed(1)} pts</p>
-                            <svg
-                              width="14" height="14" viewBox="0 0 24 24" fill="none"
-                              stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
-                              className={`text-copy-3 transition-transform flex-shrink-0 ${isExpanded ? 'rotate-90' : ''}`}
-                            >
-                              <polyline points="9 18 15 12 9 6" />
-                            </svg>
-                          </div>
+              <div key={t.id}>
+                <div
+                  onClick={() => stats && setExpandedRosterTeam(isExpanded ? null : t.id)}
+                  className={`flex items-center justify-between px-5 py-3.5 hover:bg-field/30 transition-colors gap-3 ${stats ? 'cursor-pointer' : ''}`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    {t.logoUrl ? (
+                      <img src={t.logoUrl} alt={t.name} className="w-9 h-9 object-contain flex-shrink-0" />
+                    ) : (
+                      <div className="w-9 h-9 rounded-lg bg-field-2 border border-line flex items-center justify-center text-copy-3 text-xs font-bold flex-shrink-0">
+                        {t.shortName?.slice(0, 2).toUpperCase() ?? '??'}
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium text-copy truncate">{t.name}</p>
+                        {isWildCard && (
+                          <span className="text-xs bg-warn-bg text-warn border border-warn/20 px-1.5 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">Wild Card</span>
                         )}
                       </div>
-                      {isExpanded && stats && (
-                        <div className="px-5 pb-4 bg-field/20 border-t border-line/30">
-                          <div className="pl-12 pt-3 space-y-1.5">
-                            <div className="flex justify-between text-xs">
-                              <span className="text-copy-3">Season pts</span>
-                              <span className="text-copy">{stats.points.toFixed(1)}</span>
-                            </div>
-                            {bonusItems.map((b, i) => (
-                              <div key={i} className="flex justify-between text-xs">
-                                <span className="text-positive">{b.label}</span>
-                                <span className="text-positive font-semibold">+{b.points.toFixed(1)}</span>
-                              </div>
-                            ))}
-                            <div className="flex justify-between text-xs pt-1.5 border-t border-line/50">
-                              <span className="text-copy-3">{formatRecord(stats.wins, stats.draws, stats.losses, stats.sport)}</span>
-                              <span className="text-copy font-semibold">{total.toFixed(1)} total</span>
-                            </div>
-                          </div>
-                        </div>
-                      )}
+                      <p className="text-xs text-copy-3 mt-0.5">{formatLeagueName(t.sportLeagueId)}</p>
                     </div>
-                  );
-                })}
-                {/* Empty slots */}
-                {Array.from({ length: emptySlots }).map((_, i) => (
-                  <div key={`empty-${sport}-${i}`} className="flex items-center gap-3 px-5 py-3.5 border-t border-line/30">
-                    <div className="w-9 h-9 rounded-lg border-2 border-dashed border-line flex-shrink-0" />
-                    <p className="text-xs text-copy-3 italic">Open slot</p>
                   </div>
-                ))}
+                  {stats && (
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <p className="text-sm font-semibold text-copy">{total.toFixed(1)} pts</p>
+                      <svg
+                        width="14" height="14" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
+                        className={`text-copy-3 transition-transform flex-shrink-0 ${isExpanded ? 'rotate-90' : ''}`}
+                      >
+                        <polyline points="9 18 15 12 9 6" />
+                      </svg>
+                    </div>
+                  )}
+                </div>
+                {isExpanded && stats && (
+                  <div className="px-5 pb-4 bg-field/20 border-t border-line/30">
+                    <div className="pl-12 pt-3 space-y-1.5">
+                      <div className="flex justify-between text-xs">
+                        <span className="text-copy-3">Season pts</span>
+                        <span className="text-copy">{stats.points.toFixed(1)}</span>
+                      </div>
+                      {bonusItems.map((b, i) => (
+                        <div key={i} className="flex justify-between text-xs">
+                          <span className="text-positive">{b.label}</span>
+                          <span className="text-positive font-semibold">+{b.points.toFixed(1)}</span>
+                        </div>
+                      ))}
+                      <div className="flex justify-between text-xs pt-1.5 border-t border-line/50">
+                        <span className="text-copy-3">{formatRecord(stats.wins, stats.draws, stats.losses, stats.sport)}</span>
+                        <span className="text-copy font-semibold">{total.toFixed(1)} total</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })}
