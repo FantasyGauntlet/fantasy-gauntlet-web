@@ -58,7 +58,7 @@ export default function NewLeaguePage() {
         selectedSports: form.selectedSports,
         memberCap: form.memberCap ? Number(form.memberCap) : null,
         isPublic: form.isPublic,
-        ...(retroMode ? { referenceDate: `${retroYear}-10-01` } : {}),
+        ...(retroMode ? { referenceDate: `${retroYear}-08-01` } : {}),
       });
       router.push(`/leagues/${league.id}`);
     } catch (e: unknown) {
@@ -228,7 +228,7 @@ export default function NewLeaguePage() {
                 ))}
               </select>
               <p className="text-xs text-copy-3 mt-2">
-                Uses Oct 1, {retroYear} as the reference date to find the correct seasons for each sport.
+                Uses Aug 1, {retroYear} as the reference date to find the correct seasons for each sport.
               </p>
             </div>
           )}
