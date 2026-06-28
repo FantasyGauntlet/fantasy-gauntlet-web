@@ -33,6 +33,11 @@ interface SoldLot {
   winnerId: string | null; winnerName: string | null; winningBid: number; passed: boolean;
 }
 
+interface SnakePick {
+  pickIndex: number; pickerUserId: string; pickerName: string;
+  teamId: string; teamName: string; logoUrl: string | null;
+}
+
 interface Toast { id: number; type: 'success' | 'error' | 'info' | 'warn'; message: string; }
 
 type AuctionStatus = 'connecting' | 'waiting' | 'active' | 'closed' | 'error';
@@ -162,6 +167,16 @@ export default function AuctionPage() {
   const [bidFlash, setBidFlash] = useState(false);
   const [pendingBidAmt, setPendingBidAmt] = useState<number | null>(null);
   const [availableFilter, setAvailableFilter] = useState('');
+  // Snake draft state
+  const [snakeDraftOrder, setSnakeDraftOrder] = useState<string[]>([]);
+  const [snakePickerUserId, setSnakePickerUserId] = useState<string | null>(null);
+  const [snakePickIndex, setSnakePickIndex] = useState(0);
+  const [snakePickHistory, setSnakePickHistory] = useState<SnakePick[]>([]);
+  const [snakePickSearch, setSnakePickSearch] = useState('');
+  const [snakePickPending, setSnakePickPending] = useState(false);
+  // Commissioner: set draft order for snake-defined
+  const [settingDraftOrder, setSettingDraftOrder] = useState(false);
+  const [draftOrderInput, setDraftOrderInput] = useState<string[]>([]);
 
   const socketRef = useRef<Socket | null>(null);
   const toastId = useRef(0);
@@ -268,8 +283,21 @@ export default function AuctionPage() {
           : [];
         setUpcomingQueue(remaining);
 
-        // Reconstruct current lot if in-progress
-        if (session.currentLot && session.status === 'active') {
+        // Reconstruct snake draft state on reconnect
+        const isSnake = session.nominationMode === 'snake-random' || session.nominationMode === 'snake-defined';
+        if (isSnake && session.draftOrder) {
+          setSnakeDraftOrder(session.draftOrder);
+          setSnakePickIndex(session.currentIndex ?? 0);
+          if (session.currentLot?.teamId === '' && session.currentLot.currentBidderId) {
+            setSnakePickerUserId(session.currentLot.currentBidderId);
+            const r = session.currentLot.timerRemaining ?? session.countdownSeconds ?? 60;
+            timerSyncRef.current = { remaining: r, receivedAt: Date.now() };
+            setTimerRemaining(r);
+          }
+        }
+
+        // Reconstruct current lot if in-progress (auction mode only)
+        if (session.currentLot && session.currentLot.teamId !== '' && session.status === 'active') {
           const { teamId, currentBid, currentBidderId, timerRemaining } = session.currentLot;
           const info = teamInfo(teamId);
           setCurrentLot({
@@ -286,7 +314,7 @@ export default function AuctionPage() {
           setTimerRemaining(initRemaining);
         }
 
-        // Reconstruct completed lots
+        // Reconstruct completed lots / snake pick history
         if (data.completedLots?.length) {
           const lots: SoldLot[] = (data.completedLots as any[]).map((l: any) => {
             const info = teamInfo(l.teamId);
@@ -301,6 +329,23 @@ export default function AuctionPage() {
             };
           });
           setSoldLots(lots.reverse());
+          if (isSnake) {
+            const picks: SnakePick[] = (data.completedLots as any[])
+              .filter((l: any) => l.winnerId)
+              .sort((a: any, b: any) => a.startedAt.localeCompare(b.startedAt))
+              .map((l: any, i: number) => {
+                const info = teamInfo(l.teamId);
+                return {
+                  pickIndex: i,
+                  pickerUserId: l.winnerId,
+                  pickerName: participantName(l.winnerId),
+                  teamId: l.teamId,
+                  teamName: info?.name ?? l.teamId,
+                  logoUrl: info?.logoUrl ?? null,
+                };
+              });
+            setSnakePickHistory(picks);
+          }
         }
       });
 
@@ -311,6 +356,78 @@ export default function AuctionPage() {
         if (data.queue) setUpcomingQueue(data.queue);
         toast('info', 'The auction has started!');
       });
+
+      // ── Snake draft events ─────────────────────────────────────────────
+      socket.on('snake_draft_started', (data: any) => {
+        if (data.draftOrder) setSnakeDraftOrder(data.draftOrder);
+        setSnakePickHistory([]);
+        setSnakePickIndex(0);
+        setSnakePickerUserId(null);
+        toast('info', 'Snake draft has started!');
+      });
+
+      socket.on('snake_pick_turn', (data: any) => {
+        setSnakePickerUserId(data.pickerUserId);
+        setSnakePickIndex(data.pickIndex ?? 0);
+        setSnakePickSearch('');
+        setSnakePickPending(false);
+        setStatus('active');
+        const t = data.timerSeconds ?? 60;
+        timerSyncRef.current = { remaining: t, receivedAt: Date.now() };
+        setTimerRemaining(t);
+      });
+
+      socket.on('pick_made', (data: any) => {
+        const info = teamMapRef.current.get(data.teamId);
+        setSnakePickHistory(prev => [...prev, {
+          pickIndex: data.pickIndex,
+          pickerUserId: data.pickerUserId,
+          pickerName: participantName(data.pickerUserId),
+          teamId: data.teamId,
+          teamName: data.teamName ?? info?.name ?? data.teamId,
+          logoUrl: info?.logoUrl ?? null,
+        }]);
+        setSnakePickerUserId(data.nextPickerUserId ?? null);
+        setSnakePickIndex(data.nextPickIndex ?? 0);
+        setSnakePickPending(false);
+        setSnakePickSearch('');
+        // Update the winner's roster locally (mirrors team_sold path)
+        if (data.pickerUserId) {
+          setFantasyTeams(prev => {
+            const updated = prev.map(ft =>
+              ft.userId === data.pickerUserId
+                ? { ...ft, remainingBudget: ft.remainingBudget } // budget unchanged in snake
+                : ft
+            );
+            fantasyTeamsRef.current = updated;
+            return updated;
+          });
+          setSoldLots(prev => [{
+            teamId: data.teamId,
+            teamName: data.teamName ?? info?.name ?? data.teamId,
+            logoUrl: info?.logoUrl ?? null,
+            winnerId: data.pickerUserId,
+            winnerName: participantName(data.pickerUserId),
+            winningBid: 0,
+            passed: false,
+          }, ...prev]);
+          if (data.pickerUserId === userRef.current?.uid) {
+            toast('success', `You drafted ${data.teamName ?? data.teamId}!`);
+          }
+        }
+      });
+
+      socket.on('pick_skipped', (data: any) => {
+        setSnakePickPending(false);
+        setSnakePickSearch('');
+        toast('warn', `Pick skipped${data.reason === 'timeout' ? ' (time expired)' : ''}`);
+      });
+
+      socket.on('pick_rejected', (data: any) => {
+        setSnakePickPending(false);
+        toast('error', data.reason ?? 'Pick rejected');
+      });
+      // ──────────────────────────────────────────────────────────────────
 
       socket.on('lot_opened', (data: any) => {
         // Cancel any pending "clear lot" timeout from team_sold / team_passed
@@ -496,6 +613,23 @@ export default function AuctionPage() {
     socketRef.current.emit('place_bid', { amount });
   }
 
+  function makePick(teamId: string) {
+    if (!socketRef.current || snakePickPending) return;
+    setSnakePickPending(true);
+    socketRef.current.emit('make_pick', { teamId });
+  }
+
+  async function saveDraftOrder() {
+    if (!id) return;
+    try {
+      await api.put(`/leagues/${id}/auction/draft-order`, { userIds: draftOrderInput });
+      setSettingDraftOrder(false);
+      toast('success', 'Draft order saved');
+    } catch (e: unknown) {
+      toast('error', e instanceof Error ? e.message : 'Failed to save draft order');
+    }
+  }
+
   function handleBidSubmit(e: React.FormEvent) {
     e.preventDefault();
     const amount = Number(bidInput);
@@ -567,6 +701,8 @@ export default function AuctionPage() {
     if (configured !== null && configured !== undefined) return configured;
     return sport === 'premier-league' ? 1 : 2;
   }
+
+  const isSnake = nominationMode === 'snake-random' || nominationMode === 'snake-defined';
 
   const soldOrPassedIds = new Set(soldLots.map(l => l.teamId));
   const allAuctionTeams = [...teamMapRef.current.values()];
@@ -661,7 +797,11 @@ export default function AuctionPage() {
               <div className="bg-card border border-line rounded-2xl p-6 text-center">
                 <div className="w-6 h-6 border-2 border-brand border-t-transparent rounded-full animate-spin mx-auto mb-3" />
                 <p className="text-copy-2 text-sm mb-1">
-                  {nominationMode === 'manual' ? 'Waiting for commissioner to nominate a team…' : 'Preparing next team…'}
+                  {isSnake
+                    ? (snakeDraftOrder.length > 0 ? 'Preparing next pick…' : 'Waiting for snake draft to begin…')
+                    : nominationMode === 'manual'
+                    ? 'Waiting for commissioner to nominate a team…'
+                    : 'Preparing next team…'}
                 </p>
                 {nominationMode === 'manual' && !isCommissioner && (
                   <p className="text-copy-3 text-xs mt-1">The commissioner will pick the next team to auction.</p>
@@ -669,8 +809,77 @@ export default function AuctionPage() {
               </div>
             )}
 
-            {/* Current Lot */}
-            {(status === 'active' || lotFlash) && currentLot && (
+            {/* Snake Draft Clock */}
+            {isSnake && status === 'active' && (
+              <div className="bg-card border border-brand/30 rounded-2xl p-5">
+                <div className="flex items-start gap-4 mb-4">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-copy-3 uppercase tracking-wide mb-1">
+                      {snakePickerUserId === user?.uid ? 'Your Pick' : 'On The Clock'}
+                    </p>
+                    <h2 className="text-xl font-bold text-copy leading-tight">
+                      {snakePickerUserId === user?.uid ? 'You' : participantName(snakePickerUserId ?? '')}
+                    </h2>
+                    <p className="text-xs text-copy-3 mt-1">
+                      Pick #{snakePickIndex + 1}
+                      {snakeDraftOrder.length > 0 && ` · Round ${Math.floor(snakePickIndex / snakeDraftOrder.length) + 1}`}
+                    </p>
+                  </div>
+                  <TimerRing
+                    remaining={timerRemaining}
+                    total={league?.auctionConfig?.countdownSeconds ?? 60}
+                    paused={paused}
+                  />
+                </div>
+
+                {snakePickerUserId === user?.uid ? (
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      placeholder="Search teams…"
+                      value={snakePickSearch}
+                      onChange={e => setSnakePickSearch(e.target.value)}
+                      className="w-full bg-field border border-line-2 rounded-xl px-4 py-2.5 text-copy text-sm placeholder-copy-3 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors"
+                    />
+                    <div className="max-h-52 overflow-y-auto space-y-1 -mr-1 pr-1">
+                      {(() => {
+                        const q = snakePickSearch.toLowerCase();
+                        const filtered = availableTeams.filter(
+                          t => !q || t.name.toLowerCase().includes(q) || t.shortName.toLowerCase().includes(q)
+                        );
+                        if (filtered.length === 0) {
+                          return <p className="text-xs text-copy-3 text-center py-4">No teams match your search</p>;
+                        }
+                        return filtered.map(team => (
+                          <button
+                            key={team.id}
+                            onClick={() => makePick(team.id)}
+                            disabled={snakePickPending}
+                            className="w-full flex items-center gap-3 px-3 py-2 rounded-xl bg-field hover:bg-field-2 transition-all active:scale-[0.98] text-left disabled:opacity-50"
+                          >
+                            <TeamLogo logoUrl={team.logoUrl} name={team.name} size={7} />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-copy truncate">{team.name}</p>
+                              <p className="text-xs text-copy-3">{fln(team.sportLeagueId)}</p>
+                            </div>
+                            <span className="text-xs font-semibold text-brand flex-shrink-0">
+                              {snakePickPending ? '…' : 'Pick'}
+                            </span>
+                          </button>
+                        ));
+                      })()}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-xs text-copy-3 text-center py-2">
+                    Waiting for {participantName(snakePickerUserId ?? '')} to make their pick…
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Current Lot — auction mode only */}
+            {!isSnake && (status === 'active' || lotFlash) && currentLot && (
               <div className={`bg-card border rounded-2xl p-5 transition-colors ${
                 lotFlash === 'sold'   ? 'border-positive/50 bg-positive/5' :
                 lotFlash === 'passed' ? 'border-line' : 'border-brand/30'
@@ -770,7 +979,7 @@ export default function AuctionPage() {
               <div className="bg-card border border-line rounded-2xl p-4 space-y-3">
                 <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide">Commissioner</p>
                 <div className="flex flex-wrap gap-2">
-                  {/* Start auction if not yet started */}
+                  {/* Start draft/auction */}
                   {status === 'waiting' && connected && league?.state === 'draft' && (
                     <button
                       onClick={handleStartAuction}
@@ -778,13 +987,40 @@ export default function AuctionPage() {
                       title={!league.auctionConfig ? 'Configure auction settings first' : undefined}
                       className="bg-brand hover:bg-brand-2 disabled:opacity-40 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors"
                     >
-                      Start Auction
+                      {isSnake ? 'Start Draft' : 'Start Auction'}
                     </button>
                   )}
-                  {/* Active-lot controls */}
-                  {status === 'active' && currentLot && (
+
+                  {/* Snake: set draft order (snake-defined, pre-start) */}
+                  {isSnake && nominationMode === 'snake-defined' && league?.state === 'draft' && (
+                    <button
+                      onClick={() => {
+                        setDraftOrderInput(
+                          snakeDraftOrder.length > 0
+                            ? snakeDraftOrder
+                            : sortedParticipants.map(ft => ft.userId)
+                        );
+                        setSettingDraftOrder(true);
+                      }}
+                      className="bg-field hover:bg-field-2 border border-line text-copy-2 text-sm font-medium px-4 py-2 rounded-xl transition-colors"
+                    >
+                      Set Draft Order
+                    </button>
+                  )}
+
+                  {/* Snake: skip current pick */}
+                  {isSnake && status === 'active' && (
+                    <button
+                      onClick={skipLot}
+                      className="bg-field hover:bg-field-2 border border-line text-copy-2 text-sm font-medium px-4 py-2 rounded-xl transition-colors"
+                    >
+                      Skip Pick
+                    </button>
+                  )}
+
+                  {/* Auction: active-lot controls */}
+                  {!isSnake && status === 'active' && currentLot && (
                     <>
-                      {/* Pause / Resume */}
                       <button
                         onClick={() => socketRef.current?.emit(paused ? 'commissioner_resume' : 'commissioner_pause')}
                         className={`text-sm font-medium px-4 py-2 rounded-xl transition-colors border ${
@@ -795,7 +1031,6 @@ export default function AuctionPage() {
                       >
                         {paused ? 'Resume Clock' : 'Pause Clock'}
                       </button>
-                      {/* Add time */}
                       <button
                         onClick={() => socketRef.current?.emit('commissioner_add_time', { seconds: 30 })}
                         className="bg-field hover:bg-field-2 border border-line text-copy-2 text-sm font-medium px-3 py-2 rounded-xl transition-colors"
@@ -808,14 +1043,12 @@ export default function AuctionPage() {
                       >
                         +60s
                       </button>
-                      {/* Reset timer to full countdown */}
                       <button
                         onClick={() => socketRef.current?.emit('commissioner_reset_timer')}
                         className="bg-field hover:bg-field-2 border border-line text-copy-2 text-sm font-medium px-4 py-2 rounded-xl transition-colors"
                       >
                         Reset Timer
                       </button>
-                      {/* Skip/pass team */}
                       <button
                         onClick={skipLot}
                         className="bg-field hover:bg-field-2 border border-line text-copy-2 text-sm font-medium px-4 py-2 rounded-xl transition-colors"
@@ -847,7 +1080,7 @@ export default function AuctionPage() {
                     </div>
                   )}
                   {/* Force-advance if stuck between lots */}
-                  {status === 'waiting' && league?.state === 'auction' && (
+                  {!isSnake && status === 'waiting' && league?.state === 'auction' && (
                     <button
                       onClick={forceNextLot}
                       className="bg-field hover:bg-field-2 border border-line text-copy-2 text-sm font-medium px-4 py-2 rounded-xl transition-colors"
@@ -856,6 +1089,60 @@ export default function AuctionPage() {
                     </button>
                   )}
                 </div>
+
+                {/* Snake: set draft order panel */}
+                {settingDraftOrder && (
+                  <div className="border-t border-line pt-3 space-y-2">
+                    <p className="text-xs font-semibold text-copy-2">Draft Order (Round 1)</p>
+                    <p className="text-xs text-copy-3">Round 2 reverses automatically (snake).</p>
+                    <div className="space-y-1">
+                      {draftOrderInput.map((uid, idx) => (
+                        <div key={uid} className="flex items-center gap-2 bg-field rounded-lg px-3 py-2">
+                          <span className="text-xs text-copy-3 w-4 text-right flex-shrink-0">{idx + 1}</span>
+                          <span className="flex-1 text-sm text-copy truncate">
+                            {uid === user?.uid ? 'You' : participantName(uid)}
+                          </span>
+                          <button
+                            disabled={idx === 0}
+                            onClick={() => setDraftOrderInput(prev => {
+                              const next = [...prev];
+                              [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
+                              return next;
+                            })}
+                            className="text-copy-3 hover:text-copy disabled:opacity-20 transition-colors p-0.5"
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="18 15 12 9 6 15"/></svg>
+                          </button>
+                          <button
+                            disabled={idx === draftOrderInput.length - 1}
+                            onClick={() => setDraftOrderInput(prev => {
+                              const next = [...prev];
+                              [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
+                              return next;
+                            })}
+                            className="text-copy-3 hover:text-copy disabled:opacity-20 transition-colors p-0.5"
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={saveDraftOrder}
+                        className="flex-1 bg-brand hover:bg-brand-2 text-white text-sm font-semibold py-2 rounded-xl transition-colors"
+                      >
+                        Save Order
+                      </button>
+                      <button
+                        onClick={() => setSettingDraftOrder(false)}
+                        className="flex-1 bg-field hover:bg-field-2 border border-line text-copy-2 text-sm font-medium py-2 rounded-xl transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
                 {/* Recovery / reset tools — always visible during an active auction */}
                 {league?.state === 'auction' && (
                   <div className="border-t border-line pt-3 space-y-2">
@@ -909,8 +1196,8 @@ export default function AuctionPage() {
               </div>
             )}
 
-            {/* Up Next queue — hidden for random-hidden nomination mode */}
-            {upcomingQueue.length > 0 && nominationMode !== 'random-hidden' && (
+            {/* Up Next queue — auction mode, non-hidden */}
+            {!isSnake && upcomingQueue.length > 0 && nominationMode !== 'random-hidden' && (
               <div className="bg-card border border-line rounded-2xl p-4">
                 <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide mb-3">
                   Up Next — {upcomingQueue.length} remaining
@@ -934,8 +1221,56 @@ export default function AuctionPage() {
               </div>
             )}
 
-            {/* Results */}
-            {soldLots.length > 0 && (
+            {/* Snake: upcoming pick order */}
+            {isSnake && snakeDraftOrder.length > 0 && status !== 'closed' && (
+              <div className="bg-card border border-line rounded-2xl p-4">
+                <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide mb-3">
+                  Pick Order — {availableTeams.length} team{availableTeams.length !== 1 ? 's' : ''} remaining
+                </p>
+                <div className="space-y-0.5 max-h-52 overflow-y-auto -mr-1 pr-1">
+                  {(() => {
+                    const n = snakeDraftOrder.length;
+                    const totalPicks = snakePickHistory.length + availableTeams.length;
+                    const rows = [];
+                    const start = Math.max(0, snakePickIndex - 1);
+                    const end = Math.min(totalPicks, snakePickIndex + n * 2 + 1);
+                    for (let i = start; i < end; i++) {
+                      const round = Math.floor(i / n);
+                      const posInRound = i % n;
+                      const uid = round % 2 === 0
+                        ? snakeDraftOrder[posInRound]
+                        : snakeDraftOrder[n - 1 - posInRound];
+                      const isCurrent = i === snakePickIndex && status === 'active';
+                      const isDone = i < snakePickIndex;
+                      const isMe = uid === user?.uid;
+                      rows.push(
+                        <div key={i} className={`flex items-center gap-2.5 px-2 py-1.5 rounded-lg ${isCurrent ? 'bg-brand/10' : ''}`}>
+                          <span className={`text-xs tabular-nums w-5 text-right flex-shrink-0 ${isDone ? 'text-copy-3' : isCurrent ? 'text-brand font-bold' : 'text-copy-3'}`}>
+                            {i + 1}
+                          </span>
+                          <span className={`text-sm flex-1 truncate ${isDone ? 'text-copy-3 line-through' : isCurrent ? 'text-brand font-semibold' : isMe ? 'text-brand font-medium' : 'text-copy'}`}>
+                            {isMe ? 'You' : participantName(uid)}
+                          </span>
+                          {isDone && snakePickHistory[i] && (
+                            <span className="text-xs text-copy-3 truncate max-w-[90px]">{snakePickHistory[i].teamName}</span>
+                          )}
+                          {isCurrent && (
+                            <span className="text-[10px] font-bold bg-brand text-white px-1.5 py-0.5 rounded-full flex-shrink-0">NOW</span>
+                          )}
+                          {!isCurrent && !isDone && i > 0 && posInRound === 0 && (
+                            <span className="text-[10px] text-copy-3 flex-shrink-0">R{round + 1}</span>
+                          )}
+                        </div>
+                      );
+                    }
+                    return rows;
+                  })()}
+                </div>
+              </div>
+            )}
+
+            {/* Results — auction mode */}
+            {!isSnake && soldLots.length > 0 && (
               <div className="bg-card border border-line rounded-2xl p-4">
                 <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide mb-3">
                   Results — {soldLots.filter(l => !l.passed).length} sold, {soldLots.filter(l => l.passed).length} passed
@@ -962,8 +1297,38 @@ export default function AuctionPage() {
                 </div>
               </div>
             )}
-            {/* Available Teams */}
-            {allAuctionTeams.length > 0 && status !== 'closed' && (
+
+            {/* Snake: draft pick history */}
+            {isSnake && snakePickHistory.length > 0 && (
+              <div className="bg-card border border-line rounded-2xl p-4">
+                <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide mb-3">
+                  Draft Picks — {snakePickHistory.length} made
+                </p>
+                <div className="space-y-2 max-h-64 overflow-y-auto -mr-1 pr-1">
+                  {[...snakePickHistory].reverse().map((pick, i) => (
+                    <div key={pick.pickIndex} className="flex items-center gap-3 py-2 border-b border-line last:border-0">
+                      <span className="text-xs text-copy-3 tabular-nums w-6 text-right flex-shrink-0">
+                        {pick.pickIndex + 1}
+                      </span>
+                      <TeamLogo logoUrl={pick.logoUrl} name={pick.teamName} size={8} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-copy truncate">{pick.teamName}</p>
+                        <p className="text-xs text-copy-2 truncate">
+                          {pick.pickerUserId === user?.uid ? 'You' : pick.pickerName}
+                        </p>
+                      </div>
+                      {pick.pickerUserId === user?.uid && (
+                        <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-brand/15 text-brand flex-shrink-0">
+                          YOURS
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {/* Available Teams — auction mode only (snake shows teams in draft clock card) */}
+            {!isSnake && allAuctionTeams.length > 0 && status !== 'closed' && (
               <div className="bg-card border border-line rounded-2xl p-4">
                 <div className="flex items-center justify-between mb-3">
                   <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide">Available Teams</p>
@@ -1019,18 +1384,20 @@ export default function AuctionPage() {
           {/* ── Right sidebar ─────────────────────────────────────── */}
           <div className="space-y-4">
 
-            {/* My budget */}
-            <div className="bg-card border border-line rounded-2xl p-4">
-              <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide mb-2">Your Budget</p>
-              <p className="text-3xl font-bold text-copy tabular-nums mb-1">${myBudget}</p>
-              <div className="w-full h-1.5 rounded-full bg-field-2 overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-brand transition-all"
-                  style={{ width: `${startingBudget > 0 ? Math.round((myBudget / startingBudget) * 100) : 0}%` }}
-                />
+            {/* My budget — auction mode only */}
+            {!isSnake && (
+              <div className="bg-card border border-line rounded-2xl p-4">
+                <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide mb-2">Your Budget</p>
+                <p className="text-3xl font-bold text-copy tabular-nums mb-1">${myBudget}</p>
+                <div className="w-full h-1.5 rounded-full bg-field-2 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-brand transition-all"
+                    style={{ width: `${startingBudget > 0 ? Math.round((myBudget / startingBudget) * 100) : 0}%` }}
+                  />
+                </div>
+                <p className="text-xs text-copy-3 mt-1">of ${startingBudget} remaining</p>
               </div>
-              <p className="text-xs text-copy-3 mt-1">of ${startingBudget} remaining</p>
-            </div>
+            )}
 
             {/* Roster viewer */}
             <div className="bg-card border border-line rounded-2xl p-4">
@@ -1087,12 +1454,22 @@ export default function AuctionPage() {
             <div className="bg-card border border-line rounded-2xl p-4">
               <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide mb-3">Participants</p>
               <div className="space-y-2">
-                {sortedParticipants.map(ft => {
+                {(isSnake
+                  ? [...sortedParticipants].sort((a, b) => {
+                      const aPicks = snakePickHistory.filter(p => p.pickerUserId === a.userId).length;
+                      const bPicks = snakePickHistory.filter(p => p.pickerUserId === b.userId).length;
+                      return bPicks - aPicks;
+                    })
+                  : sortedParticipants
+                ).map(ft => {
                   const isMe = ft.userId === user?.uid;
-                  const isHighBidder = currentLot?.currentBidderId === ft.userId;
-                  const wonCount = soldLots.filter(l => !l.passed && l.winnerId === ft.userId).length;
+                  const isHighBidder = !isSnake && currentLot?.currentBidderId === ft.userId;
+                  const isOnClock = isSnake && snakePickerUserId === ft.userId;
+                  const wonCount = isSnake
+                    ? snakePickHistory.filter(p => p.pickerUserId === ft.userId).length
+                    : soldLots.filter(l => !l.passed && l.winnerId === ft.userId).length;
                   return (
-                    <div key={ft.id} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg ${isMe ? 'bg-brand/8' : ''}`}>
+                    <div key={ft.id} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg ${isMe ? 'bg-brand/8' : isOnClock ? 'bg-warn/8' : ''}`}>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
                           <p className={`text-sm font-medium truncate ${isMe ? 'text-brand' : 'text-copy'}`}>
@@ -1101,18 +1478,23 @@ export default function AuctionPage() {
                           {isHighBidder && (
                             <span className="text-[10px] font-bold bg-brand text-white px-1.5 py-0.5 rounded-full">HIGH</span>
                           )}
+                          {isOnClock && (
+                            <span className="text-[10px] font-bold bg-warn text-white px-1.5 py-0.5 rounded-full">PICK</span>
+                          )}
                         </div>
                         {wonCount > 0 && <p className="text-[10px] text-copy-3">{wonCount} team{wonCount !== 1 ? 's' : ''}</p>}
                       </div>
-                      <div className="text-right flex-shrink-0">
-                        <p className="text-sm font-bold tabular-nums text-copy">${ft.remainingBudget}</p>
-                        <div className="w-12 h-1 rounded-full bg-field-2 mt-0.5 overflow-hidden">
-                          <div
-                            className="h-full rounded-full bg-positive transition-all"
-                            style={{ width: `${startingBudget > 0 ? Math.round((ft.remainingBudget / startingBudget) * 100) : 0}%` }}
-                          />
+                      {!isSnake && (
+                        <div className="text-right flex-shrink-0">
+                          <p className="text-sm font-bold tabular-nums text-copy">${ft.remainingBudget}</p>
+                          <div className="w-12 h-1 rounded-full bg-field-2 mt-0.5 overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-positive transition-all"
+                              style={{ width: `${startingBudget > 0 ? Math.round((ft.remainingBudget / startingBudget) * 100) : 0}%` }}
+                            />
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </div>
                   );
                 })}

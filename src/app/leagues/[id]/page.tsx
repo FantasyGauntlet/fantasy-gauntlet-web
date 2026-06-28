@@ -2769,32 +2769,41 @@ function SettingsTab({
             <h2 className="text-sm font-semibold text-copy mb-1">Auction Settings</h2>
             <p className="text-xs text-copy-3 mb-5">Must be configured before starting the auction.</p>
             <form onSubmit={saveAuctionConfig} className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-copy-2 mb-1.5">Starting Budget ($)</label>
-                  <input type="number" min={1} required value={auctionForm.startingBudget}
-                    onChange={e => setAuctionForm(f => ({ ...f, startingBudget: Number(e.target.value) }))}
-                    className={inputCls} />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-copy-2 mb-1.5">Min Opening Bid ($)</label>
-                  <input type="number" min={1} required value={auctionForm.minOpeningBid}
-                    onChange={e => setAuctionForm(f => ({ ...f, minOpeningBid: Number(e.target.value) }))}
-                    className={inputCls} />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-copy-2 mb-1.5">Min Bid Increment ($)</label>
-                  <input type="number" min={1} required value={auctionForm.minBidIncrement}
-                    onChange={e => setAuctionForm(f => ({ ...f, minBidIncrement: Number(e.target.value) }))}
-                    className={inputCls} />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-copy-2 mb-1.5">Countdown (sec)</label>
-                  <input type="number" min={5} max={120} required value={auctionForm.countdownSeconds}
-                    onChange={e => setAuctionForm(f => ({ ...f, countdownSeconds: Number(e.target.value) }))}
-                    className={inputCls} />
-                </div>
-              </div>
+              {(() => {
+                const isSnake = auctionForm.nominationMode === 'snake-random' || auctionForm.nominationMode === 'snake-defined';
+                return (
+                  <div className="grid grid-cols-2 gap-3">
+                    {!isSnake && (
+                      <>
+                        <div>
+                          <label className="block text-xs font-medium text-copy-2 mb-1.5">Starting Budget ($)</label>
+                          <input type="number" min={1} required value={auctionForm.startingBudget}
+                            onChange={e => setAuctionForm(f => ({ ...f, startingBudget: Number(e.target.value) }))}
+                            className={inputCls} />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-copy-2 mb-1.5">Min Opening Bid ($)</label>
+                          <input type="number" min={1} required value={auctionForm.minOpeningBid}
+                            onChange={e => setAuctionForm(f => ({ ...f, minOpeningBid: Number(e.target.value) }))}
+                            className={inputCls} />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-copy-2 mb-1.5">Min Bid Increment ($)</label>
+                          <input type="number" min={1} required value={auctionForm.minBidIncrement}
+                            onChange={e => setAuctionForm(f => ({ ...f, minBidIncrement: Number(e.target.value) }))}
+                            className={inputCls} />
+                        </div>
+                      </>
+                    )}
+                    <div>
+                      <label className="block text-xs font-medium text-copy-2 mb-1.5">Pick Clock (sec)</label>
+                      <input type="number" min={5} max={300} required value={auctionForm.countdownSeconds}
+                        onChange={e => setAuctionForm(f => ({ ...f, countdownSeconds: Number(e.target.value) }))}
+                        className={inputCls} />
+                    </div>
+                  </div>
+                );
+              })()}
               <div>
                 <label className="block text-xs font-medium text-copy-2 mb-1.5">Nomination Mode</label>
                 <select value={auctionForm.nominationMode}
@@ -2803,6 +2812,8 @@ function SettingsTab({
                   <option value="manual">Manual — commissioner picks who nominates</option>
                   <option value="random-disclosed">Random (disclosed) — order shown to all</option>
                   <option value="random-hidden">Random (hidden) — revealed one at a time</option>
+                  <option value="snake-random">Snake Draft — random pick order</option>
+                  <option value="snake-defined">Snake Draft — commissioner sets order</option>
                 </select>
               </div>
               <button type="submit" disabled={saving}
