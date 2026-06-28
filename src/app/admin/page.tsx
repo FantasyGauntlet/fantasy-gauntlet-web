@@ -12,6 +12,7 @@ interface SportLeague { id: string; name: string; }
 interface Team { id: string; name: string; logoUrl?: string | null; }
 interface Season { id: string; label: string; }
 interface BonusPoint { id: string; teamId: string; teamName: string; seasonId: string; seasonLabel: string; sportLeagueId: string; label: string; points: number; awardedAt: string; }
+interface AdminLeague { id: string; name: string; state: 'draft' | 'auction' | 'active' | 'completed' | 'cancelled'; selectedSports: string[]; commissionerId: string; memberCap: number | null; createdAt: string; }
 
 const LEAGUE_ACRONYMS = new Set(['nhl', 'nba', 'nfl', 'mlb', 'ucl', 'ncaa', 'mls', 'fifa', 'ufc']);
 function formatLeagueName(id: string): string {
@@ -29,7 +30,7 @@ const SYNCS = [
   { key: 'records',      label: 'Sync Records',             endpoint: '/admin/ingestion/records' },
 ];
 
-type Tab = 'sync' | 'bonus' | 'scoring' | 'preset' | 'deadlines';
+type Tab = 'sync' | 'bonus' | 'scoring' | 'preset' | 'deadlines' | 'leagues';
 
 function Spinner({ size = 'sm' }: { size?: 'sm' | 'md' }) {
   const s = size === 'sm' ? 'w-4 h-4 border-[1.5px]' : 'w-6 h-6 border-2';
@@ -277,12 +278,77 @@ export default function AdminPage() {
     }
   }
 
+  // ── Leagues ────────────────────────────────────────────────────────────────
+  const [allLeagues, setAllLeagues] = useState<AdminLeague[]>([]);
+  const [leaguesLoaded, setLeaguesLoaded] = useState(false);
+  const [leagueSearch, setLeagueSearch] = useState('');
+  const [expandedLeagues, setExpandedLeagues] = useState<Set<string>>(new Set());
+  const [leagueStatuses, setLeagueStatuses] = useState<Record<string, { status: 'idle' | 'loading' | 'success' | 'error'; message: string }>>({});
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (tab !== 'leagues' || leaguesLoaded) return;
+    setLeaguesLoaded(true);
+    api.get<AdminLeague[]>('/admin/leagues').then(setAllLeagues).catch(() => {});
+  }, [tab, leaguesLoaded]);
+
+  function toggleLeague(id: string) {
+    setExpandedLeagues(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  async function forceState(leagueId: string, state: AdminLeague['state']) {
+    setLeagueStatuses(s => ({ ...s, [leagueId]: { status: 'loading', message: '' } }));
+    try {
+      const updated = await api.patch<AdminLeague>(`/admin/leagues/${leagueId}/state`, { state });
+      setAllLeagues(ls => ls.map(l => l.id === leagueId ? { ...l, state: updated.state } : l));
+      setLeagueStatuses(s => ({ ...s, [leagueId]: { status: 'success', message: `→ ${state}` } }));
+    } catch (e: unknown) {
+      setLeagueStatuses(s => ({ ...s, [leagueId]: { status: 'error', message: e instanceof Error ? e.message : 'Failed' } }));
+    }
+  }
+
+  async function forceDelete(leagueId: string) {
+    setLeagueStatuses(s => ({ ...s, [leagueId]: { status: 'loading', message: '' } }));
+    setDeleteConfirm(null);
+    try {
+      await api.delete(`/admin/leagues/${leagueId}`);
+      setAllLeagues(ls => ls.filter(l => l.id !== leagueId));
+    } catch (e: unknown) {
+      setLeagueStatuses(s => ({ ...s, [leagueId]: { status: 'error', message: e instanceof Error ? e.message : 'Failed' } }));
+    }
+  }
+
+  const STATE_TRANSITIONS: Record<AdminLeague['state'], AdminLeague['state'][]> = {
+    draft:     ['auction', 'active', 'cancelled'],
+    auction:   ['active', 'cancelled'],
+    active:    ['completed', 'cancelled'],
+    completed: [],
+    cancelled: [],
+  };
+
+  const STATE_COLORS: Record<AdminLeague['state'], string> = {
+    draft:     'bg-field text-copy-3 border-line',
+    auction:   'bg-amber-50 text-amber-700 border-amber-200',
+    active:    'bg-positive/10 text-positive border-positive/20',
+    completed: 'bg-brand/10 text-brand border-brand/20',
+    cancelled: 'bg-danger-bg text-danger border-danger/20',
+  };
+
+  const filteredLeagues = leagueSearch.trim()
+    ? allLeagues.filter(l => l.name.toLowerCase().includes(leagueSearch.toLowerCase()))
+    : allLeagues;
+
   const tabs: { key: Tab; label: string }[] = [
     { key: 'sync',      label: 'Data Sync' },
     { key: 'bonus',     label: 'Bonus Points' },
     { key: 'scoring',   label: 'League Scoring' },
     { key: 'preset',    label: 'Auction Preset' },
     { key: 'deadlines', label: 'Deadlines' },
+    { key: 'leagues',   label: 'Leagues' },
   ];
 
   return (
@@ -774,6 +840,128 @@ export default function AdminPage() {
                 })}
               </div>
             )}
+          </div>
+        )}
+        {/* ── Leagues ── */}
+        {tab === 'leagues' && (
+          <div className="space-y-3">
+            <div className="bg-card border border-line rounded-2xl p-5">
+              <div className="flex items-center gap-3">
+                <h2 className="text-sm font-semibold text-copy flex-1">All Leagues</h2>
+                <input
+                  value={leagueSearch}
+                  onChange={e => setLeagueSearch(e.target.value)}
+                  placeholder="Search leagues..."
+                  className="bg-field border border-line-2 rounded-xl px-3 py-1.5 text-sm text-copy placeholder-copy-3 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors w-52"
+                />
+              </div>
+            </div>
+
+            {filteredLeagues.length === 0 ? (
+              <p className="text-copy-3 text-sm px-1">{leaguesLoaded ? 'No leagues found.' : 'Loading...'}</p>
+            ) : filteredLeagues.map(league => {
+              const isOpen = expandedLeagues.has(league.id);
+              const lStatus = leagueStatuses[league.id];
+              const nextStates = STATE_TRANSITIONS[league.state];
+
+              return (
+                <div key={league.id} className="bg-card border border-line rounded-2xl overflow-hidden">
+                  {/* Row header */}
+                  <button
+                    type="button"
+                    onClick={() => toggleLeague(league.id)}
+                    className="w-full flex items-center gap-3 px-5 py-4 hover:bg-field/30 transition-colors text-left"
+                  >
+                    <svg
+                      width="12" height="12" viewBox="0 0 24 24" fill="none"
+                      stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
+                      className={`text-copy-3 transition-transform flex-shrink-0 ${isOpen ? 'rotate-90' : ''}`}
+                    >
+                      <polyline points="9 18 15 12 9 6" />
+                    </svg>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-copy truncate">{league.name}</p>
+                      <p className="text-xs text-copy-3 mt-0.5">
+                        {league.selectedSports.map(s => formatLeagueName(s)).join(' · ')}
+                      </p>
+                    </div>
+                    <span className={`flex-shrink-0 text-xs font-medium px-2 py-0.5 rounded-full border ${STATE_COLORS[league.state]}`}>
+                      {league.state}
+                    </span>
+                  </button>
+
+                  {/* Expanded body */}
+                  {isOpen && (
+                    <div className="border-t border-line px-5 py-4 space-y-4">
+                      {/* Meta */}
+                      <div className="flex gap-6 text-xs text-copy-3">
+                        <span>Created {new Date(league.createdAt).toLocaleDateString()}</span>
+                        {league.memberCap && <span>Cap: {league.memberCap}</span>}
+                        <span className="font-mono truncate">ID: {league.id}</span>
+                      </div>
+
+                      {/* State transitions */}
+                      {nextStates.length > 0 && (
+                        <div>
+                          <p className="text-xs font-medium text-copy-2 mb-2">Force State</p>
+                          <div className="flex flex-wrap gap-2">
+                            {nextStates.map(s => (
+                              <button
+                                key={s}
+                                onClick={() => forceState(league.id, s)}
+                                disabled={lStatus?.status === 'loading'}
+                                className="text-xs font-medium px-3 py-1.5 rounded-lg border bg-field hover:bg-field-2 border-line text-copy-2 disabled:opacity-50 transition-colors"
+                              >
+                                → {s}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Status feedback */}
+                      {lStatus && lStatus.status !== 'idle' && (
+                        <p className={`text-xs ${
+                          lStatus.status === 'success' ? 'text-positive' :
+                          lStatus.status === 'error' ? 'text-danger' : 'text-copy-3'
+                        }`}>
+                          {lStatus.status === 'loading' ? 'Working...' : lStatus.message}
+                        </p>
+                      )}
+
+                      {/* Delete */}
+                      <div className="pt-1 border-t border-line/50">
+                        {deleteConfirm === league.id ? (
+                          <div className="flex items-center gap-3">
+                            <p className="text-xs text-danger flex-1">Delete permanently? This cannot be undone.</p>
+                            <button
+                              onClick={() => forceDelete(league.id)}
+                              className="text-xs font-semibold text-white bg-danger hover:bg-danger/80 px-3 py-1.5 rounded-lg transition-colors"
+                            >
+                              Confirm Delete
+                            </button>
+                            <button
+                              onClick={() => setDeleteConfirm(null)}
+                              className="text-xs text-copy-3 hover:text-copy px-2 py-1.5 transition-colors"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setDeleteConfirm(league.id)}
+                            disabled={lStatus?.status === 'loading'}
+                            className="text-xs text-danger hover:text-danger/80 px-3 py-1.5 rounded-lg hover:bg-danger-bg transition-colors disabled:opacity-50"
+                          >
+                            Delete League
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </main>
