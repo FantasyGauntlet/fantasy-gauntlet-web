@@ -124,7 +124,15 @@ export default function AdminPage() {
     !teamFilter.trim() || t.name.toLowerCase().includes(teamFilter.toLowerCase())
   );
 
-  const bonusBySport = bonusList.reduce<Record<string, BonusPoint[]>>((acc, b) => {
+  const [bonusYearFilter, setBonusYearFilter] = useState('');
+
+  const bonusYears = [...new Set(bonusList.map(b => new Date(b.awardedAt).getFullYear().toString()))].sort((a, b) => b.localeCompare(a));
+
+  const filteredBonusList = bonusYearFilter
+    ? bonusList.filter(b => new Date(b.awardedAt).getFullYear().toString() === bonusYearFilter)
+    : bonusList;
+
+  const bonusBySport = filteredBonusList.reduce<Record<string, BonusPoint[]>>((acc, b) => {
     (acc[b.sportLeagueId] ??= []).push(b);
     return acc;
   }, {});
@@ -457,7 +465,19 @@ export default function AdminPage() {
 
             {/* Awarded bonus points grouped by league */}
             <div className="bg-card border border-line rounded-2xl p-5">
-              <h2 className="text-sm font-semibold text-copy mb-4">Awarded Bonus Points</h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-sm font-semibold text-copy">Awarded Bonus Points</h2>
+                {bonusYears.length > 0 && (
+                  <select
+                    value={bonusYearFilter}
+                    onChange={e => setBonusYearFilter(e.target.value)}
+                    className="bg-field border border-line-2 rounded-lg px-3 py-1.5 text-xs text-copy focus:outline-none focus:border-brand transition-colors"
+                  >
+                    <option value="">All years</option>
+                    {bonusYears.map(y => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                )}
+              </div>
               {bonusList.length === 0 ? (
                 <p className="text-copy-3 text-sm">No bonus points awarded yet.</p>
               ) : (
