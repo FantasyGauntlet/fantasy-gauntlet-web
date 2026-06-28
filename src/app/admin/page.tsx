@@ -22,7 +22,7 @@ function formatLeagueName(id: string): string {
 
 const SYNCS = [
   { key: 'seed',         label: 'Seed Sports',              endpoint: '/sports/seed' },
-  { key: 'seed-seasons', label: 'Seed Seasons (2022–2026)', endpoint: '/sports/seed-seasons' },
+  { key: 'seed-seasons', label: 'Seed Seasons (2022–2027)', endpoint: '/sports/seed-seasons' },
   { key: 'teams',        label: 'Sync Teams',               endpoint: '/admin/ingestion/teams' },
   { key: 'logos',        label: 'Sync Logos',               endpoint: '/admin/sync-logos' },
   { key: 'schedule',     label: 'Sync Schedule',            endpoint: '/admin/ingestion/schedule' },
