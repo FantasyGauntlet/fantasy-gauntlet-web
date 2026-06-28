@@ -161,6 +161,11 @@ export default function AuctionPage() {
   const socketRef = useRef<Socket | null>(null);
   const toastId = useRef(0);
   const lotFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Tracks the last server-sent timer value and when we received it, so we can
+  // interpolate the countdown between server ticks (prevents timer drift/jumpiness)
+  const timerSyncRef = useRef<{ remaining: number; receivedAt: number } | null>(null);
+  const pausedRef = useRef(false);
+  useEffect(() => { pausedRef.current = paused; }, [paused]);
 
   // ── Derived ───────────────────────────────────────────────────────────────
   const isCommissioner = league?.commissionerId === user?.uid;
@@ -171,6 +176,21 @@ export default function AuctionPage() {
   const minNextBid = currentLot
     ? (currentLot.currentBidderId === null ? minOpeningBid : currentLot.currentBid + minBidIncrement)
     : minOpeningBid;
+
+  // ── Local timer interpolation ─────────────────────────────────────────────
+  // Runs every 250ms to count down between server ticks. Without this, the
+  // display only updates once per second when the server event arrives, which
+  // can look stale due to network jitter. The server tick is still authoritative.
+  useEffect(() => {
+    const tick = setInterval(() => {
+      if (!timerSyncRef.current || pausedRef.current) return;
+      const { remaining, receivedAt } = timerSyncRef.current;
+      const elapsed = (Date.now() - receivedAt) / 1000;
+      const local = Math.max(0, remaining - Math.floor(elapsed));
+      setTimerRemaining(local);
+    }, 250);
+    return () => clearInterval(tick);
+  }, []);
 
   // ── Toast helper ──────────────────────────────────────────────────────────
   function toast(type: Toast['type'], message: string) {
@@ -254,7 +274,9 @@ export default function AuctionPage() {
             currentBidderId,
             totalSeconds: session.countdownSeconds ?? 30,
           });
-          setTimerRemaining(timerRemaining ?? session.countdownSeconds ?? 30);
+          const initRemaining = timerRemaining ?? session.countdownSeconds ?? 30;
+          timerSyncRef.current = { remaining: initRemaining, receivedAt: Date.now() };
+          setTimerRemaining(initRemaining);
         }
 
         // Reconstruct completed lots
@@ -300,6 +322,7 @@ export default function AuctionPage() {
           currentBidderId: null,
           totalSeconds: lotTimer,
         });
+        timerSyncRef.current = { remaining: lotTimer, receivedAt: Date.now() };
         setTimerRemaining(lotTimer);
         setStatus('active');
         setLotFlash(null);
@@ -311,12 +334,18 @@ export default function AuctionPage() {
 
       socket.on('lot_paused', (data: any) => {
         setPaused(true);
-        if (data.timerRemaining !== undefined) setTimerRemaining(data.timerRemaining);
+        if (data.timerRemaining !== undefined) {
+          timerSyncRef.current = null; // stop interpolation while paused
+          setTimerRemaining(data.timerRemaining);
+        }
       });
 
       socket.on('lot_resumed', (data: any) => {
         setPaused(false);
-        if (data.timerRemaining !== undefined) setTimerRemaining(data.timerRemaining);
+        if (data.timerRemaining !== undefined) {
+          timerSyncRef.current = { remaining: data.timerRemaining, receivedAt: Date.now() };
+          setTimerRemaining(data.timerRemaining);
+        }
       });
 
       socket.on('new_high_bid', (data: any) => {
@@ -327,10 +356,14 @@ export default function AuctionPage() {
           if (wasMe && !isNowMe) toast('warn', `Outbid! New high bid: $${data.amount}`);
           return { ...prev, currentBid: data.amount, currentBidderId: data.bidderId };
         });
-        if (data.timerRemaining !== undefined) setTimerRemaining(data.timerRemaining);
+        if (data.timerRemaining !== undefined) {
+          timerSyncRef.current = { remaining: data.timerRemaining, receivedAt: Date.now() };
+          setTimerRemaining(data.timerRemaining);
+        }
       });
 
       socket.on('timer_update', (data: any) => {
+        timerSyncRef.current = { remaining: data.remaining, receivedAt: Date.now() };
         setTimerRemaining(data.remaining);
       });
 
@@ -358,6 +391,7 @@ export default function AuctionPage() {
         if (data.winnerId === userRef.current?.uid) {
           toast('success', `You won ${info?.name ?? data.teamId} for $${data.winningBid}!`);
         }
+        timerSyncRef.current = null;
         lotFlashTimerRef.current = setTimeout(() => {
           lotFlashTimerRef.current = null;
           setLotFlash(null); setCurrentLot(null); setStatus('waiting');
@@ -374,6 +408,7 @@ export default function AuctionPage() {
           winnerId: null, winnerName: null, winningBid: 0, passed: true,
         };
         setSoldLots(prev => [passed, ...prev]);
+        timerSyncRef.current = null;
         lotFlashTimerRef.current = setTimeout(() => {
           lotFlashTimerRef.current = null;
           setLotFlash(null); setCurrentLot(null); setStatus('waiting');
