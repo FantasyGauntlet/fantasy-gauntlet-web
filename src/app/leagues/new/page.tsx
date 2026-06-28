@@ -25,6 +25,8 @@ export default function NewLeaguePage() {
     memberCap: '',
     isPublic: false,
   });
+  const [retroMode, setRetroMode] = useState(false);
+  const [retroYear, setRetroYear] = useState(new Date().getFullYear() - 1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [sportsError, setSportsError] = useState('');
@@ -56,6 +58,7 @@ export default function NewLeaguePage() {
         selectedSports: form.selectedSports,
         memberCap: form.memberCap ? Number(form.memberCap) : null,
         isPublic: form.isPublic,
+        ...(retroMode ? { referenceDate: `${retroYear}-10-01` } : {}),
       });
       router.push(`/leagues/${league.id}`);
     } catch (e: unknown) {
@@ -194,6 +197,39 @@ export default function NewLeaguePage() {
                   </button>
                 );
               })}
+            </div>
+          )}
+        </div>
+
+        {/* Retroactive league (temporary feature) */}
+        <div className="bg-card border border-warn/30 rounded-2xl p-5">
+          <label className="flex items-center gap-3 cursor-pointer">
+            <div
+              onClick={() => setRetroMode(r => !r)}
+              className={`w-9 h-5 rounded-full transition-colors relative flex-shrink-0 ${retroMode ? 'bg-warn' : 'bg-field-2 border border-line-2'}`}
+            >
+              <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${retroMode ? 'translate-x-4' : 'translate-x-0.5'}`} />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-copy">Past season league</p>
+              <p className="text-xs text-copy-3">Retroactively create a league for a previous year</p>
+            </div>
+          </label>
+          {retroMode && (
+            <div className="mt-4">
+              <label className={labelCls}>Season year</label>
+              <select
+                value={retroYear}
+                onChange={e => setRetroYear(Number(e.target.value))}
+                className={inputCls}
+              >
+                {[2025, 2024, 2023, 2022].map(y => (
+                  <option key={y} value={y}>{y}–{y + 1} season</option>
+                ))}
+              </select>
+              <p className="text-xs text-copy-3 mt-2">
+                Uses Oct 1, {retroYear} as the reference date to find the correct seasons for each sport.
+              </p>
             </div>
           )}
         </div>
