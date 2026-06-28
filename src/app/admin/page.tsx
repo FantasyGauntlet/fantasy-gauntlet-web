@@ -12,7 +12,6 @@ interface SportLeague { id: string; name: string; }
 interface Team { id: string; name: string; logoUrl?: string | null; }
 interface Season { id: string; label: string; }
 interface BonusPoint { id: string; teamId: string; teamName: string; seasonId: string; seasonLabel: string; sportLeagueId: string; label: string; points: number; awardedAt: string; }
-interface FantasyLeague { id: string; name: string; selectedSports: string[]; transactionDeadline?: string | null; }
 
 const LEAGUE_ACRONYMS = new Set(['nhl', 'nba', 'nfl', 'mlb', 'ucl', 'ncaa', 'mls', 'fifa', 'ufc']);
 function formatLeagueName(id: string): string {
@@ -238,7 +237,7 @@ export default function AdminPage() {
   const totalPresetCount = Object.values(presetTeams).reduce((sum, ts) => sum + ts.length, 0);
 
   // ── Deadlines ──────────────────────────────────────────────────────────────
-  const [allLeagues, setAllLeagues] = useState<FantasyLeague[]>([]);
+  const [savedDeadlines, setSavedDeadlines] = useState<Record<string, string>>({});
   const [deadlinesLoaded, setDeadlinesLoaded] = useState(false);
   const [deadlineDrafts, setDeadlineDrafts] = useState<Record<string, string>>({});
   const [deadlineStatuses, setDeadlineStatuses] = useState<Record<string, 'idle' | 'loading' | 'success' | 'error'>>({});
@@ -246,39 +245,35 @@ export default function AdminPage() {
   useEffect(() => {
     if (tab !== 'deadlines' || deadlinesLoaded) return;
     setDeadlinesLoaded(true);
-    api.get<FantasyLeague[]>('/admin/leagues')
-      .then(leagues => {
-        setAllLeagues(leagues);
-        const drafts: Record<string, string> = {};
-        for (const l of leagues) {
-          drafts[l.id] = l.transactionDeadline ?? '';
-        }
-        setDeadlineDrafts(drafts);
+    api.get<Record<string, string>>('/sports/deadlines')
+      .then(dl => {
+        setSavedDeadlines(dl ?? {});
+        setDeadlineDrafts(dl ?? {});
       })
       .catch(() => {});
   }, [tab, deadlinesLoaded]);
 
-  async function saveDeadline(leagueId: string) {
-    setDeadlineStatuses(s => ({ ...s, [leagueId]: 'loading' }));
+  async function saveDeadline(sportId: string) {
+    setDeadlineStatuses(s => ({ ...s, [sportId]: 'loading' }));
     try {
-      const date = deadlineDrafts[leagueId] || null;
-      await api.patch(`/admin/leagues/${leagueId}/deadline`, { date });
-      setAllLeagues(ls => ls.map(l => l.id === leagueId ? { ...l, transactionDeadline: date } : l));
-      setDeadlineStatuses(s => ({ ...s, [leagueId]: 'success' }));
+      const date = deadlineDrafts[sportId] || null;
+      await api.patch(`/sports/deadlines/${sportId}`, { date });
+      setSavedDeadlines(d => date ? { ...d, [sportId]: date } : Object.fromEntries(Object.entries(d).filter(([k]) => k !== sportId)));
+      setDeadlineStatuses(s => ({ ...s, [sportId]: 'success' }));
     } catch {
-      setDeadlineStatuses(s => ({ ...s, [leagueId]: 'error' }));
+      setDeadlineStatuses(s => ({ ...s, [sportId]: 'error' }));
     }
   }
 
-  async function clearDeadline(leagueId: string) {
-    setDeadlineDrafts(d => ({ ...d, [leagueId]: '' }));
-    setDeadlineStatuses(s => ({ ...s, [leagueId]: 'loading' }));
+  async function clearDeadline(sportId: string) {
+    setDeadlineDrafts(d => ({ ...d, [sportId]: '' }));
+    setDeadlineStatuses(s => ({ ...s, [sportId]: 'loading' }));
     try {
-      await api.patch(`/admin/leagues/${leagueId}/deadline`, { date: null });
-      setAllLeagues(ls => ls.map(l => l.id === leagueId ? { ...l, transactionDeadline: null } : l));
-      setDeadlineStatuses(s => ({ ...s, [leagueId]: 'success' }));
+      await api.patch(`/sports/deadlines/${sportId}`, { date: null });
+      setSavedDeadlines(d => Object.fromEntries(Object.entries(d).filter(([k]) => k !== sportId)));
+      setDeadlineStatuses(s => ({ ...s, [sportId]: 'success' }));
     } catch {
-      setDeadlineStatuses(s => ({ ...s, [leagueId]: 'error' }));
+      setDeadlineStatuses(s => ({ ...s, [sportId]: 'error' }));
     }
   }
 
@@ -702,33 +697,33 @@ export default function AdminPage() {
           <div className="bg-card border border-line rounded-2xl p-5">
             <h2 className="text-sm font-semibold text-copy mb-1">Transaction Deadlines</h2>
             <p className="text-xs text-copy-3 mb-5">
-              Set a date per league after which trades and waiver claims are blocked. Leave blank for no deadline.
+              Set a sport-wide deadline. Once the date is reached, trades and waiver claims involving that sport are blocked across all leagues.
             </p>
 
-            {allLeagues.length === 0 ? (
-              <p className="text-copy-3 text-sm">No leagues found.</p>
+            {sports.length === 0 ? (
+              <div className="flex items-center gap-2 text-copy-3 text-sm py-2">
+                <Spinner />
+                Loading sports...
+              </div>
             ) : (
               <div className="space-y-1">
-                {allLeagues.map(league => {
-                  const draft = deadlineDrafts[league.id] ?? '';
-                  const status = deadlineStatuses[league.id] ?? 'idle';
-                  const hasDeadline = !!league.transactionDeadline;
+                {sports.map(sport => {
+                  const draft = deadlineDrafts[sport.id] ?? '';
+                  const status = deadlineStatuses[sport.id] ?? 'idle';
+                  const savedDate = savedDeadlines[sport.id];
                   const today = new Date().toISOString().slice(0, 10);
-                  const isLocked = hasDeadline && today >= league.transactionDeadline!;
+                  const isLocked = !!savedDate && today >= savedDate;
 
                   return (
-                    <div key={league.id} className="flex items-center gap-3 py-3 border-b border-line/50 last:border-0">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-copy truncate">{league.name}</p>
-                        <p className="text-xs text-copy-3 mt-0.5">{league.selectedSports.map(s => formatLeagueName(s)).join(' · ')}</p>
-                      </div>
+                    <div key={sport.id} className="flex items-center gap-3 py-3 border-b border-line/50 last:border-0">
+                      <p className="flex-1 text-sm font-medium text-copy">{sport.name}</p>
 
                       {isLocked && (
                         <span className="flex-shrink-0 text-xs font-medium text-danger bg-danger-bg border border-danger/20 px-2 py-0.5 rounded-full">
                           Locked
                         </span>
                       )}
-                      {hasDeadline && !isLocked && (
+                      {savedDate && !isLocked && (
                         <span className="flex-shrink-0 text-xs font-medium text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
                           Set
                         </span>
@@ -738,14 +733,14 @@ export default function AdminPage() {
                         type="date"
                         value={draft}
                         onChange={e => {
-                          setDeadlineDrafts(d => ({ ...d, [league.id]: e.target.value }));
-                          setDeadlineStatuses(s => ({ ...s, [league.id]: 'idle' }));
+                          setDeadlineDrafts(d => ({ ...d, [sport.id]: e.target.value }));
+                          setDeadlineStatuses(s => ({ ...s, [sport.id]: 'idle' }));
                         }}
                         className="bg-field border border-line-2 rounded-lg px-3 py-1.5 text-sm text-copy focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors"
                       />
 
                       <button
-                        onClick={() => saveDeadline(league.id)}
+                        onClick={() => saveDeadline(sport.id)}
                         disabled={status === 'loading'}
                         className="flex-shrink-0 flex items-center gap-1 bg-brand hover:bg-brand-2 disabled:opacity-50 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
                       >
@@ -753,9 +748,9 @@ export default function AdminPage() {
                         Save
                       </button>
 
-                      {hasDeadline && (
+                      {savedDate && (
                         <button
-                          onClick={() => clearDeadline(league.id)}
+                          onClick={() => clearDeadline(sport.id)}
                           disabled={status === 'loading'}
                           className="flex-shrink-0 text-xs text-danger hover:text-danger/80 px-2 py-1.5 rounded-lg hover:bg-danger-bg transition-colors disabled:opacity-50"
                         >
