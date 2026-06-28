@@ -2803,7 +2803,6 @@ function SettingsTab({
                   <option value="manual">Manual — commissioner picks who nominates</option>
                   <option value="random-disclosed">Random (disclosed) — order shown to all</option>
                   <option value="random-hidden">Random (hidden) — revealed one at a time</option>
-                  <option value="defined">Defined — set order in advance</option>
                 </select>
               </div>
               <button type="submit" disabled={saving}
