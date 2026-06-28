@@ -284,7 +284,6 @@ export default function AdminPage() {
   const [leagueSearch, setLeagueSearch] = useState('');
   const [expandedLeagues, setExpandedLeagues] = useState<Set<string>>(new Set());
   const [leagueStatuses, setLeagueStatuses] = useState<Record<string, { status: 'idle' | 'loading' | 'success' | 'error'; message: string }>>({});
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   useEffect(() => {
     if (tab !== 'leagues' || leaguesLoaded) return;
@@ -306,17 +305,6 @@ export default function AdminPage() {
       const updated = await api.patch<AdminLeague>(`/admin/leagues/${leagueId}/state`, { state });
       setAllLeagues(ls => ls.map(l => l.id === leagueId ? { ...l, state: updated.state } : l));
       setLeagueStatuses(s => ({ ...s, [leagueId]: { status: 'success', message: `→ ${state}` } }));
-    } catch (e: unknown) {
-      setLeagueStatuses(s => ({ ...s, [leagueId]: { status: 'error', message: e instanceof Error ? e.message : 'Failed' } }));
-    }
-  }
-
-  async function forceDelete(leagueId: string) {
-    setLeagueStatuses(s => ({ ...s, [leagueId]: { status: 'loading', message: '' } }));
-    setDeleteConfirm(null);
-    try {
-      await api.delete(`/admin/leagues/${leagueId}`);
-      setAllLeagues(ls => ls.filter(l => l.id !== leagueId));
     } catch (e: unknown) {
       setLeagueStatuses(s => ({ ...s, [leagueId]: { status: 'error', message: e instanceof Error ? e.message : 'Failed' } }));
     }
@@ -929,33 +917,21 @@ export default function AdminPage() {
                         </p>
                       )}
 
-                      {/* Delete */}
+                      {/* Open league */}
                       <div className="pt-1 border-t border-line/50">
-                        {deleteConfirm === league.id ? (
-                          <div className="flex items-center gap-3">
-                            <p className="text-xs text-danger flex-1">Delete permanently? This cannot be undone.</p>
-                            <button
-                              onClick={() => forceDelete(league.id)}
-                              className="text-xs font-semibold text-white bg-danger hover:bg-danger/80 px-3 py-1.5 rounded-lg transition-colors"
-                            >
-                              Confirm Delete
-                            </button>
-                            <button
-                              onClick={() => setDeleteConfirm(null)}
-                              className="text-xs text-copy-3 hover:text-copy px-2 py-1.5 transition-colors"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => setDeleteConfirm(league.id)}
-                            disabled={lStatus?.status === 'loading'}
-                            className="text-xs text-danger hover:text-danger/80 px-3 py-1.5 rounded-lg hover:bg-danger-bg transition-colors disabled:opacity-50"
-                          >
-                            Delete League
-                          </button>
-                        )}
+                        <a
+                          href={`/leagues/${league.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 text-xs font-medium text-brand hover:text-brand-2 px-3 py-1.5 rounded-lg hover:bg-brand/5 transition-colors"
+                        >
+                          Open League
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                            <polyline points="15 3 21 3 21 9" />
+                            <line x1="10" y1="14" x2="21" y2="3" />
+                          </svg>
+                        </a>
                       </div>
                     </div>
                   )}
