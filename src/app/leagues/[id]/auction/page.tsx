@@ -899,6 +899,16 @@ export default function AuctionPage() {
               </div>
             )}
 
+            {/* Teams remaining count for random-hidden (no queue revealed) */}
+            {nominationMode === 'random-hidden' && (availableTeams.length > 0 || !!currentLot) && (
+              <div className="bg-card border border-line rounded-2xl px-4 py-3 flex items-center justify-between">
+                <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide">Teams Remaining</p>
+                <span className="text-2xl font-bold text-copy tabular-nums">
+                  {availableTeams.length + (currentLot ? 1 : 0)}
+                </span>
+              </div>
+            )}
+
             {/* Up Next queue — hidden for random-hidden nomination mode */}
             {upcomingQueue.length > 0 && nominationMode !== 'random-hidden' && (
               <div className="bg-card border border-line rounded-2xl p-4">
