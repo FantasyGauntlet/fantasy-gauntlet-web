@@ -125,10 +125,10 @@ export default function AdminPage() {
 
   const [bonusYearFilter, setBonusYearFilter] = useState('');
 
-  const bonusYears = [...new Set(bonusList.map(b => b.seasonLabel))].sort((a, b) => b.localeCompare(a));
+  const bonusYears = [...new Set(bonusList.map(b => b.seasonLabel.split('-')[0]))].sort((a, b) => b.localeCompare(a));
 
   const filteredBonusList = bonusYearFilter
-    ? bonusList.filter(b => b.seasonLabel === bonusYearFilter)
+    ? bonusList.filter(b => b.seasonLabel.split('-')[0] === bonusYearFilter)
     : bonusList;
 
   const bonusBySport = filteredBonusList.reduce<Record<string, BonusPoint[]>>((acc, b) => {
@@ -469,7 +469,10 @@ export default function AdminPage() {
                     className="bg-field border border-line-2 rounded-lg px-3 py-1.5 text-xs text-copy focus:outline-none focus:border-brand transition-colors"
                   >
                     <option value="">All years</option>
-                    {bonusYears.map(y => <option key={y} value={y}>{y}</option>)}
+                    {bonusYears.map(y => {
+                      const next = String(parseInt(y) + 1).slice(-2);
+                      return <option key={y} value={y}>{y}-{next}</option>;
+                    })}
                   </select>
                 )}
               </div>
