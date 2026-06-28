@@ -22,8 +22,6 @@ export default function NewLeaguePage() {
   const [form, setForm] = useState({
     name: '',
     selectedSports: [] as string[],
-    startDate: '',
-    endDate: '',
     memberCap: '',
     isPublic: false,
   });
@@ -56,8 +54,6 @@ export default function NewLeaguePage() {
       const league = await api.post<{ id: string }>('/leagues', {
         name: form.name,
         selectedSports: form.selectedSports,
-        startDate: form.startDate,
-        endDate: form.endDate,
         memberCap: form.memberCap ? Number(form.memberCap) : null,
         isPublic: form.isPublic,
       });
@@ -103,27 +99,6 @@ export default function NewLeaguePage() {
                 className={inputCls}
                 placeholder="e.g. The Gauntlet 2025"
               />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className={labelCls}>Start Date</label>
-                <input
-                  required type="date"
-                  value={form.startDate}
-                  onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))}
-                  className={inputCls}
-                />
-              </div>
-              <div>
-                <label className={labelCls}>End Date</label>
-                <input
-                  required type="date"
-                  value={form.endDate}
-                  onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))}
-                  className={inputCls}
-                />
-              </div>
             </div>
 
             <div>

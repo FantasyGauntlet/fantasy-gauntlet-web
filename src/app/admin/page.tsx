@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
 import NavBar from '@/components/NavBar';
@@ -9,7 +9,7 @@ const BASE = 'https://fantasy-gauntlet-backend-production.up.railway.app/api/v1'
 
 interface SyncResult { label: string; status: 'idle' | 'loading' | 'success' | 'error'; message: string; }
 interface SportLeague { id: string; name: string; }
-interface Team { id: string; name: string; }
+interface Team { id: string; name: string; logoUrl?: string | null; }
 interface Season { id: string; label: string; }
 interface BonusPoint { id: string; teamId: string; teamName: string; seasonId: string; seasonLabel: string; sportLeagueId: string; label: string; points: number; awardedAt: string; }
 
@@ -29,7 +29,7 @@ const SYNCS = [
   { key: 'records',      label: 'Sync Records',             endpoint: '/admin/ingestion/records' },
 ];
 
-type Tab = 'sync' | 'bonus' | 'scoring';
+type Tab = 'sync' | 'bonus' | 'scoring' | 'preset';
 
 function Spinner({ size = 'sm' }: { size?: 'sm' | 'md' }) {
   const s = size === 'sm' ? 'w-4 h-4 border-[1.5px]' : 'w-6 h-6 border-2';
@@ -123,7 +123,6 @@ export default function AdminPage() {
     !teamFilter.trim() || t.name.toLowerCase().includes(teamFilter.toLowerCase())
   );
 
-  // Group bonus list by sport league
   const bonusBySport = bonusList.reduce<Record<string, BonusPoint[]>>((acc, b) => {
     (acc[b.sportLeagueId] ??= []).push(b);
     return acc;
@@ -150,10 +149,90 @@ export default function AdminPage() {
     }
   }
 
+  // ── Auction Preset ─────────────────────────────────────────────────────────
+  const [presetTeams, setPresetTeams] = useState<Record<string, Team[]>>({});
+  const [presetLoading, setPresetLoading] = useState(false);
+  const [selectedPresetIds, setSelectedPresetIds] = useState<Set<string>>(new Set());
+  const [presetSportFilter, setPresetSportFilter] = useState<Record<string, string>>({});
+  const [presetExpanded, setPresetExpanded] = useState<Set<string>>(new Set());
+  const [presetSaveStatus, setPresetSaveStatus] = useState<{ status: 'idle' | 'loading' | 'success' | 'error'; message: string }>({ status: 'idle', message: '' });
+  const presetLoadedRef = useRef(false);
+
+  useEffect(() => {
+    if (tab !== 'preset' || presetLoadedRef.current || presetLoading || sports.length === 0) return;
+    presetLoadedRef.current = true;
+    setPresetLoading(true);
+    (async () => {
+      try {
+        const [entries, preset] = await Promise.all([
+          Promise.all(
+            sports.map(s =>
+              fetch(`${BASE}/sports/leagues/${s.id}/teams`)
+                .then(r => r.json())
+                .then((ts: Team[]) => [s.id, [...ts].sort((a, b) => a.name.localeCompare(b.name))] as [string, Team[]])
+                .catch(() => [s.id, []] as [string, Team[]])
+            )
+          ),
+          api.get<{ teamIds: string[] } | null>('/sports/preset').catch(() => null),
+        ]);
+        setPresetTeams(Object.fromEntries(entries));
+        if (preset && Array.isArray(preset.teamIds)) {
+          setSelectedPresetIds(new Set(preset.teamIds));
+        }
+        setPresetExpanded(new Set(sports.map(s => s.id)));
+      } finally {
+        setPresetLoading(false);
+      }
+    })();
+  }, [tab, sports, presetLoading]);
+
+  function togglePresetSport(sportId: string) {
+    setPresetExpanded(prev => {
+      const next = new Set(prev);
+      if (next.has(sportId)) next.delete(sportId); else next.add(sportId);
+      return next;
+    });
+  }
+
+  function togglePresetTeam(teamId: string) {
+    setSelectedPresetIds(prev => {
+      const next = new Set(prev);
+      if (next.has(teamId)) next.delete(teamId); else next.add(teamId);
+      return next;
+    });
+  }
+
+  function selectAllForSport(sportId: string) {
+    const ids = (presetTeams[sportId] ?? []).map(t => t.id);
+    setSelectedPresetIds(prev => {
+      const next = new Set(prev);
+      ids.forEach(id => next.add(id));
+      return next;
+    });
+  }
+
+  function deselectAllForSport(sportId: string) {
+    const ids = new Set((presetTeams[sportId] ?? []).map(t => t.id));
+    setSelectedPresetIds(prev => new Set([...prev].filter(id => !ids.has(id))));
+  }
+
+  async function savePreset() {
+    setPresetSaveStatus({ status: 'loading', message: 'Saving...' });
+    try {
+      const res = await api.post<{ saved: number }>('/sports/preset', { teamIds: [...selectedPresetIds] });
+      setPresetSaveStatus({ status: 'success', message: `Saved ${res.saved} teams to preset.` });
+    } catch (e: unknown) {
+      setPresetSaveStatus({ status: 'error', message: e instanceof Error ? e.message : 'Failed' });
+    }
+  }
+
+  const totalPresetCount = Object.values(presetTeams).reduce((sum, ts) => sum + ts.length, 0);
+
   const tabs: { key: Tab; label: string }[] = [
     { key: 'sync',    label: 'Data Sync' },
     { key: 'bonus',   label: 'Bonus Points' },
     { key: 'scoring', label: 'League Scoring' },
+    { key: 'preset',  label: 'Auction Preset' },
   ];
 
   return (
@@ -407,6 +486,148 @@ export default function AdminPage() {
                 scoringResult.status === 'error' ? 'text-danger' : 'text-copy-3'
               }`}>{scoringResult.message}</p>
             )}
+          </div>
+        )}
+
+        {/* ── Auction Preset ── */}
+        {tab === 'preset' && (
+          <div className="space-y-4">
+            {/* Header card */}
+            <div className="bg-card border border-line rounded-2xl p-5">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-sm font-semibold text-copy">Auction Draft Preset</h2>
+                  <p className="text-xs text-copy-3 mt-1">
+                    Select the teams available in every league&apos;s auction draft. Use this to trim the NCAA pool without removing teams from the system.
+                  </p>
+                  {!presetLoading && totalPresetCount > 0 && (
+                    <p className="text-xs text-copy-2 mt-2">
+                      <span className="font-semibold text-copy">{selectedPresetIds.size}</span>
+                      <span className="text-copy-3"> / {totalPresetCount} teams selected</span>
+                    </p>
+                  )}
+                </div>
+                <button
+                  onClick={savePreset}
+                  disabled={presetLoading || presetSaveStatus.status === 'loading'}
+                  className="flex-shrink-0 flex items-center gap-1.5 bg-brand hover:bg-brand-2 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors"
+                >
+                  {presetSaveStatus.status === 'loading' ? <Spinner /> : null}
+                  {presetSaveStatus.status === 'loading' ? 'Saving...' : 'Save Preset'}
+                </button>
+              </div>
+              {presetSaveStatus.status !== 'idle' && (
+                <p className={`text-xs mt-3 ${
+                  presetSaveStatus.status === 'success' ? 'text-positive' :
+                  presetSaveStatus.status === 'error' ? 'text-danger' : 'text-copy-3'
+                }`}>{presetSaveStatus.message}</p>
+              )}
+            </div>
+
+            {/* Loading state */}
+            {presetLoading && (
+              <div className="flex items-center justify-center gap-3 py-12 text-copy-3">
+                <Spinner size="md" />
+                <span className="text-sm">Loading teams...</span>
+              </div>
+            )}
+
+            {/* Sport sections */}
+            {!presetLoading && sports.map(sport => {
+              const sportTeams = presetTeams[sport.id] ?? [];
+              const isOpen = presetExpanded.has(sport.id);
+              const filterStr = presetSportFilter[sport.id] ?? '';
+              const filteredSportTeams = filterStr.trim()
+                ? sportTeams.filter(t => t.name.toLowerCase().includes(filterStr.toLowerCase()))
+                : sportTeams;
+              const selectedCount = sportTeams.filter(t => selectedPresetIds.has(t.id)).length;
+              const allSelected = sportTeams.length > 0 && selectedCount === sportTeams.length;
+
+              return (
+                <div key={sport.id} className="bg-card border border-line rounded-2xl overflow-hidden">
+                  {/* Section header */}
+                  <button
+                    type="button"
+                    onClick={() => togglePresetSport(sport.id)}
+                    className="w-full flex items-center justify-between px-5 py-4 hover:bg-field/30 transition-colors text-left"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <svg
+                        width="12" height="12" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
+                        className={`text-copy-3 transition-transform flex-shrink-0 ${isOpen ? 'rotate-90' : ''}`}
+                      >
+                        <polyline points="9 18 15 12 9 6" />
+                      </svg>
+                      <span className="text-sm font-semibold text-copy">{sport.name}</span>
+                    </div>
+                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${
+                      allSelected
+                        ? 'bg-positive/10 text-positive border-positive/20'
+                        : selectedCount > 0
+                          ? 'bg-brand/10 text-brand border-brand/20'
+                          : 'bg-field text-copy-3 border-line'
+                    }`}>
+                      {selectedCount}/{sportTeams.length}
+                    </span>
+                  </button>
+
+                  {/* Section body */}
+                  {isOpen && (
+                    <div className="border-t border-line">
+                      {/* Controls */}
+                      <div className="px-5 py-3 flex items-center gap-3 border-b border-line/50 bg-field/20">
+                        <input
+                          value={filterStr}
+                          onChange={e => setPresetSportFilter(f => ({ ...f, [sport.id]: e.target.value }))}
+                          placeholder={`Search ${sport.name}...`}
+                          className="flex-1 bg-field border border-line-2 rounded-lg px-3 py-1.5 text-xs text-copy placeholder-copy-3 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => allSelected ? deselectAllForSport(sport.id) : selectAllForSport(sport.id)}
+                          className="flex-shrink-0 text-xs text-brand hover:text-brand-2 font-medium px-3 py-1.5 rounded-lg hover:bg-brand/5 transition-colors"
+                        >
+                          {allSelected ? 'Deselect all' : 'Select all'}
+                        </button>
+                      </div>
+
+                      {/* Team list */}
+                      <div className="max-h-72 overflow-y-auto divide-y divide-line/40">
+                        {filteredSportTeams.length === 0 ? (
+                          <p className="text-copy-3 text-xs px-5 py-4">
+                            {filterStr.trim() ? 'No teams match your search.' : 'No teams loaded.'}
+                          </p>
+                        ) : filteredSportTeams.map(team => {
+                          const checked = selectedPresetIds.has(team.id);
+                          return (
+                            <label
+                              key={team.id}
+                              className="flex items-center gap-3 px-5 py-2.5 cursor-pointer hover:bg-field/40 transition-colors"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => togglePresetTeam(team.id)}
+                                className="w-4 h-4 rounded accent-brand flex-shrink-0"
+                              />
+                              {team.logoUrl && (
+                                <img
+                                  src={team.logoUrl}
+                                  alt=""
+                                  className="w-5 h-5 object-contain flex-shrink-0"
+                                />
+                              )}
+                              <span className="text-sm text-copy">{team.name}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </main>
