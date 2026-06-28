@@ -12,6 +12,7 @@ interface SportLeague { id: string; name: string; }
 interface Team { id: string; name: string; logoUrl?: string | null; }
 interface Season { id: string; label: string; }
 interface BonusPoint { id: string; teamId: string; teamName: string; seasonId: string; seasonLabel: string; sportLeagueId: string; label: string; points: number; awardedAt: string; }
+interface FantasyLeague { id: string; name: string; selectedSports: string[]; transactionDeadline?: string | null; }
 
 const LEAGUE_ACRONYMS = new Set(['nhl', 'nba', 'nfl', 'mlb', 'ucl', 'ncaa', 'mls', 'fifa', 'ufc']);
 function formatLeagueName(id: string): string {
@@ -29,7 +30,7 @@ const SYNCS = [
   { key: 'records',      label: 'Sync Records',             endpoint: '/admin/ingestion/records' },
 ];
 
-type Tab = 'sync' | 'bonus' | 'scoring' | 'preset';
+type Tab = 'sync' | 'bonus' | 'scoring' | 'preset' | 'deadlines';
 
 function Spinner({ size = 'sm' }: { size?: 'sm' | 'md' }) {
   const s = size === 'sm' ? 'w-4 h-4 border-[1.5px]' : 'w-6 h-6 border-2';
@@ -228,11 +229,57 @@ export default function AdminPage() {
 
   const totalPresetCount = Object.values(presetTeams).reduce((sum, ts) => sum + ts.length, 0);
 
+  // ── Deadlines ──────────────────────────────────────────────────────────────
+  const [allLeagues, setAllLeagues] = useState<FantasyLeague[]>([]);
+  const [deadlinesLoaded, setDeadlinesLoaded] = useState(false);
+  const [deadlineDrafts, setDeadlineDrafts] = useState<Record<string, string>>({});
+  const [deadlineStatuses, setDeadlineStatuses] = useState<Record<string, 'idle' | 'loading' | 'success' | 'error'>>({});
+
+  useEffect(() => {
+    if (tab !== 'deadlines' || deadlinesLoaded) return;
+    setDeadlinesLoaded(true);
+    api.get<FantasyLeague[]>('/admin/leagues')
+      .then(leagues => {
+        setAllLeagues(leagues);
+        const drafts: Record<string, string> = {};
+        for (const l of leagues) {
+          drafts[l.id] = l.transactionDeadline ?? '';
+        }
+        setDeadlineDrafts(drafts);
+      })
+      .catch(() => {});
+  }, [tab, deadlinesLoaded]);
+
+  async function saveDeadline(leagueId: string) {
+    setDeadlineStatuses(s => ({ ...s, [leagueId]: 'loading' }));
+    try {
+      const date = deadlineDrafts[leagueId] || null;
+      await api.patch(`/admin/leagues/${leagueId}/deadline`, { date });
+      setAllLeagues(ls => ls.map(l => l.id === leagueId ? { ...l, transactionDeadline: date } : l));
+      setDeadlineStatuses(s => ({ ...s, [leagueId]: 'success' }));
+    } catch {
+      setDeadlineStatuses(s => ({ ...s, [leagueId]: 'error' }));
+    }
+  }
+
+  async function clearDeadline(leagueId: string) {
+    setDeadlineDrafts(d => ({ ...d, [leagueId]: '' }));
+    setDeadlineStatuses(s => ({ ...s, [leagueId]: 'loading' }));
+    try {
+      await api.patch(`/admin/leagues/${leagueId}/deadline`, { date: null });
+      setAllLeagues(ls => ls.map(l => l.id === leagueId ? { ...l, transactionDeadline: null } : l));
+      setDeadlineStatuses(s => ({ ...s, [leagueId]: 'success' }));
+    } catch {
+      setDeadlineStatuses(s => ({ ...s, [leagueId]: 'error' }));
+    }
+  }
+
   const tabs: { key: Tab; label: string }[] = [
-    { key: 'sync',    label: 'Data Sync' },
-    { key: 'bonus',   label: 'Bonus Points' },
-    { key: 'scoring', label: 'League Scoring' },
-    { key: 'preset',  label: 'Auction Preset' },
+    { key: 'sync',      label: 'Data Sync' },
+    { key: 'bonus',     label: 'Bonus Points' },
+    { key: 'scoring',   label: 'League Scoring' },
+    { key: 'preset',    label: 'Auction Preset' },
+    { key: 'deadlines', label: 'Deadlines' },
   ];
 
   return (
@@ -628,6 +675,87 @@ export default function AdminPage() {
                 </div>
               );
             })}
+          </div>
+        )}
+        {/* ── Deadlines ── */}
+        {tab === 'deadlines' && (
+          <div className="bg-card border border-line rounded-2xl p-5">
+            <h2 className="text-sm font-semibold text-copy mb-1">Transaction Deadlines</h2>
+            <p className="text-xs text-copy-3 mb-5">
+              Set a date per league after which trades and waiver claims are blocked. Leave blank for no deadline.
+            </p>
+
+            {allLeagues.length === 0 ? (
+              <p className="text-copy-3 text-sm">No leagues found.</p>
+            ) : (
+              <div className="space-y-1">
+                {allLeagues.map(league => {
+                  const draft = deadlineDrafts[league.id] ?? '';
+                  const status = deadlineStatuses[league.id] ?? 'idle';
+                  const hasDeadline = !!league.transactionDeadline;
+                  const today = new Date().toISOString().slice(0, 10);
+                  const isLocked = hasDeadline && today >= league.transactionDeadline!;
+
+                  return (
+                    <div key={league.id} className="flex items-center gap-3 py-3 border-b border-line/50 last:border-0">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-copy truncate">{league.name}</p>
+                        <p className="text-xs text-copy-3 mt-0.5">{league.selectedSports.map(s => formatLeagueName(s)).join(' · ')}</p>
+                      </div>
+
+                      {isLocked && (
+                        <span className="flex-shrink-0 text-xs font-medium text-danger bg-danger-bg border border-danger/20 px-2 py-0.5 rounded-full">
+                          Locked
+                        </span>
+                      )}
+                      {hasDeadline && !isLocked && (
+                        <span className="flex-shrink-0 text-xs font-medium text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                          Set
+                        </span>
+                      )}
+
+                      <input
+                        type="date"
+                        value={draft}
+                        onChange={e => {
+                          setDeadlineDrafts(d => ({ ...d, [league.id]: e.target.value }));
+                          setDeadlineStatuses(s => ({ ...s, [league.id]: 'idle' }));
+                        }}
+                        className="bg-field border border-line-2 rounded-lg px-3 py-1.5 text-sm text-copy focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors"
+                      />
+
+                      <button
+                        onClick={() => saveDeadline(league.id)}
+                        disabled={status === 'loading'}
+                        className="flex-shrink-0 flex items-center gap-1 bg-brand hover:bg-brand-2 disabled:opacity-50 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+                      >
+                        {status === 'loading' ? <Spinner /> : null}
+                        Save
+                      </button>
+
+                      {hasDeadline && (
+                        <button
+                          onClick={() => clearDeadline(league.id)}
+                          disabled={status === 'loading'}
+                          className="flex-shrink-0 text-xs text-danger hover:text-danger/80 px-2 py-1.5 rounded-lg hover:bg-danger-bg transition-colors disabled:opacity-50"
+                        >
+                          Clear
+                        </button>
+                      )}
+
+                      {status === 'success' && (
+                        <svg className="w-4 h-4 text-positive flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                      {status === 'error' && (
+                        <span className="text-xs text-danger flex-shrink-0">Failed</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </main>
