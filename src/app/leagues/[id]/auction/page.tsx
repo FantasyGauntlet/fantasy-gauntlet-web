@@ -159,6 +159,8 @@ export default function AuctionPage() {
   const [selectedNomination, setSelectedNomination] = useState('');
   const [auctionErrorMsg, setAuctionErrorMsg] = useState('');
   const [confirmReset, setConfirmReset] = useState(false);
+  const [bidFlash, setBidFlash] = useState(false);
+  const [pendingBidAmt, setPendingBidAmt] = useState<number | null>(null);
 
   const socketRef = useRef<Socket | null>(null);
   const toastId = useRef(0);
@@ -190,7 +192,7 @@ export default function AuctionPage() {
       const elapsed = (Date.now() - receivedAt) / 1000;
       const local = Math.max(0, remaining - Math.floor(elapsed));
       setTimerRemaining(local);
-    }, 250);
+    }, 100);
     return () => clearInterval(tick);
   }, []);
 
@@ -331,6 +333,7 @@ export default function AuctionPage() {
         setPaused(false);
         setBidInput('');
         setBidError('');
+        setPendingBidAmt(null);
         setUpcomingQueue(q => q.filter(tid => tid !== data.teamId));
       });
 
@@ -358,6 +361,8 @@ export default function AuctionPage() {
           if (wasMe && !isNowMe) toast('warn', `Outbid! New high bid: $${data.amount}`);
           return { ...prev, currentBid: data.amount, currentBidderId: data.bidderId };
         });
+        setBidFlash(true);
+        setTimeout(() => setBidFlash(false), 500);
         if (data.timerRemaining !== undefined) {
           timerSyncRef.current = { remaining: data.timerRemaining, receivedAt: Date.now() };
           setTimerRemaining(data.timerRemaining);
@@ -457,11 +462,13 @@ export default function AuctionPage() {
         toast('success', `Bid of $${data.amount} placed`);
         setBidInput('');
         setBidError('');
+        setPendingBidAmt(null);
       });
 
       socket.on('bid_rejected', (data: any) => {
         setBidError(data.reason ?? 'Bid rejected');
         toast('error', data.reason ?? 'Bid rejected');
+        setPendingBidAmt(null);
       });
 
       socket.on('error', (data: any) => {
@@ -482,6 +489,7 @@ export default function AuctionPage() {
   function placeBid(amount: number) {
     if (!socketRef.current) return;
     setBidError('');
+    setPendingBidAmt(amount);
     socketRef.current.emit('place_bid', { amount });
   }
 
@@ -677,7 +685,7 @@ export default function AuctionPage() {
                 <div className="flex items-end gap-4 mb-4">
                   <div>
                     <p className="text-xs text-copy-3 mb-0.5">Current bid</p>
-                    <p className="text-4xl font-bold text-copy tabular-nums">${currentLot.currentBid}</p>
+                    <p className={`text-4xl font-bold tabular-nums transition-colors duration-300 ${bidFlash ? 'text-brand' : 'text-copy'}`}>${currentLot.currentBid}</p>
                   </div>
                   {currentLot.currentBidderId && (
                     <div className="mb-1">
@@ -707,15 +715,15 @@ export default function AuctionPage() {
                       />
                       <button
                         type="submit"
-                        disabled={iAmHighBidder || myBudget < minNextBid}
+                        disabled={myBudget < minNextBid}
                         className="bg-brand hover:bg-brand-2 disabled:opacity-40 text-white font-semibold px-5 py-2.5 rounded-xl transition-colors text-sm whitespace-nowrap"
                       >
-                        {iAmHighBidder ? 'High Bidder' : 'Place Bid'}
+                        {iAmHighBidder ? 'Raise Bid' : 'Place Bid'}
                       </button>
                     </div>
                     {bidError && <p className="text-danger text-xs">{bidError}</p>}
                     {/* Quick bid buttons */}
-                    {!iAmHighBidder && myBudget >= minNextBid && (
+                    {myBudget >= minNextBid && (
                       <div className="flex gap-2">
                         {[minNextBid, minNextBid + minBidIncrement * 4, minNextBid + minBidIncrement * 9, minNextBid + minBidIncrement * 24]
                           .filter((a, i, arr) => a <= myBudget && arr.indexOf(a) === i)
@@ -725,9 +733,14 @@ export default function AuctionPage() {
                               key={amt}
                               type="button"
                               onClick={() => placeBid(amt)}
-                              className="flex-1 text-xs bg-field hover:bg-field-2 border border-line text-copy-2 py-2 rounded-lg transition-colors"
+                              disabled={pendingBidAmt !== null}
+                              className={`flex-1 text-xs border border-line text-copy-2 py-2 rounded-lg transition-all active:scale-95 ${
+                                pendingBidAmt === amt
+                                  ? 'bg-brand/10 border-brand/30 text-brand'
+                                  : 'bg-field hover:bg-field-2'
+                              }`}
                             >
-                              ${amt}
+                              {pendingBidAmt === amt ? '…' : `$${amt}`}
                             </button>
                           ))}
                       </div>
