@@ -117,7 +117,7 @@ type TxEvent =
   | { type: 'trade'; id: string; date: string; proposerFantasyTeamId: string; receiverFantasyTeamId: string; offeredSportTeamIds: string[]; requestedSportTeamIds: string[]; }
   | { type: 'waiver'; id: string; date: string; claimantUserId: string; claimantDisplayName: string; addTeamId: string; dropTeamId: string; };
 
-type Tab = 'standings' | 'roster' | 'waivers' | 'rules' | 'settings' | 'commissioner';
+type Tab = 'standings' | 'roster' | 'waivers' | 'settings' | 'commissioner';
 
 const STATE_META: Record<string, { label: string; cls: string }> = {
   draft:     { label: 'Draft',     cls: 'bg-warn-bg text-warn border-warn/20' },
@@ -207,7 +207,6 @@ export default function LeaguePage() {
     { key: 'standings', label: 'Standings' },
     { key: 'roster', label: 'Roster' },
     { key: 'waivers', label: 'Waivers' },
-    { key: 'rules', label: 'Rules' },
     { key: 'settings', label: 'League' },
     ...(isCommissioner ? [{ key: 'commissioner' as Tab, label: 'Commissioner' }] : []),
   ];
@@ -285,7 +284,6 @@ export default function LeaguePage() {
           selectedSports={league.selectedSports}
         />
       )}
-      {tab === 'rules' && <RulesTab league={league} />}
       {tab === 'commissioner' && isCommissioner && (
         <CommissionerTab league={league} setLeague={setLeague} leagueId={id} />
       )}
@@ -2143,6 +2141,7 @@ function SettingsTab({
   fantasyTeams: FantasyTeam[];
 }) {
   const msgEndRef = useRef<HTMLDivElement>(null);
+  const [rulesOpen, setRulesOpen] = useState(false);
 
   const [transactions, setTransactions] = useState<TxEvent[]>([]);
   const [txLoading, setTxLoading] = useState(true);
@@ -2472,6 +2471,28 @@ function SettingsTab({
               : 'This is the first season of this league.'}
           </p>
         </div>
+      </div>
+
+      {/* ── Rules & Scoring (collapsible) ──────────────────────────────────────── */}
+      <div className="bg-card border border-line rounded-2xl overflow-hidden">
+        <button
+          onClick={() => setRulesOpen(v => !v)}
+          className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-field/50 transition-colors"
+        >
+          <p className="text-sm font-semibold text-copy">Rules &amp; Scoring</p>
+          <svg
+            width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+            className={`text-copy-3 transition-transform duration-200 ${rulesOpen ? 'rotate-180' : ''}`}
+          >
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </button>
+        {rulesOpen && (
+          <div className="border-t border-line px-5 py-5">
+            <RulesTab league={league} />
+          </div>
+        )}
       </div>
 
     </div>
@@ -2877,9 +2898,7 @@ function CommissionerTab({
 
 function RulesTab({ league }: { league: League }) {
   return (
-    <div className="bg-card border border-line rounded-2xl p-5 space-y-6">
-      <h2 className="text-sm font-semibold text-copy">Rules &amp; Scoring</h2>
-
+    <div className="space-y-6">
       <section className="space-y-5">
         <h3 className="text-xs font-semibold text-copy-3 uppercase tracking-widest">General Rules</h3>
 
