@@ -117,7 +117,7 @@ type TxEvent =
   | { type: 'trade'; id: string; date: string; proposerFantasyTeamId: string; receiverFantasyTeamId: string; offeredSportTeamIds: string[]; requestedSportTeamIds: string[]; }
   | { type: 'waiver'; id: string; date: string; claimantUserId: string; claimantDisplayName: string; addTeamId: string; dropTeamId: string; };
 
-type Tab = 'standings' | 'roster' | 'waivers' | 'settings';
+type Tab = 'standings' | 'roster' | 'waivers' | 'rules' | 'settings' | 'commissioner';
 
 const STATE_META: Record<string, { label: string; cls: string }> = {
   draft:     { label: 'Draft',     cls: 'bg-warn-bg text-warn border-warn/20' },
@@ -207,7 +207,9 @@ export default function LeaguePage() {
     { key: 'standings', label: 'Standings' },
     { key: 'roster', label: 'Roster' },
     { key: 'waivers', label: 'Waivers' },
+    { key: 'rules', label: 'Rules' },
     { key: 'settings', label: 'League' },
+    ...(isCommissioner ? [{ key: 'commissioner' as Tab, label: 'Commissioner' }] : []),
   ];
 
   return (
@@ -283,8 +285,12 @@ export default function LeaguePage() {
           selectedSports={league.selectedSports}
         />
       )}
+      {tab === 'rules' && <RulesTab league={league} />}
+      {tab === 'commissioner' && isCommissioner && (
+        <CommissionerTab league={league} setLeague={setLeague} leagueId={id} />
+      )}
       {tab === 'settings' && (
-        <SettingsTab league={league} setLeague={setLeague} isCommissioner={isCommissioner} leagueId={id} memberCount={members.length} previousLeagueId={league.previousLeagueId} userId={user?.uid} fantasyTeams={fantasyTeams} />
+        <SettingsTab league={league} isCommissioner={isCommissioner} leagueId={id} memberCount={members.length} previousLeagueId={league.previousLeagueId} userId={user?.uid} fantasyTeams={fantasyTeams} />
       )}
     </div>
   );
@@ -2126,10 +2132,9 @@ function WaiversTab({
 // ─── Settings Tab ─────────────────────────────────────────────────────────────
 
 function SettingsTab({
-  league, setLeague, isCommissioner, leagueId, memberCount, previousLeagueId, userId, fantasyTeams,
+  league, isCommissioner, leagueId, memberCount, previousLeagueId, userId, fantasyTeams,
 }: {
   league: League;
-  setLeague: React.Dispatch<React.SetStateAction<League | null>>;
   isCommissioner: boolean;
   leagueId: string;
   memberCount: number;
@@ -2137,33 +2142,7 @@ function SettingsTab({
   userId?: string;
   fantasyTeams: FantasyTeam[];
 }) {
-  const router = useRouter();
   const msgEndRef = useRef<HTMLDivElement>(null);
-
-  const [auctionForm, setAuctionForm] = useState({
-    startingBudget:   league.auctionConfig?.startingBudget   ?? 100,
-    minOpeningBid:    league.auctionConfig?.minOpeningBid    ?? 1,
-    minBidIncrement:  league.auctionConfig?.minBidIncrement  ?? 1,
-    nominationMode:   league.auctionConfig?.nominationMode   ?? 'manual',
-    countdownSeconds: league.auctionConfig?.countdownSeconds ?? 30,
-    maxWildcard:      league.auctionConfig?.maxWildcard      ?? 0,
-  });
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [deleteInput, setDeleteInput] = useState('');
-  const [deleting, setDeleting] = useState(false);
-  const [renewing, setRenewing] = useState(false);
-
-  const [topZoneEnabled, setTopZoneEnabled] = useState(!!(league.topZone));
-  const [topZoneCount, setTopZoneCount] = useState(league.topZone ?? 4);
-  const [bottomZoneEnabled, setBottomZoneEnabled] = useState(!!(league.bottomZone));
-  const [bottomZoneCount, setBottomZoneCount] = useState(league.bottomZone ?? 3);
-  const [zonesSaving, setZonesSaving] = useState(false);
-
-  const [waiverDay, setWaiverDay] = useState(league.waiverSettings?.processingDay ?? 'tuesday');
-  const [waiverHour, setWaiverHour] = useState(league.waiverSettings?.processingHour ?? 10);
-  const [waiverSettingsSaving, setWaiverSettingsSaving] = useState(false);
 
   const [transactions, setTransactions] = useState<TxEvent[]>([]);
   const [txLoading, setTxLoading] = useState(true);
@@ -2201,77 +2180,6 @@ function SettingsTab({
     () => new Map(fantasyTeams.map(ft => [ft.id, ft])),
     [fantasyTeams],
   );
-
-  const inputCls = 'w-full bg-field border border-line-2 rounded-xl px-4 py-2.5 text-copy text-sm focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors';
-
-  async function saveAuctionConfig(e: React.FormEvent) {
-    e.preventDefault();
-    setSaving(true);
-    try {
-      const updated = await api.patch<League>(`/leagues/${leagueId}/auction-config`, auctionForm);
-      setLeague(updated);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-    } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Failed to save');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleDeleteLeague() {
-    if (deleteInput !== 'delete') return;
-    setDeleting(true);
-    try {
-      await api.delete(`/leagues/${leagueId}`);
-      router.replace('/leagues');
-    } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : 'Failed to delete league');
-      setDeleting(false);
-    }
-  }
-
-  async function handleRenew() {
-    if (!confirm('Start a new season? Members will be carried over and the new league will be in draft state.')) return;
-    setRenewing(true);
-    try {
-      const newLeague = await api.post<{ id: string }>(`/leagues/${leagueId}/renew`);
-      router.push(`/leagues/${newLeague.id}`);
-    } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : 'Failed to renew league');
-      setRenewing(false);
-    }
-  }
-
-  async function saveTableZones() {
-    setZonesSaving(true);
-    try {
-      const updated = await api.patch<League>(`/leagues/${leagueId}/table-zones`, {
-        topZone: topZoneEnabled ? topZoneCount : null,
-        bottomZone: bottomZoneEnabled ? bottomZoneCount : null,
-      });
-      setLeague(updated);
-    } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : 'Failed to save');
-    } finally {
-      setZonesSaving(false);
-    }
-  }
-
-  async function saveWaiverSettings() {
-    setWaiverSettingsSaving(true);
-    try {
-      const updated = await api.patch<League>(`/leagues/${leagueId}/waiver-settings`, {
-        processingDay: waiverDay,
-        processingHour: waiverHour,
-      });
-      setLeague(updated);
-    } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : 'Failed to save waiver settings');
-    } finally {
-      setWaiverSettingsSaving(false);
-    }
-  }
 
   async function handleAddAnnouncement(e: React.FormEvent) {
     e.preventDefault();
@@ -2325,54 +2233,6 @@ function SettingsTab({
 
   return (
     <div className="space-y-4">
-      {/* Delete modal */}
-      {showDeleteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-card border border-line rounded-2xl p-6 w-full max-w-sm shadow-2xl">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-9 h-9 rounded-xl bg-danger/10 flex items-center justify-center flex-shrink-0">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-danger">
-                  <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-                </svg>
-              </div>
-              <div>
-                <h3 className="font-semibold text-copy">Delete League</h3>
-                <p className="text-xs text-copy-3">This cannot be undone</p>
-              </div>
-            </div>
-            <p className="text-sm text-copy-2 mb-4">
-              This will permanently delete <span className="font-semibold text-copy">{league.name}</span> along with all members, rosters, and auction data.
-            </p>
-            <label className="block text-xs font-medium text-copy-2 mb-1.5">
-              Type <span className="font-mono font-bold text-danger">delete</span> to confirm
-            </label>
-            <input
-              value={deleteInput}
-              onChange={e => setDeleteInput(e.target.value)}
-              placeholder="delete"
-              className="w-full bg-field border border-line-2 rounded-xl px-4 py-2.5 text-copy text-sm placeholder-copy-3 focus:outline-none focus:border-danger focus:ring-1 focus:ring-danger transition-colors mb-4"
-              onKeyDown={e => e.key === 'Enter' && deleteInput === 'delete' && handleDeleteLeague()}
-              autoFocus
-            />
-            <div className="flex gap-2">
-              <button
-                onClick={() => { setShowDeleteModal(false); setDeleteInput(''); }}
-                className="flex-1 bg-field hover:bg-field-2 border border-line text-copy-2 font-medium py-2.5 rounded-xl transition-colors text-sm"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDeleteLeague}
-                disabled={deleteInput !== 'delete' || deleting}
-                className="flex-1 bg-danger hover:bg-danger/80 disabled:opacity-40 text-white font-semibold py-2.5 rounded-xl transition-colors text-sm"
-              >
-                {deleting ? 'Deleting…' : 'Delete League'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* ── Message Board ──────────────────────────────────────────────────────── */}
       <div className="bg-card border border-line rounded-2xl overflow-hidden">
         <div className="px-5 py-4 border-b border-line">
@@ -2614,397 +2474,598 @@ function SettingsTab({
         </div>
       </div>
 
-      {/* ── Commissioner Tools ─────────────────────────────────────────────────── */}
-      {isCommissioner && (
-        <>
-          {(league.state === 'draft' || league.state === 'completed') && (
-            <div className="bg-card border border-line rounded-2xl p-5">
-              <h2 className="text-sm font-semibold text-copy mb-4">Commissioner Controls</h2>
-              {league.state === 'draft' && (
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-medium text-copy">Skip auction &amp; go live</p>
-                    <p className="text-xs text-copy-3 mt-0.5">Transition directly to active without running an auction.</p>
-                  </div>
-                  <button
-                    onClick={async () => {
-                      if (!confirm('Set league to active? This skips the auction and cannot be undone.')) return;
-                      try {
-                        const updated = await api.patch<League>(`/leagues/${leagueId}/state`, { state: 'active' });
-                        setLeague(updated);
-                      } catch (e: unknown) { alert(e instanceof Error ? e.message : 'Failed'); }
-                    }}
-                    className="flex-shrink-0 bg-brand hover:bg-brand-2 text-white text-xs font-semibold px-3 py-2 rounded-xl transition-colors whitespace-nowrap"
-                  >
-                    Set Active
-                  </button>
-                </div>
-              )}
-              {league.state === 'completed' && (
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-medium text-copy">Renew this league</p>
-                    <p className="text-xs text-copy-3 mt-0.5">Start a new season. Members carry over; a new draft league is created.</p>
-                  </div>
-                  <button
-                    onClick={handleRenew}
-                    disabled={renewing}
-                    className="flex-shrink-0 bg-brand hover:bg-brand-2 disabled:opacity-50 text-white text-xs font-semibold px-3 py-2 rounded-xl transition-colors whitespace-nowrap"
-                  >
-                    {renewing ? 'Creating...' : 'Renew League'}
-                  </button>
-                </div>
-              )}
+    </div>
+  );
+}
+
+// ─── Commissioner Tab ─────────────────────────────────────────────────────────
+
+function CommissionerTab({
+  league, setLeague, leagueId,
+}: {
+  league: League;
+  setLeague: React.Dispatch<React.SetStateAction<League | null>>;
+  leagueId: string;
+}) {
+  const router = useRouter();
+
+  const [auctionForm, setAuctionForm] = useState({
+    startingBudget:   league.auctionConfig?.startingBudget   ?? 100,
+    minOpeningBid:    league.auctionConfig?.minOpeningBid    ?? 1,
+    minBidIncrement:  league.auctionConfig?.minBidIncrement  ?? 1,
+    nominationMode:   league.auctionConfig?.nominationMode   ?? 'manual',
+    countdownSeconds: league.auctionConfig?.countdownSeconds ?? 30,
+    maxWildcard:      league.auctionConfig?.maxWildcard      ?? 0,
+  });
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteInput, setDeleteInput] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [renewing, setRenewing] = useState(false);
+
+  const [topZoneEnabled, setTopZoneEnabled] = useState(!!(league.topZone));
+  const [topZoneCount, setTopZoneCount] = useState(league.topZone ?? 4);
+  const [bottomZoneEnabled, setBottomZoneEnabled] = useState(!!(league.bottomZone));
+  const [bottomZoneCount, setBottomZoneCount] = useState(league.bottomZone ?? 3);
+  const [zonesSaving, setZonesSaving] = useState(false);
+
+  const [waiverDay, setWaiverDay] = useState(league.waiverSettings?.processingDay ?? 'tuesday');
+  const [waiverHour, setWaiverHour] = useState(league.waiverSettings?.processingHour ?? 10);
+  const [waiverSettingsSaving, setWaiverSettingsSaving] = useState(false);
+
+  const inputCls = 'w-full bg-field border border-line-2 rounded-xl px-4 py-2.5 text-copy text-sm focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors';
+
+  async function saveAuctionConfig(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const updated = await api.patch<League>(`/leagues/${leagueId}/auction-config`, auctionForm);
+      setLeague(updated);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Failed to save');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDeleteLeague() {
+    if (deleteInput !== 'delete') return;
+    setDeleting(true);
+    try {
+      await api.delete(`/leagues/${leagueId}`);
+      router.replace('/leagues');
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Failed to delete league');
+      setDeleting(false);
+    }
+  }
+
+  async function handleRenew() {
+    if (!confirm('Start a new season? Members will be carried over and the new league will be in draft state.')) return;
+    setRenewing(true);
+    try {
+      const newLeague = await api.post<{ id: string }>(`/leagues/${leagueId}/renew`);
+      router.push(`/leagues/${newLeague.id}`);
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Failed to renew league');
+      setRenewing(false);
+    }
+  }
+
+  async function saveTableZones() {
+    setZonesSaving(true);
+    try {
+      const updated = await api.patch<League>(`/leagues/${leagueId}/table-zones`, {
+        topZone: topZoneEnabled ? topZoneCount : null,
+        bottomZone: bottomZoneEnabled ? bottomZoneCount : null,
+      });
+      setLeague(updated);
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Failed to save');
+    } finally {
+      setZonesSaving(false);
+    }
+  }
+
+  async function saveWaiverSettings() {
+    setWaiverSettingsSaving(true);
+    try {
+      const updated = await api.patch<League>(`/leagues/${leagueId}/waiver-settings`, {
+        processingDay: waiverDay,
+        processingHour: waiverHour,
+      });
+      setLeague(updated);
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Failed to save waiver settings');
+    } finally {
+      setWaiverSettingsSaving(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Delete modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-card border border-line rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-9 h-9 rounded-xl bg-danger/10 flex items-center justify-center flex-shrink-0">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-danger">
+                  <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="font-semibold text-copy">Delete League</h3>
+                <p className="text-xs text-copy-3">This cannot be undone</p>
+              </div>
+            </div>
+            <p className="text-sm text-copy-2 mb-4">
+              This will permanently delete <span className="font-semibold text-copy">{league.name}</span> along with all members, rosters, and auction data.
+            </p>
+            <label className="block text-xs font-medium text-copy-2 mb-1.5">
+              Type <span className="font-mono font-bold text-danger">delete</span> to confirm
+            </label>
+            <input
+              value={deleteInput}
+              onChange={e => setDeleteInput(e.target.value)}
+              placeholder="delete"
+              className="w-full bg-field border border-line-2 rounded-xl px-4 py-2.5 text-copy text-sm placeholder-copy-3 focus:outline-none focus:border-danger focus:ring-1 focus:ring-danger transition-colors mb-4"
+              onKeyDown={e => e.key === 'Enter' && deleteInput === 'delete' && handleDeleteLeague()}
+              autoFocus
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setShowDeleteModal(false); setDeleteInput(''); }}
+                className="flex-1 bg-field hover:bg-field-2 border border-line text-copy-2 font-medium py-2.5 rounded-xl transition-colors text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteLeague}
+                disabled={deleteInput !== 'delete' || deleting}
+                className="flex-1 bg-danger hover:bg-danger/80 disabled:opacity-40 text-white font-semibold py-2.5 rounded-xl transition-colors text-sm"
+              >
+                {deleting ? 'Deleting…' : 'Delete League'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* State controls */}
+      {(league.state === 'draft' || league.state === 'completed') && (
+        <div className="bg-card border border-line rounded-2xl p-5">
+          <h2 className="text-sm font-semibold text-copy mb-4">Commissioner Controls</h2>
+          {league.state === 'draft' && (
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-medium text-copy">Skip auction &amp; go live</p>
+                <p className="text-xs text-copy-3 mt-0.5">Transition directly to active without running an auction.</p>
+              </div>
+              <button
+                onClick={async () => {
+                  if (!confirm('Set league to active? This skips the auction and cannot be undone.')) return;
+                  try {
+                    const updated = await api.patch<League>(`/leagues/${leagueId}/state`, { state: 'active' });
+                    setLeague(updated);
+                  } catch (e: unknown) { alert(e instanceof Error ? e.message : 'Failed'); }
+                }}
+                className="flex-shrink-0 bg-brand hover:bg-brand-2 text-white text-xs font-semibold px-3 py-2 rounded-xl transition-colors whitespace-nowrap"
+              >
+                Set Active
+              </button>
             </div>
           )}
-
-          {/* Table Zones */}
-          <div className="bg-card border border-line rounded-2xl p-5">
-            <div className="flex items-start justify-between gap-3 mb-4">
+          {league.state === 'completed' && (
+            <div className="flex items-center justify-between gap-3">
               <div>
-                <h2 className="text-sm font-semibold text-copy">Table Zones</h2>
-                <p className="text-xs text-copy-3 mt-0.5">Highlight positions on the standings table.</p>
+                <p className="text-xs font-medium text-copy">Renew this league</p>
+                <p className="text-xs text-copy-3 mt-0.5">Start a new season. Members carry over; a new draft league is created.</p>
               </div>
               <button
-                onClick={saveTableZones}
-                disabled={zonesSaving}
+                onClick={handleRenew}
+                disabled={renewing}
                 className="flex-shrink-0 bg-brand hover:bg-brand-2 disabled:opacity-50 text-white text-xs font-semibold px-3 py-2 rounded-xl transition-colors whitespace-nowrap"
               >
-                {zonesSaving ? 'Saving...' : 'Save'}
+                {renewing ? 'Creating...' : 'Renew League'}
               </button>
             </div>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <label className="flex items-center gap-2.5 cursor-pointer select-none flex-1">
-                  <input
-                    type="checkbox"
-                    checked={topZoneEnabled}
-                    onChange={e => setTopZoneEnabled(e.target.checked)}
-                    className="w-4 h-4 rounded accent-positive"
-                  />
-                  <div>
-                    <p className="text-xs font-medium text-copy">Top Zone</p>
-                    <p className="text-xs text-copy-3">Highlighted in green — qualification / prize spots</p>
-                  </div>
-                </label>
-                <div className="flex items-center gap-1.5 flex-shrink-0">
-                  <input
-                    type="number"
-                    min={1}
-                    max={20}
-                    value={topZoneCount}
-                    disabled={!topZoneEnabled}
-                    onChange={e => setTopZoneCount(Math.max(1, Number(e.target.value)))}
-                    className="w-14 bg-field border border-line-2 rounded-lg px-2 py-1 text-xs text-copy text-center focus:outline-none focus:border-brand disabled:opacity-40 transition-colors"
-                  />
-                  <span className="text-xs text-copy-3">teams</span>
-                </div>
+          )}
+        </div>
+      )}
+
+      {/* Table Zones */}
+      <div className="bg-card border border-line rounded-2xl p-5">
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div>
+            <h2 className="text-sm font-semibold text-copy">Table Zones</h2>
+            <p className="text-xs text-copy-3 mt-0.5">Highlight positions on the standings table.</p>
+          </div>
+          <button
+            onClick={saveTableZones}
+            disabled={zonesSaving}
+            className="flex-shrink-0 bg-brand hover:bg-brand-2 disabled:opacity-50 text-white text-xs font-semibold px-3 py-2 rounded-xl transition-colors whitespace-nowrap"
+          >
+            {zonesSaving ? 'Saving...' : 'Save'}
+          </button>
+        </div>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <label className="flex items-center gap-2.5 cursor-pointer select-none flex-1">
+              <input
+                type="checkbox"
+                checked={topZoneEnabled}
+                onChange={e => setTopZoneEnabled(e.target.checked)}
+                className="w-4 h-4 rounded accent-positive"
+              />
+              <div>
+                <p className="text-xs font-medium text-copy">Top Zone</p>
+                <p className="text-xs text-copy-3">Highlighted in green — qualification / prize spots</p>
               </div>
-              <div className="h-px bg-line" />
-              <div className="flex items-center justify-between gap-3">
-                <label className="flex items-center gap-2.5 cursor-pointer select-none flex-1">
-                  <input
-                    type="checkbox"
-                    checked={bottomZoneEnabled}
-                    onChange={e => setBottomZoneEnabled(e.target.checked)}
-                    className="w-4 h-4 rounded accent-danger"
-                  />
-                  <div>
-                    <p className="text-xs font-medium text-copy">Relegation Zone</p>
-                    <p className="text-xs text-copy-3">Highlighted in red — bottom of the table</p>
-                  </div>
-                </label>
-                <div className="flex items-center gap-1.5 flex-shrink-0">
-                  <input
-                    type="number"
-                    min={1}
-                    max={20}
-                    value={bottomZoneCount}
-                    disabled={!bottomZoneEnabled}
-                    onChange={e => setBottomZoneCount(Math.max(1, Number(e.target.value)))}
-                    className="w-14 bg-field border border-line-2 rounded-lg px-2 py-1 text-xs text-copy text-center focus:outline-none focus:border-brand disabled:opacity-40 transition-colors"
-                  />
-                  <span className="text-xs text-copy-3">teams</span>
-                </div>
-              </div>
+            </label>
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              <input
+                type="number"
+                min={1}
+                max={20}
+                value={topZoneCount}
+                disabled={!topZoneEnabled}
+                onChange={e => setTopZoneCount(Math.max(1, Number(e.target.value)))}
+                className="w-14 bg-field border border-line-2 rounded-lg px-2 py-1 text-xs text-copy text-center focus:outline-none focus:border-brand disabled:opacity-40 transition-colors"
+              />
+              <span className="text-xs text-copy-3">teams</span>
             </div>
           </div>
-
-          {/* Waiver Processing */}
-          <div className="bg-card border border-line rounded-2xl p-5">
-            <div className="flex items-start justify-between gap-3 mb-4">
+          <div className="h-px bg-line" />
+          <div className="flex items-center justify-between gap-3">
+            <label className="flex items-center gap-2.5 cursor-pointer select-none flex-1">
+              <input
+                type="checkbox"
+                checked={bottomZoneEnabled}
+                onChange={e => setBottomZoneEnabled(e.target.checked)}
+                className="w-4 h-4 rounded accent-danger"
+              />
               <div>
-                <h2 className="text-sm font-semibold text-copy">Waiver Processing</h2>
-                <p className="text-xs text-copy-3 mt-0.5">Configure when pending claims are automatically processed.</p>
+                <p className="text-xs font-medium text-copy">Relegation Zone</p>
+                <p className="text-xs text-copy-3">Highlighted in red — bottom of the table</p>
               </div>
-              <button
-                onClick={saveWaiverSettings}
-                disabled={waiverSettingsSaving}
-                className="flex-shrink-0 bg-brand hover:bg-brand-2 disabled:opacity-50 text-white text-xs font-semibold px-3 py-2 rounded-xl transition-colors whitespace-nowrap"
-              >
-                {waiverSettingsSaving ? 'Saving...' : 'Save'}
-              </button>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-copy-2 mb-1.5">Processing Day</label>
-                <select value={waiverDay} onChange={e => setWaiverDay(e.target.value)} className={inputCls}>
-                  {['sunday','monday','tuesday','wednesday','thursday','friday','saturday'].map(d => (
-                    <option key={d} value={d}>{d.charAt(0).toUpperCase() + d.slice(1)}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-copy-2 mb-1.5">Processing Time (EST)</label>
-                <select value={waiverHour} onChange={e => setWaiverHour(Number(e.target.value))} className={inputCls}>
-                  {Array.from({ length: 24 }, (_, i) => (
-                    <option key={i} value={i}>
-                      {i === 0 ? '12:00 AM' : i < 12 ? `${i}:00 AM` : i === 12 ? '12:00 PM' : `${i - 12}:00 PM`}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            </label>
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              <input
+                type="number"
+                min={1}
+                max={20}
+                value={bottomZoneCount}
+                disabled={!bottomZoneEnabled}
+                onChange={e => setBottomZoneCount(Math.max(1, Number(e.target.value)))}
+                className="w-14 bg-field border border-line-2 rounded-lg px-2 py-1 text-xs text-copy text-center focus:outline-none focus:border-brand disabled:opacity-40 transition-colors"
+              />
+              <span className="text-xs text-copy-3">teams</span>
             </div>
           </div>
+        </div>
+      </div>
 
-          <div className="bg-card border border-line rounded-2xl p-5">
-            <h2 className="text-sm font-semibold text-copy mb-1">Auction Settings</h2>
-            <p className="text-xs text-copy-3 mb-5">Must be configured before starting the auction.</p>
-            <form onSubmit={saveAuctionConfig} className="space-y-4">
-              {(() => {
-                const isSnake = auctionForm.nominationMode === 'snake-random' || auctionForm.nominationMode === 'snake-defined';
-                return (
-                  <div className="grid grid-cols-2 gap-3">
-                    {!isSnake && (
-                      <>
-                        <div>
-                          <label className="block text-xs font-medium text-copy-2 mb-1.5">Starting Budget ($)</label>
-                          <input type="number" min={1} required value={auctionForm.startingBudget}
-                            onChange={e => setAuctionForm(f => ({ ...f, startingBudget: Number(e.target.value) }))}
-                            className={inputCls} />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-copy-2 mb-1.5">Min Opening Bid ($)</label>
-                          <input type="number" min={1} required value={auctionForm.minOpeningBid}
-                            onChange={e => setAuctionForm(f => ({ ...f, minOpeningBid: Number(e.target.value) }))}
-                            className={inputCls} />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-copy-2 mb-1.5">Min Bid Increment ($)</label>
-                          <input type="number" min={1} required value={auctionForm.minBidIncrement}
-                            onChange={e => setAuctionForm(f => ({ ...f, minBidIncrement: Number(e.target.value) }))}
-                            className={inputCls} />
-                        </div>
-                      </>
-                    )}
+      {/* Waiver Processing */}
+      <div className="bg-card border border-line rounded-2xl p-5">
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div>
+            <h2 className="text-sm font-semibold text-copy">Waiver Processing</h2>
+            <p className="text-xs text-copy-3 mt-0.5">Configure when pending claims are automatically processed.</p>
+          </div>
+          <button
+            onClick={saveWaiverSettings}
+            disabled={waiverSettingsSaving}
+            className="flex-shrink-0 bg-brand hover:bg-brand-2 disabled:opacity-50 text-white text-xs font-semibold px-3 py-2 rounded-xl transition-colors whitespace-nowrap"
+          >
+            {waiverSettingsSaving ? 'Saving...' : 'Save'}
+          </button>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-medium text-copy-2 mb-1.5">Processing Day</label>
+            <select value={waiverDay} onChange={e => setWaiverDay(e.target.value)} className={inputCls}>
+              {['sunday','monday','tuesday','wednesday','thursday','friday','saturday'].map(d => (
+                <option key={d} value={d}>{d.charAt(0).toUpperCase() + d.slice(1)}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-copy-2 mb-1.5">Processing Time (EST)</label>
+            <select value={waiverHour} onChange={e => setWaiverHour(Number(e.target.value))} className={inputCls}>
+              {Array.from({ length: 24 }, (_, i) => (
+                <option key={i} value={i}>
+                  {i === 0 ? '12:00 AM' : i < 12 ? `${i}:00 AM` : i === 12 ? '12:00 PM' : `${i - 12}:00 PM`}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Auction Settings */}
+      <div className="bg-card border border-line rounded-2xl p-5">
+        <h2 className="text-sm font-semibold text-copy mb-1">Auction Settings</h2>
+        <p className="text-xs text-copy-3 mb-5">Must be configured before starting the auction.</p>
+        <form onSubmit={saveAuctionConfig} className="space-y-4">
+          {(() => {
+            const isSnake = auctionForm.nominationMode === 'snake-random' || auctionForm.nominationMode === 'snake-defined';
+            return (
+              <div className="grid grid-cols-2 gap-3">
+                {!isSnake && (
+                  <>
                     <div>
-                      <label className="block text-xs font-medium text-copy-2 mb-1.5">Pick Clock (sec)</label>
-                      <input type="number" min={5} max={300} required value={auctionForm.countdownSeconds}
-                        onChange={e => setAuctionForm(f => ({ ...f, countdownSeconds: Number(e.target.value) }))}
+                      <label className="block text-xs font-medium text-copy-2 mb-1.5">Starting Budget ($)</label>
+                      <input type="number" min={1} required value={auctionForm.startingBudget}
+                        onChange={e => setAuctionForm(f => ({ ...f, startingBudget: Number(e.target.value) }))}
                         className={inputCls} />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-copy-2 mb-1.5">Wildcard Slots</label>
-                      <input type="number" min={0} max={20} value={auctionForm.maxWildcard}
-                        onChange={e => setAuctionForm(f => ({ ...f, maxWildcard: Number(e.target.value) }))}
+                      <label className="block text-xs font-medium text-copy-2 mb-1.5">Min Opening Bid ($)</label>
+                      <input type="number" min={1} required value={auctionForm.minOpeningBid}
+                        onChange={e => setAuctionForm(f => ({ ...f, minOpeningBid: Number(e.target.value) }))}
                         className={inputCls} />
-                      <p className="text-[10px] text-copy-3 mt-1">Extra team slots beyond per-sport limits. 0 = none.</p>
                     </div>
-                  </div>
-                );
-              })()}
-              <div>
-                <label className="block text-xs font-medium text-copy-2 mb-1.5">Nomination Mode</label>
-                <select value={auctionForm.nominationMode}
-                  onChange={e => setAuctionForm(f => ({ ...f, nominationMode: e.target.value }))}
-                  className={inputCls}>
-                  <option value="manual">Manual — commissioner picks who nominates</option>
-                  <option value="random-disclosed">Random (disclosed) — order shown to all</option>
-                  <option value="random-hidden">Random (hidden) — revealed one at a time</option>
-                  <option value="snake-random">Snake Draft — random pick order</option>
-                  <option value="snake-defined">Snake Draft — commissioner sets order</option>
-                </select>
+                    <div>
+                      <label className="block text-xs font-medium text-copy-2 mb-1.5">Min Bid Increment ($)</label>
+                      <input type="number" min={1} required value={auctionForm.minBidIncrement}
+                        onChange={e => setAuctionForm(f => ({ ...f, minBidIncrement: Number(e.target.value) }))}
+                        className={inputCls} />
+                    </div>
+                  </>
+                )}
+                <div>
+                  <label className="block text-xs font-medium text-copy-2 mb-1.5">Pick Clock (sec)</label>
+                  <input type="number" min={5} max={300} required value={auctionForm.countdownSeconds}
+                    onChange={e => setAuctionForm(f => ({ ...f, countdownSeconds: Number(e.target.value) }))}
+                    className={inputCls} />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-copy-2 mb-1.5">Wildcard Slots</label>
+                  <input type="number" min={0} max={20} value={auctionForm.maxWildcard}
+                    onChange={e => setAuctionForm(f => ({ ...f, maxWildcard: Number(e.target.value) }))}
+                    className={inputCls} />
+                  <p className="text-[10px] text-copy-3 mt-1">Extra team slots beyond per-sport limits. 0 = none.</p>
+                </div>
               </div>
-              <button type="submit" disabled={saving}
-                className="bg-brand hover:bg-brand-2 disabled:opacity-50 text-white font-semibold px-5 py-2.5 rounded-xl transition-colors text-sm">
-                {saving ? 'Saving...' : saved ? '✓ Saved' : 'Save Auction Settings'}
-              </button>
-            </form>
+            );
+          })()}
+          <div>
+            <label className="block text-xs font-medium text-copy-2 mb-1.5">Nomination Mode</label>
+            <select value={auctionForm.nominationMode}
+              onChange={e => setAuctionForm(f => ({ ...f, nominationMode: e.target.value }))}
+              className={inputCls}>
+              <option value="manual">Manual — commissioner picks who nominates</option>
+              <option value="random-disclosed">Random (disclosed) — order shown to all</option>
+              <option value="random-hidden">Random (hidden) — revealed one at a time</option>
+              <option value="snake-random">Snake Draft — random pick order</option>
+              <option value="snake-defined">Snake Draft — commissioner sets order</option>
+            </select>
           </div>
+          <button type="submit" disabled={saving}
+            className="bg-brand hover:bg-brand-2 disabled:opacity-50 text-white font-semibold px-5 py-2.5 rounded-xl transition-colors text-sm">
+            {saving ? 'Saving...' : saved ? '✓ Saved' : 'Save Auction Settings'}
+          </button>
+        </form>
+      </div>
 
-          <div className="bg-card border border-danger/20 rounded-2xl p-5">
-            <h2 className="text-sm font-semibold text-danger mb-1">Danger Zone</h2>
-            <p className="text-xs text-copy-3 mb-4">Destructive actions that cannot be reversed.</p>
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <p className="text-sm font-medium text-copy">Delete this league</p>
-                <p className="text-xs text-copy-3 mt-0.5">Permanently removes all members, rosters, and data.</p>
-              </div>
-              <button
-                onClick={() => setShowDeleteModal(true)}
-                className="flex-shrink-0 bg-danger/10 hover:bg-danger/20 border border-danger/30 text-danger text-sm font-semibold px-4 py-2 rounded-xl transition-colors whitespace-nowrap"
-              >
-                Delete League
-              </button>
-            </div>
+      {/* Danger Zone */}
+      <div className="bg-card border border-danger/20 rounded-2xl p-5">
+        <h2 className="text-sm font-semibold text-danger mb-1">Danger Zone</h2>
+        <p className="text-xs text-copy-3 mb-4">Destructive actions that cannot be reversed.</p>
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-medium text-copy">Delete this league</p>
+            <p className="text-xs text-copy-3 mt-0.5">Permanently removes all members, rosters, and data.</p>
           </div>
+          <button
+            onClick={() => setShowDeleteModal(true)}
+            className="flex-shrink-0 bg-danger/10 hover:bg-danger/20 border border-danger/30 text-danger text-sm font-semibold px-4 py-2 rounded-xl transition-colors whitespace-nowrap"
+          >
+            Delete League
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Rules Tab ────────────────────────────────────────────────────────────────
+
+function RulesTab({ league }: { league: League }) {
+  return (
+    <div className="bg-card border border-line rounded-2xl p-5 space-y-6">
+      <h2 className="text-sm font-semibold text-copy">Rules &amp; Scoring</h2>
+
+      <section className="space-y-5">
+        <h3 className="text-xs font-semibold text-copy-3 uppercase tracking-widest">General Rules</h3>
+
+        <div>
+          <p className="text-xs font-semibold text-copy-2 uppercase tracking-wide mb-2">Roster</p>
+          <ul className="space-y-1.5 list-disc list-inside">
+            {[
+              'Minimum 1 team owned per sport',
+              '2 Wildcard Teams — additional team in any sport but Premier League',
+              'Limits: 1 EPL team per player, max 2 teams in any given sport',
+            ].map((r, i) => <li key={i} className="text-sm text-copy-2 leading-relaxed pl-1">{r}</li>)}
+          </ul>
+        </div>
+
+        <div>
+          <p className="text-xs font-semibold text-copy-2 uppercase tracking-wide mb-2">Points</p>
+          <ul className="space-y-1.5 list-disc list-inside">
+            <li className="text-sm text-copy-2 leading-relaxed pl-1">Points are based on Wins, Draws and Playoffs. The Table is based on the total accumulation throughout the season.</li>
+            <li className="text-sm text-copy-2 leading-relaxed pl-1">A bonus is given for Conference and Division Champions. (See &ldquo;Points&rdquo; tab for criteria)</li>
+            <li className="text-sm text-copy-2 leading-relaxed pl-1">NCAAF bonus points will only be given out for Power 4 teams; NCAAB bonus will only be given out for Power 5 teams</li>
+            <li className="text-sm text-copy-2 leading-relaxed pl-1">Power 4 = SEC, Big Ten, ACC, Big 12</li>
+            <li className="text-sm text-copy-2 leading-relaxed pl-1">Power 5 = Power 4 + Big East</li>
+          </ul>
+        </div>
+
+        <div>
+          <p className="text-xs font-semibold text-copy-2 uppercase tracking-wide mb-2">Transactions</p>
+          <ul className="space-y-1.5 list-disc list-inside">
+            {(() => {
+              const ws = league.waiverSettings;
+              const wDay = ws?.processingDay ?? 'tuesday';
+              const wHour = ws?.processingHour ?? 10;
+              const wDayLabel = wDay.charAt(0).toUpperCase() + wDay.slice(1);
+              const wTimeLabel = wHour === 0 ? '12:00 AM' : wHour < 12 ? `${wHour}:00 AM` : wHour === 12 ? '12:00 PM' : `${wHour - 12}:00 PM`;
+              return [
+                'Teams are added and removed by submitting a waiver request on the "Waivers" tab.',
+                `Waivers are processed every ${wDayLabel} morning at ${wTimeLabel} EST by standard rule sets.`,
+                'Tiebreaker order is reverse current standings (Lowest in the standings is #1 priority.)',
+                'Trades are allowed to be made as long as both teams are upholding roster limits.',
+                'Every sport has a deadline for transactions, this is set by the Admin panel.',
+              ];
+            })().map((r, i) => <li key={i} className="text-sm text-copy-2 leading-relaxed pl-1">{r}</li>)}
+          </ul>
+        </div>
+      </section>
+
+      <div className="border-t border-line" />
+
+      <section className="space-y-3">
+        <h3 className="text-xs font-semibold text-copy-3 uppercase tracking-widest">Draft Rules</h3>
+        <ul className="space-y-1.5 list-disc list-inside">
+          {[
+            '3 options for Drafts: Randomized order Auction, Nomination Auction, Snake draft',
+            'For Auction: Players will have $1,000 to bid on all their teams — this is a hard cap.',
+            'Players will have 15 seconds to bid on a team; once a bid is placed the 15-second timer restarts until it expires.',
+            'Teams not drafted during the auction will become free agent teams available on waivers.',
+          ].map((r, i) => <li key={i} className="text-sm text-copy-2 leading-relaxed pl-1">{r}</li>)}
+        </ul>
+      </section>
+
+      {league.seasonRefs.length > 0 && (
+        <>
+          <div className="border-t border-line" />
+          <section>
+            <h3 className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-3">Scoring Breakdown</h3>
+            <div className="overflow-x-auto rounded-xl border border-line">
+              <table className="w-full text-sm min-w-max">
+                <thead>
+                  <tr className="bg-field/60 border-b border-line">
+                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-copy-3 min-w-[140px]"></th>
+                    {league.seasonRefs.map(ref => (
+                      <th key={ref.sportLeagueId} className="text-center px-4 py-2.5 text-xs font-semibold text-copy-3 whitespace-nowrap">
+                        {formatLeagueName(ref.sportLeagueId)}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-t border-line/50 bg-field/30">
+                    <td colSpan={league.seasonRefs.length + 1} className="px-4 py-1.5 text-xs font-semibold text-copy-3">
+                      Points per:
+                    </td>
+                  </tr>
+                  <tr className="border-t border-line/50">
+                    <td className="px-4 py-2.5 font-medium text-copy">Win</td>
+                    {league.seasonRefs.map(ref => (
+                      <td key={ref.sportLeagueId} className="px-4 py-2.5 text-center text-copy-2">
+                        {ref.winValue.toFixed(1)}
+                      </td>
+                    ))}
+                  </tr>
+                  <tr className="border-t border-line/50">
+                    <td className="px-4 py-2.5 font-medium text-copy">Draw / OT Loss</td>
+                    {league.seasonRefs.map(ref => (
+                      <td key={ref.sportLeagueId} className="px-4 py-2.5 text-center text-copy-2">
+                        {(ref.drawValue ?? 0).toFixed(1)}
+                      </td>
+                    ))}
+                  </tr>
+                  <tr className="border-t-2 border-line bg-field/30">
+                    <td colSpan={league.seasonRefs.length + 1} className="px-4 py-1.5 text-xs font-semibold text-copy-3">
+                      Playoff structure:
+                    </td>
+                  </tr>
+                  {[
+                    { label: '1st round winner', pts: 10 },
+                    { label: '2nd round winner', pts: 15 },
+                    { label: '3rd round winner', pts: 25 },
+                    { label: 'Champion',          pts: 50 },
+                    { label: 'Max playoff points', pts: 100 },
+                  ].map(({ label, pts }, i) => (
+                    <tr key={label} className={`border-t border-line/50${i === 3 ? ' font-semibold' : ''}`}>
+                      <td className={`px-4 py-2.5 text-copy ${i === 3 ? 'font-semibold' : 'font-medium'}`}>{label}</td>
+                      {league.seasonRefs.map(ref => (
+                        <td key={ref.sportLeagueId} className={`px-4 py-2.5 text-center ${i === 3 ? 'text-copy font-semibold' : 'text-copy-2'}`}>
+                          {pts}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
         </>
       )}
 
-      {/* ── League Rules ──────────────────────────────────────────────────────── */}
-      <div className="bg-card border border-line rounded-2xl p-5 space-y-6">
-        <h2 className="text-sm font-semibold text-copy">League Rules</h2>
+      <div className="border-t border-line" />
 
-        <section className="space-y-5">
-          <h3 className="text-xs font-semibold text-copy-3 uppercase tracking-widest">General Rules</h3>
+      <section className="space-y-4">
+        <h3 className="text-xs font-semibold text-copy-3 uppercase tracking-widest">Playoff Points — Special Cases</h3>
+        <p className="text-xs text-copy-3">Playoff points stack as your team advances. Some leagues map rounds differently:</p>
+        <div className="space-y-3">
+          {[
+            {
+              sport: 'UCL',
+              rules: ['1st Round Win = Round of 16 Win'],
+            },
+            {
+              sport: 'Premier League',
+              rules: [
+                '1st Round Win = Top 8 League position',
+                '2nd Round Win = Top 4 League position',
+                '3rd Round Win = Top 2 League position',
+              ],
+            },
+            {
+              sport: 'NCAA Basketball',
+              rules: ['1st Round Win = Sweet 16 Win'],
+            },
+          ].map(({ sport, rules }) => (
+            <div key={sport} className="bg-field border border-line rounded-xl px-4 py-3">
+              <p className="text-xs font-semibold text-copy mb-1.5">{sport}</p>
+              <ul className="space-y-1 list-disc list-inside">
+                {rules.map((r, i) => <li key={i} className="text-xs text-copy-2 pl-1">{r}</li>)}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </section>
 
-          {/* Roster */}
-          <div>
-            <p className="text-xs font-semibold text-copy-2 uppercase tracking-wide mb-2">Roster</p>
-            <ul className="space-y-1.5 list-disc list-inside">
-              {[
-                'Minimum 1 team owned per sport',
-                '2 Wildcard Teams — additional team in any sport but Premier League',
-                'Limits: 1 EPL team per player, max 2 teams in any given sport',
-              ].map((r, i) => <li key={i} className="text-sm text-copy-2 leading-relaxed pl-1">{r}</li>)}
-            </ul>
-          </div>
+      <div className="border-t border-line" />
 
-          {/* Points */}
-          <div>
-            <p className="text-xs font-semibold text-copy-2 uppercase tracking-wide mb-2">Points</p>
-            <ul className="space-y-1.5 list-disc list-inside">
-              <li className="text-sm text-copy-2 leading-relaxed pl-1">Points are based on Wins, Draws and Playoffs. The Table is based on the total accumulation throughout the season.</li>
-              <li className="text-sm text-copy-2 leading-relaxed pl-1">A bonus is given for Conference and Division Champions. (See &ldquo;Points&rdquo; tab for criteria)</li>
-              <li className="text-sm text-copy-2 leading-relaxed pl-1">NCAAF bonus points will only be given out for Power 4 teams; NCAAB bonus will only be given out for Power 5 teams</li>
-              <li className="text-sm text-copy-2 leading-relaxed pl-1">Power 4 = SEC, Big Ten, ACC, Big 12</li>
-              <li className="text-sm text-copy-2 leading-relaxed pl-1">Power 5 = Power 4 + Big East</li>
-            </ul>
-          </div>
-
-          {/* Transactions */}
-          <div>
-            <p className="text-xs font-semibold text-copy-2 uppercase tracking-wide mb-2">Transactions</p>
-            <ul className="space-y-1.5 list-disc list-inside">
-              {(() => {
-                const ws = league.waiverSettings;
-                const wDay = ws?.processingDay ?? 'tuesday';
-                const wHour = ws?.processingHour ?? 10;
-                const wDayLabel = wDay.charAt(0).toUpperCase() + wDay.slice(1);
-                const wTimeLabel = wHour === 0 ? '12:00 AM' : wHour < 12 ? `${wHour}:00 AM` : wHour === 12 ? '12:00 PM' : `${wHour - 12}:00 PM`;
-                return [
-                  'Teams are added and removed by submitting a waiver request on the "Waivers" tab.',
-                  `Waivers are processed every ${wDayLabel} morning at ${wTimeLabel} EST by standard rule sets.`,
-                  'Tiebreaker order is reverse current standings (Lowest in the standings is #1 priority.)',
-                  'Trades are allowed to be made as long as both teams are upholding roster limits.',
-                  'Every sport has a deadline for transactions, this is set by the Admin panel.',
-                ];
-              })().map((r, i) => <li key={i} className="text-sm text-copy-2 leading-relaxed pl-1">{r}</li>)}
-            </ul>
-          </div>
-        </section>
-
-        <div className="border-t border-line" />
-
-        <section className="space-y-3">
-          <h3 className="text-xs font-semibold text-copy-3 uppercase tracking-widest">Draft Rules</h3>
-          <ul className="space-y-1.5 list-disc list-inside">
-            {[
-              '3 options for Drafts: Randomized order Auction, Nomination Auction, Snake draft',
-              'For Auction: Players will have $1,000 to bid on all their teams — this is a hard cap.',
-              'Players will have 15 seconds to bid on a team; once a bid is placed the 15-second timer restarts until it expires.',
-              'Teams not drafted during the auction will become free agent teams available on waivers.',
-            ].map((r, i) => <li key={i} className="text-sm text-copy-2 leading-relaxed pl-1">{r}</li>)}
-          </ul>
-        </section>
-
-        <div className="border-t border-line" />
-
-        <section>
-          <h3 className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-3">Bonus Payouts · $75 per winner</h3>
-          <div className="space-y-2">
-            {[
-              { label: 'Bonus 1', desc: 'Manager whose lowest-scoring roster team earns the fewest points.' },
-              { label: 'Bonus 2', desc: 'Manager with the highest points-to-auction-cost ratio across their roster.' },
-            ].map(b => (
-              <div key={b.label} className="flex gap-3 bg-field border border-line rounded-xl px-4 py-3">
-                <span className="text-xs font-semibold text-brand whitespace-nowrap mt-0.5">{b.label}</span>
-                <p className="text-sm text-copy-2">{b.desc}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {league.seasonRefs.length > 0 && (
-          <>
-            <div className="border-t border-line" />
-            <section>
-              <h3 className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-3">Scoring Breakdown</h3>
-              <div className="overflow-x-auto rounded-xl border border-line">
-                <table className="w-full text-sm min-w-max">
-                  <thead>
-                    <tr className="bg-field/60 border-b border-line">
-                      <th className="text-left px-4 py-2.5 text-xs font-semibold text-copy-3 min-w-[140px]"></th>
-                      {league.seasonRefs.map(ref => (
-                        <th key={ref.sportLeagueId} className="text-center px-4 py-2.5 text-xs font-semibold text-copy-3 whitespace-nowrap">
-                          {formatLeagueName(ref.sportLeagueId)}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {/* Points per section */}
-                    <tr className="border-t border-line/50 bg-field/30">
-                      <td colSpan={league.seasonRefs.length + 1} className="px-4 py-1.5 text-xs font-semibold text-copy-3">
-                        Points per:
-                      </td>
-                    </tr>
-                    <tr className="border-t border-line/50">
-                      <td className="px-4 py-2.5 font-medium text-copy">Win</td>
-                      {league.seasonRefs.map(ref => (
-                        <td key={ref.sportLeagueId} className="px-4 py-2.5 text-center text-copy-2">
-                          {ref.winValue.toFixed(1)}
-                        </td>
-                      ))}
-                    </tr>
-                    <tr className="border-t border-line/50">
-                      <td className="px-4 py-2.5 font-medium text-copy">Draw / OT Loss</td>
-                      {league.seasonRefs.map(ref => (
-                        <td key={ref.sportLeagueId} className="px-4 py-2.5 text-center text-copy-2">
-                          {(ref.drawValue ?? 0).toFixed(1)}
-                        </td>
-                      ))}
-                    </tr>
-
-                    {/* Playoff structure section */}
-                    <tr className="border-t-2 border-line bg-field/30">
-                      <td colSpan={league.seasonRefs.length + 1} className="px-4 py-1.5 text-xs font-semibold text-copy-3">
-                        Playoff structure:
-                      </td>
-                    </tr>
-                    {[
-                      { label: '1st round winner', pts: 10 },
-                      { label: '2nd round winner', pts: 15 },
-                      { label: '3rd round winner', pts: 25 },
-                      { label: 'Champion',          pts: 50 },
-                      { label: 'Max playoff points', pts: 100 },
-                    ].map(({ label, pts }, i) => (
-                      <tr key={label} className={`border-t border-line/50${i === 3 ? ' font-semibold' : ''}`}>
-                        <td className={`px-4 py-2.5 text-copy ${i === 3 ? 'font-semibold' : 'font-medium'}`}>{label}</td>
-                        {league.seasonRefs.map(ref => (
-                          <td key={ref.sportLeagueId} className={`px-4 py-2.5 text-center ${i === 3 ? 'text-copy font-semibold' : 'text-copy-2'}`}>
-                            {pts}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-          </>
-        )}
-      </div>
+      <section className="space-y-4">
+        <h3 className="text-xs font-semibold text-copy-3 uppercase tracking-widest">Bonus Points</h3>
+        <p className="text-xs text-copy-3">Awarded in addition to regular win/draw points for finishing in qualifying positions:</p>
+        <div className="space-y-2">
+          {[
+            { sport: 'NHL',            rules: ['10 pts — Top 2 in each division'] },
+            { sport: 'NBA',            rules: ['10 pts — Top 3 in each conference'] },
+            { sport: 'NFL',            rules: ['10 pts — Each Division Winner'] },
+            { sport: 'MLB',            rules: ['10 pts — Each Division Winner + 4 seed (Top Wildcard team)'] },
+            { sport: 'UCL',            rules: ['10 pts — Top 8 in the Final Table'] },
+            { sport: 'EPL',            rules: ['5 pts — Top 6 in the League', '15 pts — FA and EFL Cup Winners'] },
+            { sport: 'NCAA Football',  rules: ['20 pts — Power 4 Champions (B1G, SEC, B12, ACC)'] },
+            { sport: 'NCAA Basketball',rules: ['8 pts — (Power 4 + Big East) conference winner', '8 pts — (Power 4 + Big East) conference tournament winner'] },
+          ].map(({ sport, rules }) => (
+            <div key={sport} className="flex gap-3 bg-field border border-line rounded-xl px-4 py-3">
+              <span className="text-xs font-semibold text-brand whitespace-nowrap w-28 flex-shrink-0 mt-0.5">{sport}</span>
+              <ul className="space-y-1 list-disc list-inside flex-1">
+                {rules.map((r, i) => <li key={i} className="text-xs text-copy-2">{r}</li>)}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }
