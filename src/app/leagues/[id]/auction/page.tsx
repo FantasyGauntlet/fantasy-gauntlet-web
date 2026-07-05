@@ -147,6 +147,7 @@ export default function AuctionPage() {
   const [currentLot, setCurrentLot] = useState<CurrentLot | null>(null);
   const [soldLots, setSoldLots] = useState<SoldLot[]>([]);
   const [upcomingQueue, setUpcomingQueue] = useState<string[]>([]);
+  const [hiddenQueueSize, setHiddenQueueSize] = useState<number>(0);
   const [nominationMode, setNominationMode] = useState('random');
   const [minBidIncrement, setMinBidIncrement] = useState(1);
   const [minOpeningBid, setMinOpeningBid] = useState(1);
@@ -282,6 +283,9 @@ export default function AuctionPage() {
           ? (session.queue?.slice((session.currentIndex ?? -1) + 1) ?? [])
           : [];
         setUpcomingQueue(remaining);
+        if (session.nominationMode === 'random-hidden' && session.queueSize) {
+          setHiddenQueueSize(session.queueSize);
+        }
 
         // Reconstruct snake draft state on reconnect
         const isSnake = session.nominationMode === 'snake-random' || session.nominationMode === 'snake-defined';
@@ -706,9 +710,16 @@ export default function AuctionPage() {
 
   const soldOrPassedIds = new Set(soldLots.map(l => l.teamId));
   const allAuctionTeams = [...teamMapRef.current.values()];
-  const availableTeams = allAuctionTeams
-    .filter(t => !soldOrPassedIds.has(t.id) && t.id !== currentLot?.teamId)
-    .sort((a, b) => a.name.localeCompare(b.name));
+  // For non-hidden modes, derive available teams from the actual queue (preset-filtered by backend)
+  // rather than all sport teams. For hidden mode, fall back to allAuctionTeams for display only.
+  const availableTeams = nominationMode !== 'random-hidden'
+    ? upcomingQueue
+        .map(tid => teamMapRef.current.get(tid))
+        .filter((t): t is SportTeam => !!t && !soldOrPassedIds.has(t.id) && t.id !== currentLot?.teamId)
+        .sort((a, b) => a.name.localeCompare(b.name))
+    : allAuctionTeams
+        .filter(t => !soldOrPassedIds.has(t.id) && t.id !== currentLot?.teamId)
+        .sort((a, b) => a.name.localeCompare(b.name));
   const filteredAvailableTeams = availableFilter
     ? availableTeams.filter(t => t.sportLeagueId === availableFilter)
     : availableTeams;
@@ -1187,11 +1198,11 @@ export default function AuctionPage() {
             )}
 
             {/* Teams remaining count for random-hidden (no queue revealed) */}
-            {nominationMode === 'random-hidden' && (availableTeams.length > 0 || !!currentLot) && (
+            {nominationMode === 'random-hidden' && hiddenQueueSize > 0 && (
               <div className="bg-card border border-line rounded-2xl px-4 py-3 flex items-center justify-between">
                 <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide">Teams Remaining</p>
                 <span className="text-2xl font-bold text-copy tabular-nums">
-                  {availableTeams.length + (currentLot ? 1 : 0)}
+                  {hiddenQueueSize - soldLots.length}
                 </span>
               </div>
             )}
