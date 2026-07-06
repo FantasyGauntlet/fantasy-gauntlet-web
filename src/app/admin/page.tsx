@@ -60,6 +60,25 @@ export default function AdminPage() {
     for (const s of SYNCS) await runSync(s.key, s.label, s.endpoint);
   }
 
+  // ── Per-sport team sync ────────────────────────────────────────────────────
+  const [sportSyncTarget, setSportSyncTarget] = useState('');
+  const [sportSyncStatus, setSportSyncStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [sportSyncMessage, setSportSyncMessage] = useState('');
+
+  async function syncSingleSport() {
+    if (!sportSyncTarget) return;
+    setSportSyncStatus('loading');
+    setSportSyncMessage('Syncing...');
+    try {
+      await api.post('/admin/ingestion/teams', { sportKeys: [sportSyncTarget] });
+      setSportSyncStatus('success');
+      setSportSyncMessage(`Teams synced for ${formatLeagueName(sportSyncTarget)}`);
+    } catch (e: unknown) {
+      setSportSyncStatus('error');
+      setSportSyncMessage(e instanceof Error ? e.message : 'Failed');
+    }
+  }
+
   // ── Bonus Points ───────────────────────────────────────────────────────────
   const [sports, setSports] = useState<SportLeague[]>([]);
   const [selectedSport, setSelectedSport] = useState('');
@@ -367,41 +386,74 @@ export default function AdminPage() {
 
         {/* ── Data Sync ── */}
         {tab === 'sync' && (
-          <div className="bg-card border border-line rounded-2xl p-5">
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="text-sm font-semibold text-copy">Data Sync</h2>
-              <button
-                onClick={runAll}
-                className="bg-brand hover:bg-brand-2 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
-              >
-                Run All
-              </button>
-            </div>
-            <div className="space-y-1">
-              {SYNCS.map(s => {
-                const r = results[s.key];
-                return (
-                  <div key={s.key} className="flex items-center justify-between py-3 border-b border-line/50 last:border-0">
-                    <div>
-                      <p className="text-sm font-medium text-copy">{s.label}</p>
-                      {r && (
-                        <p className={`text-xs mt-0.5 ${
-                          r.status === 'success' ? 'text-positive' :
-                          r.status === 'error' ? 'text-danger' : 'text-copy-3'
-                        }`}>{r.message}</p>
-                      )}
+          <div className="space-y-4">
+            <div className="bg-card border border-line rounded-2xl p-5">
+              <div className="flex items-center justify-between mb-5">
+                <h2 className="text-sm font-semibold text-copy">Data Sync</h2>
+                <button
+                  onClick={runAll}
+                  className="bg-brand hover:bg-brand-2 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  Run All
+                </button>
+              </div>
+              <div className="space-y-1">
+                {SYNCS.map(s => {
+                  const r = results[s.key];
+                  return (
+                    <div key={s.key} className="flex items-center justify-between py-3 border-b border-line/50 last:border-0">
+                      <div>
+                        <p className="text-sm font-medium text-copy">{s.label}</p>
+                        {r && (
+                          <p className={`text-xs mt-0.5 ${
+                            r.status === 'success' ? 'text-positive' :
+                            r.status === 'error' ? 'text-danger' : 'text-copy-3'
+                          }`}>{r.message}</p>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => runSync(s.key, s.label, s.endpoint)}
+                        disabled={r?.status === 'loading'}
+                        className="flex items-center gap-1.5 bg-field hover:bg-field-2 border border-line disabled:opacity-50 text-copy-2 text-xs px-3 py-1.5 rounded-lg transition-colors"
+                      >
+                        {r?.status === 'loading' ? <Spinner /> : null}
+                        {r?.status === 'loading' ? 'Running...' : 'Run'}
+                      </button>
                     </div>
-                    <button
-                      onClick={() => runSync(s.key, s.label, s.endpoint)}
-                      disabled={r?.status === 'loading'}
-                      className="flex items-center gap-1.5 bg-field hover:bg-field-2 border border-line disabled:opacity-50 text-copy-2 text-xs px-3 py-1.5 rounded-lg transition-colors"
-                    >
-                      {r?.status === 'loading' ? <Spinner /> : null}
-                      {r?.status === 'loading' ? 'Running...' : 'Run'}
-                    </button>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Per-sport team sync — useful for refreshing a single league's roster mid-season */}
+            <div className="bg-card border border-line rounded-2xl p-5">
+              <h2 className="text-sm font-semibold text-copy mb-4">Sync Teams by Sport</h2>
+              <div className="flex gap-2">
+                <select
+                  value={sportSyncTarget}
+                  onChange={e => { setSportSyncTarget(e.target.value); setSportSyncStatus('idle'); setSportSyncMessage(''); }}
+                  className={`flex-1 ${inputCls}`}
+                >
+                  <option value="">Select sport...</option>
+                  {['premier-league','ucl','world-cup','nfl','ncaa-football','nba','ncaa-basketball','nhl','mlb'].map(id => (
+                    <option key={id} value={id}>{formatLeagueName(id)}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={syncSingleSport}
+                  disabled={!sportSyncTarget || sportSyncStatus === 'loading'}
+                  className="flex items-center gap-1.5 bg-brand hover:bg-brand-2 text-white text-xs font-semibold px-4 py-2 rounded-xl disabled:opacity-50 transition-colors whitespace-nowrap"
+                >
+                  {sportSyncStatus === 'loading' ? <Spinner /> : null}
+                  {sportSyncStatus === 'loading' ? 'Syncing...' : 'Sync Teams'}
+                </button>
+              </div>
+              {sportSyncMessage && (
+                <p className={`text-xs mt-2 ${
+                  sportSyncStatus === 'success' ? 'text-positive' :
+                  sportSyncStatus === 'error' ? 'text-danger' : 'text-copy-3'
+                }`}>{sportSyncMessage}</p>
+              )}
             </div>
           </div>
         )}
