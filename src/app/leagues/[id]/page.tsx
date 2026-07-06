@@ -337,7 +337,6 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone }: {
         </thead>
         <tbody>
           {standings.map(s => {
-            const totalWins = s.teamBreakdown.reduce((sum, t) => sum + t.wins, 0);
             const isExpanded = expanded === s.userId;
             const isMe = myTeamOwnerIds.has(s.userId);
             const inTopZone = !!topZone && s.rank <= topZone;
@@ -376,8 +375,7 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone }: {
                       const total = s.teamBreakdown.length;
                       return (
                         <span className="text-sm text-copy-3">
-                          {activeCount < total ? <><span className="text-copy">{activeCount}</span>/{total}</> : total}
-                          {' · '}{totalWins}W
+                          {activeCount < total ? <><span className="text-copy font-medium">{activeCount}</span>/{total}</> : total}
                         </span>
                       );
                     })()}
