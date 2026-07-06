@@ -79,6 +79,30 @@ export default function AdminPage() {
     }
   }
 
+  // ── Manual team entry ──────────────────────────────────────────────────────
+  const SPORT_KEYS = ['premier-league','ucl','world-cup','nfl','ncaa-football','nba','ncaa-basketball','nhl','mlb'];
+  const [manualSport, setManualSport] = useState('ucl');
+  const [manualTeamText, setManualTeamText] = useState('');
+  const [manualStatus, setManualStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [manualMessage, setManualMessage] = useState('');
+
+  async function submitManualTeams() {
+    const names = manualTeamText.split('\n').map(l => l.trim()).filter(Boolean);
+    if (!names.length) return;
+    setManualStatus('loading');
+    setManualMessage('Saving...');
+    try {
+      const res = await api.post<{ replaced: number }>(`/admin/ingestion/sports/${manualSport}/replace-teams`, {
+        teams: names.map(name => ({ name })),
+      });
+      setManualStatus('success');
+      setManualMessage(`Saved ${res.replaced} teams for ${formatLeagueName(manualSport)}`);
+    } catch (e: unknown) {
+      setManualStatus('error');
+      setManualMessage(e instanceof Error ? e.message : 'Failed');
+    }
+  }
+
   // ── Bonus Points ───────────────────────────────────────────────────────────
   const [sports, setSports] = useState<SportLeague[]>([]);
   const [selectedSport, setSelectedSport] = useState('');
@@ -454,6 +478,51 @@ export default function AdminPage() {
                   sportSyncStatus === 'error' ? 'text-danger' : 'text-copy-3'
                 }`}>{sportSyncMessage}</p>
               )}
+            </div>
+
+            {/* Manual team entry — paste in team names when ESPN data isn't updated yet */}
+            <div className="bg-card border border-line rounded-2xl p-5">
+              <div className="mb-4">
+                <h2 className="text-sm font-semibold text-copy">Manual Team Entry</h2>
+                <p className="text-xs text-copy-3 mt-0.5">Replaces all teams for a sport with your list. One team per line.</p>
+              </div>
+              <div className="space-y-3">
+                <select
+                  value={manualSport}
+                  onChange={e => { setManualSport(e.target.value); setManualStatus('idle'); setManualMessage(''); }}
+                  className={inputCls}
+                >
+                  {SPORT_KEYS.map(id => (
+                    <option key={id} value={id}>{formatLeagueName(id)}</option>
+                  ))}
+                </select>
+                <textarea
+                  value={manualTeamText}
+                  onChange={e => { setManualTeamText(e.target.value); setManualStatus('idle'); setManualMessage(''); }}
+                  placeholder={'Real Madrid\nManchester City\nBayern Munich\n...'}
+                  rows={10}
+                  className={`${inputCls} font-mono resize-y`}
+                />
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-copy-3">
+                    {manualTeamText.split('\n').filter(l => l.trim()).length} teams entered
+                  </span>
+                  <button
+                    onClick={submitManualTeams}
+                    disabled={!manualTeamText.trim() || manualStatus === 'loading'}
+                    className="flex items-center gap-1.5 bg-brand hover:bg-brand-2 text-white text-xs font-semibold px-4 py-2 rounded-xl disabled:opacity-50 transition-colors"
+                  >
+                    {manualStatus === 'loading' ? <Spinner /> : null}
+                    {manualStatus === 'loading' ? 'Saving...' : 'Replace Teams'}
+                  </button>
+                </div>
+                {manualMessage && (
+                  <p className={`text-xs ${
+                    manualStatus === 'success' ? 'text-positive' :
+                    manualStatus === 'error' ? 'text-danger' : 'text-copy-3'
+                  }`}>{manualMessage}</p>
+                )}
+              </div>
             </div>
           </div>
         )}
