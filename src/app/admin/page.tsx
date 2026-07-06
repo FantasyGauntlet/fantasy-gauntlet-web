@@ -115,7 +115,7 @@ export default function AdminPage() {
   const [expandedSports, setExpandedSports] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    fetch(`${BASE}/sports/leagues`).then(r => r.json()).then(setSports).catch(() => {});
+    fetch(`${BASE}/sports/leagues?includeArchived=true`).then(r => r.json()).then(setSports).catch(() => {});
   }, []);
 
   useEffect(() => {
