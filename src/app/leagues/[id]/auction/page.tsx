@@ -163,6 +163,8 @@ export default function AuctionPage() {
   const [rosterView, setRosterView] = useState(''); // empty = current user
   const [nominating, setNominating] = useState(false);
   const [selectedNomination, setSelectedNomination] = useState('');
+  const [nominatorUserId, setNominatorUserId] = useState<string | null>(null);
+  const [nominationOrderState, setNominationOrderState] = useState<string[]>([]);
   const [auctionErrorMsg, setAuctionErrorMsg] = useState('');
   const [confirmReset, setConfirmReset] = useState(false);
   const [bidFlash, setBidFlash] = useState(false);
@@ -287,6 +289,15 @@ export default function AuctionPage() {
           setHiddenQueueSize(session.queueSize);
         }
 
+        // Restore manual nomination state on reconnect
+        if (session.nominationMode === 'manual') {
+          if (session.nominationOrder) setNominationOrderState(session.nominationOrder);
+          if (session.nominationOrder && session.nominationIndex !== undefined) {
+            const idx = session.nominationIndex % session.nominationOrder.length;
+            setNominatorUserId(session.nominationOrder[idx]);
+          }
+        }
+
         // Reconstruct snake draft state on reconnect
         const isSnake = session.nominationMode === 'snake-random' || session.nominationMode === 'snake-defined';
         if (isSnake && session.draftOrder) {
@@ -356,8 +367,8 @@ export default function AuctionPage() {
       socket.on('auction_started', (data: any) => {
         setStatus('waiting');
         if (data.nominationMode) setNominationMode(data.nominationMode);
-        // Queue is sent for manual and disclosed modes; null for random-hidden
         if (data.queue) setUpcomingQueue(data.queue);
+        if (data.nominationOrder) setNominationOrderState(data.nominationOrder);
         toast('info', 'The auction has started!');
       });
 
@@ -458,6 +469,7 @@ export default function AuctionPage() {
         setBidInput('');
         setBidError('');
         setPendingBidAmt(null);
+        setNominatorUserId(null);
         setUpcomingQueue(q => q.filter(tid => tid !== data.teamId));
       });
 
@@ -571,6 +583,16 @@ export default function AuctionPage() {
         if (data.queue) setUpcomingQueue(data.queue);
       });
 
+      socket.on('nomination_turn', (data: any) => {
+        setNominatorUserId(data.nominatorUserId ?? null);
+        setNominating(false);
+        setSelectedNomination('');
+      });
+
+      socket.on('nomination_order_updated', (data: any) => {
+        if (data.nominationOrder) setNominationOrderState(data.nominationOrder);
+      });
+
       socket.on('auction_closed', () => {
         setStatus('closed');
         setCurrentLot(null);
@@ -649,9 +671,8 @@ export default function AuctionPage() {
   function handleNominate() {
     if (!selectedNomination) return;
     setNominating(true);
-    socketRef.current?.emit('commissioner_nominate', { teamId: selectedNomination });
+    socketRef.current?.emit('submit_nomination', { teamId: selectedNomination });
     setSelectedNomination('');
-    setTimeout(() => setNominating(false), 800);
   }
 
   async function handleStartAuction() {
@@ -810,12 +831,16 @@ export default function AuctionPage() {
                 <p className="text-copy-2 text-sm mb-1">
                   {isSnake
                     ? (snakeDraftOrder.length > 0 ? 'Preparing next pick…' : 'Waiting for snake draft to begin…')
+                    : nominationMode === 'manual' && nominatorUserId
+                    ? nominatorUserId === user?.uid
+                      ? 'It\'s your turn to nominate!'
+                      : `Waiting for ${participantName(nominatorUserId)} to nominate…`
                     : nominationMode === 'manual'
-                    ? 'Waiting for commissioner to nominate a team…'
+                    ? 'Waiting for nomination…'
                     : 'Preparing next team…'}
                 </p>
-                {nominationMode === 'manual' && !isCommissioner && (
-                  <p className="text-copy-3 text-xs mt-1">The commissioner will pick the next team to auction.</p>
+                {nominationMode === 'manual' && nominatorUserId && nominatorUserId !== user?.uid && !isCommissioner && (
+                  <p className="text-copy-3 text-xs mt-1">{participantName(nominatorUserId)} will pick the next team to auction.</p>
                 )}
               </div>
             )}
@@ -1068,7 +1093,7 @@ export default function AuctionPage() {
                       </button>
                     </>
                   )}
-                  {/* Manual mode: pick next team */}
+                  {/* Manual mode: commissioner can always nominate (fallback for any turn) */}
                   {nominationMode === 'manual' && status === 'waiting' && league?.state === 'auction' && (
                     <div className="flex gap-2 w-full">
                       <select
@@ -1076,7 +1101,11 @@ export default function AuctionPage() {
                         onChange={e => setSelectedNomination(e.target.value)}
                         className="flex-1 bg-field border border-line-2 rounded-xl px-3 py-2 text-copy text-sm focus:outline-none focus:border-brand"
                       >
-                        <option value="">Pick a team to nominate…</option>
+                        <option value="">
+                          {nominatorUserId && nominatorUserId !== user?.uid
+                            ? `Nominate on behalf of ${participantName(nominatorUserId)}…`
+                            : 'Pick a team to nominate…'}
+                        </option>
                         {nominationOptions.map(t => (
                           <option key={t.id} value={t.id}>{t.name} ({fln(t.sportLeagueId)})</option>
                         ))}
@@ -1194,6 +1223,32 @@ export default function AuctionPage() {
                     )}
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Non-commissioner nomination UI: shown when it's the user's turn */}
+            {nominationMode === 'manual' && !isCommissioner && nominatorUserId === user?.uid && status === 'waiting' && league?.state === 'auction' && (
+              <div className="bg-card border border-brand/40 rounded-2xl p-4 space-y-3">
+                <p className="text-xs font-semibold text-brand uppercase tracking-wide">Your Turn to Nominate</p>
+                <div className="flex gap-2">
+                  <select
+                    value={selectedNomination}
+                    onChange={e => setSelectedNomination(e.target.value)}
+                    className="flex-1 bg-field border border-line-2 rounded-xl px-3 py-2 text-copy text-sm focus:outline-none focus:border-brand"
+                  >
+                    <option value="">Pick a team to nominate…</option>
+                    {nominationOptions.map(t => (
+                      <option key={t.id} value={t.id}>{t.name} ({fln(t.sportLeagueId)})</option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={handleNominate}
+                    disabled={!selectedNomination || nominating}
+                    className="bg-brand hover:bg-brand-2 disabled:opacity-40 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors whitespace-nowrap"
+                  >
+                    {nominating ? 'Nominating…' : 'Nominate'}
+                  </button>
+                </div>
               </div>
             )}
 
