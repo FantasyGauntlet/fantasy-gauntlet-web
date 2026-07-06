@@ -761,7 +761,7 @@ export default function AuctionPage() {
           <span className="text-copy-3">/</span>
           <span className="text-copy font-semibold">{league?.name ?? '...'}</span>
           <span className="text-copy-3">/</span>
-          <span className="text-brand font-semibold">Auction Room</span>
+          <span className="text-brand font-semibold">Draft Room</span>
         </div>
         <div className="flex items-center gap-2 text-sm text-copy-2">
           <Dot color={connected ? 'green' : 'red'} />
@@ -773,7 +773,7 @@ export default function AuctionPage() {
       {status === 'connecting' && (
         <div className="flex flex-col items-center justify-center py-24 gap-4 text-copy-2">
           <div className="w-10 h-10 border-2 border-brand border-t-transparent rounded-full animate-spin" />
-          <p>Joining auction room…</p>
+          <p>Joining draft room…</p>
         </div>
       )}
 

@@ -121,7 +121,7 @@ type Tab = 'standings' | 'roster' | 'waivers' | 'settings';
 
 const STATE_META: Record<string, { label: string; cls: string }> = {
   draft:     { label: 'Draft',     cls: 'bg-warn-bg text-warn border-warn/20' },
-  auction:   { label: 'Auction',   cls: 'bg-info-bg text-info border-info/20' },
+  auction:   { label: 'Draft',     cls: 'bg-info-bg text-info border-info/20' },
   active:    { label: 'Active',    cls: 'bg-brand-dim text-brand border-brand/20' },
   completed: { label: 'Completed', cls: 'bg-field text-copy-3 border-line' },
   cancelled: { label: 'Cancelled', cls: 'bg-danger-bg text-danger border-danger/20' },
@@ -229,7 +229,7 @@ export default function LeaguePage() {
                 href={`/leagues/${id}/auction`}
                 className="bg-info text-white font-semibold px-4 py-2 rounded-xl text-sm transition-colors hover:opacity-90"
               >
-                Enter Auction Room
+                Enter Draft Room
               </Link>
             )}
             {isCommissioner && league.state === 'draft' && (
