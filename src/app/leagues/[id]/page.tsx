@@ -1997,62 +1997,83 @@ function WaiversTab({
               <p className="text-xs font-semibold text-copy-3 uppercase tracking-wider">
                 2. Add from available pool
               </p>
-              <div className="flex items-center gap-2 flex-wrap">
-                <select
-                  value={sportFilter}
-                  onChange={e => setSportFilter(e.target.value)}
-                  className="bg-field border border-line-2 text-xs text-copy rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-brand transition-colors"
-                >
-                  <option value="all">All sports</option>
-                  {selectedSports.map(s => <option key={s} value={s}>{formatLeagueName(s)}</option>)}
-                </select>
-                <button
-                  type="button"
-                  onClick={() => setPoolSort(s => s === 'alpha' ? 'points' : 'alpha')}
-                  className="bg-field border border-line-2 text-xs text-copy-2 rounded-lg px-2.5 py-1.5 hover:border-brand hover:text-copy transition-colors"
-                >
-                  {poolSort === 'alpha' ? 'A–Z' : 'Top Pts'}
-                </button>
+              <span className="text-xs text-copy-3">{filteredAvailable.length} available</span>
+            </div>
+
+            {/* Filters row */}
+            <div className="flex gap-2 mb-2 flex-wrap">
+              <div className="relative flex-1 min-w-0">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="absolute left-2.5 top-1/2 -translate-y-1/2 text-copy-3 pointer-events-none">
+                  <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" strokeLinecap="round" />
+                </svg>
+                <input
+                  type="text"
+                  value={poolSearch}
+                  onChange={e => setPoolSearch(e.target.value)}
+                  placeholder="Search teams…"
+                  className="w-full bg-field border border-line-2 rounded-lg pl-7 pr-3 py-1.5 text-xs text-copy placeholder-copy-3 focus:outline-none focus:border-brand transition-colors"
+                />
               </div>
+              <select
+                value={sportFilter}
+                onChange={e => setSportFilter(e.target.value)}
+                className="bg-field border border-line-2 text-xs text-copy rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-brand transition-colors"
+              >
+                <option value="all">All sports</option>
+                {selectedSports.map(s => <option key={s} value={s}>{formatLeagueName(s)}</option>)}
+              </select>
+              <select
+                value={poolSort}
+                onChange={e => setPoolSort(e.target.value as 'alpha' | 'points')}
+                className="bg-field border border-line-2 text-xs text-copy rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-brand transition-colors"
+              >
+                <option value="alpha">A–Z</option>
+                <option value="points">Top Points</option>
+              </select>
             </div>
-            <div className="mb-2">
-              <input
-                type="text"
-                value={poolSearch}
-                onChange={e => setPoolSearch(e.target.value)}
-                placeholder="Search teams..."
-                className="w-full bg-field border border-line-2 rounded-lg px-3 py-1.5 text-xs text-copy placeholder-copy-3 focus:outline-none focus:border-brand transition-colors"
-              />
-            </div>
+
+            {/* Team list */}
             {filteredAvailable.length === 0 ? (
-              <div className="text-center py-6 border border-dashed border-line rounded-xl">
+              <div className="text-center py-8 border border-dashed border-line rounded-xl">
                 <p className="text-copy-3 text-xs">
-                  No available teams{sportFilter !== 'all' ? ` in ${sportFilter}` : ''}.
+                  No available teams{sportFilter !== 'all' ? ` in ${formatLeagueName(sportFilter)}` : ''}.
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-56 overflow-y-auto pr-0.5">
-                {filteredAvailable.map(t => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => setAddTeamId(addTeamId === t.id ? '' : t.id)}
-                    className={`text-left px-3 py-2.5 rounded-xl border transition-all ${
-                      addTeamId === t.id
-                        ? 'bg-brand-dim border-brand/40 text-copy'
-                        : 'bg-field border-line text-copy-2 hover:border-line-2 hover:text-copy'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 mb-1">
-                      {t.logoUrl && <img src={t.logoUrl} alt={t.name} className="w-6 h-6 object-contain flex-shrink-0" />}
-                      <p className="font-medium text-xs leading-snug">{t.name}</p>
-                    </div>
-                    <p className="text-xs text-copy-3">{formatLeagueName(t.sportLeagueId)}</p>
-                    <p className="text-xs text-copy-2 mt-1">
-                      {formatRecord(t.wins, t.draws, t.losses, t.sport)} · {t.points.toFixed(1)} pts
-                    </p>
-                  </button>
-                ))}
+              <div className="border border-line rounded-xl overflow-hidden max-h-80 overflow-y-auto divide-y divide-line/50">
+                {filteredAvailable.map(t => {
+                  const selected = addTeamId === t.id;
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => setAddTeamId(selected ? '' : t.id)}
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 transition-colors text-left ${
+                        selected ? 'bg-brand-dim' : 'hover:bg-field'
+                      }`}
+                    >
+                      <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center">
+                        {t.logoUrl
+                          ? <img src={t.logoUrl} alt={t.name} className="w-8 h-8 object-contain" />
+                          : <div className="w-8 h-8 rounded bg-field-2 flex items-center justify-center text-copy-3 text-[10px] font-bold">{t.shortName?.slice(0, 2).toUpperCase() ?? '?'}</div>
+                        }
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm font-medium truncate ${selected ? 'text-brand' : 'text-copy'}`}>{t.name}</p>
+                        <p className="text-xs text-copy-3">{formatLeagueName(t.sportLeagueId)}</p>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <p className="text-sm font-semibold text-copy">{t.points.toFixed(1)} pts</p>
+                        <p className="text-xs text-copy-3">{formatRecord(t.wins, t.draws, t.losses, t.sport)}</p>
+                      </div>
+                      {selected && (
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-brand flex-shrink-0">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
