@@ -79,28 +79,49 @@ export default function AdminPage() {
     }
   }
 
-  // ── Manual team entry ──────────────────────────────────────────────────────
+  // ── Manage Teams ───────────────────────────────────────────────────────────
   const SPORT_KEYS = ['premier-league','ucl','world-cup','nfl','ncaa-football','nba','ncaa-basketball','nhl','mlb'];
   const [manualSport, setManualSport] = useState('ucl');
-  const [manualTeamText, setManualTeamText] = useState('');
-  const [manualStatus, setManualStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
-  const [manualMessage, setManualMessage] = useState('');
+  const [manageTeams, setManageTeams] = useState<Team[]>([]);
+  const [manageLoading, setManageLoading] = useState(false);
+  const [manageAddName, setManageAddName] = useState('');
+  const [manageAddStatus, setManageAddStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [manageDeleteIds, setManageDeleteIds] = useState<Set<string>>(new Set());
 
-  async function submitManualTeams() {
-    const names = manualTeamText.split('\n').map(l => l.trim()).filter(Boolean);
-    if (!names.length) return;
-    setManualStatus('loading');
-    setManualMessage('Saving...');
+  async function loadManageTeams(sport: string) {
+    setManageLoading(true);
     try {
-      const res = await api.post<{ replaced: number }>(`/admin/ingestion/sports/${manualSport}/replace-teams`, {
-        teams: names.map(name => ({ name })),
-      });
-      setManualStatus('success');
-      setManualMessage(`Saved ${res.replaced} teams for ${formatLeagueName(manualSport)}`);
-    } catch (e: unknown) {
-      setManualStatus('error');
-      setManualMessage(e instanceof Error ? e.message : 'Failed');
+      const ts = await fetch(`${BASE}/sports/leagues/${sport}/teams`).then(r => r.json()) as Team[];
+      setManageTeams([...ts].sort((a, b) => a.name.localeCompare(b.name)));
+    } catch { setManageTeams([]); }
+    setManageLoading(false);
+  }
+
+  useEffect(() => { loadManageTeams(manualSport); }, [manualSport]);
+
+  async function addManageTeam() {
+    const name = manageAddName.trim();
+    if (!name) return;
+    setManageAddStatus('loading');
+    try {
+      const res = await api.post<{ teamId: string; name: string }>(`/admin/ingestion/sports/${manualSport}/add-team`, { name });
+      setManageTeams(prev => [...prev, { id: res.teamId, name: res.name, shortName: res.name, sportLeagueId: manualSport, logoUrl: null }].sort((a, b) => a.name.localeCompare(b.name)));
+      setManageAddName('');
+      setManageAddStatus('success');
+      setTimeout(() => setManageAddStatus('idle'), 2000);
+    } catch {
+      setManageAddStatus('error');
+      setTimeout(() => setManageAddStatus('idle'), 3000);
     }
+  }
+
+  async function removeManageTeam(teamId: string) {
+    setManageDeleteIds(prev => new Set([...prev, teamId]));
+    try {
+      await api.delete(`/admin/ingestion/sports/${manualSport}/teams/${teamId}`);
+      setManageTeams(prev => prev.filter(t => t.id !== teamId));
+    } catch { /* ignore */ }
+    setManageDeleteIds(prev => { const n = new Set(prev); n.delete(teamId); return n; });
   }
 
   // ── Bonus Points ───────────────────────────────────────────────────────────
@@ -516,48 +537,82 @@ export default function AdminPage() {
               )}
             </div>
 
-            {/* Manual team entry — paste in team names when ESPN data isn't updated yet */}
+            {/* Manage Teams — add/remove individual teams */}
             <div className="bg-card border border-line rounded-2xl p-5">
               <div className="mb-4">
-                <h2 className="text-sm font-semibold text-copy">Manual Team Entry</h2>
-                <p className="text-xs text-copy-3 mt-0.5">Replaces all teams for a sport with your list. One team per line.</p>
+                <h2 className="text-sm font-semibold text-copy">Manage Teams</h2>
+                <p className="text-xs text-copy-3 mt-0.5">Add or remove individual teams for a sport without replacing the whole roster.</p>
               </div>
               <div className="space-y-3">
                 <select
                   value={manualSport}
-                  onChange={e => { setManualSport(e.target.value); setManualStatus('idle'); setManualMessage(''); }}
+                  onChange={e => setManualSport(e.target.value)}
                   className={inputCls}
                 >
                   {SPORT_KEYS.map(id => (
                     <option key={id} value={id}>{formatLeagueName(id)}</option>
                   ))}
                 </select>
-                <textarea
-                  value={manualTeamText}
-                  onChange={e => { setManualTeamText(e.target.value); setManualStatus('idle'); setManualMessage(''); }}
-                  placeholder={'Real Madrid\nManchester City\nBayern Munich\n...'}
-                  rows={10}
-                  className={`${inputCls} font-mono resize-y`}
-                />
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-copy-3">
-                    {manualTeamText.split('\n').filter(l => l.trim()).length} teams entered
-                  </span>
+
+                {/* Current team list */}
+                <div className="border border-line rounded-xl overflow-hidden">
+                  {manageLoading ? (
+                    <div className="flex items-center justify-center gap-2 py-6 text-copy-3 text-sm">
+                      <Spinner /> Loading…
+                    </div>
+                  ) : manageTeams.length === 0 ? (
+                    <p className="text-copy-3 text-xs text-center py-6">No teams found for {formatLeagueName(manualSport)}.</p>
+                  ) : (
+                    <div className="divide-y divide-line max-h-72 overflow-y-auto">
+                      {manageTeams.map(t => (
+                        <div key={t.id} className="flex items-center justify-between px-3 py-2 gap-3 hover:bg-field/50 transition-colors">
+                          <div className="flex items-center gap-2 min-w-0">
+                            {t.logoUrl && <img src={t.logoUrl} alt={t.name} className="w-5 h-5 object-contain flex-shrink-0" />}
+                            <span className="text-sm text-copy truncate">{t.name}</span>
+                            <span className="text-xs text-copy-3 font-mono flex-shrink-0 opacity-50">{t.id}</span>
+                          </div>
+                          <button
+                            onClick={() => removeManageTeam(t.id)}
+                            disabled={manageDeleteIds.has(t.id)}
+                            className="flex-shrink-0 p-1 text-copy-3 hover:text-danger transition-colors disabled:opacity-40"
+                            title="Remove team"
+                          >
+                            {manageDeleteIds.has(t.id) ? <Spinner size="sm" /> : (
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                              </svg>
+                            )}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Add team row */}
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={manageAddName}
+                    onChange={e => setManageAddName(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && addManageTeam()}
+                    placeholder="Team name…"
+                    className={`${inputCls} flex-1`}
+                  />
                   <button
-                    onClick={submitManualTeams}
-                    disabled={!manualTeamText.trim() || manualStatus === 'loading'}
-                    className="flex items-center gap-1.5 bg-brand hover:bg-brand-2 text-white text-xs font-semibold px-4 py-2 rounded-xl disabled:opacity-50 transition-colors"
+                    onClick={addManageTeam}
+                    disabled={!manageAddName.trim() || manageAddStatus === 'loading'}
+                    className={`flex-shrink-0 flex items-center gap-1.5 text-xs font-semibold px-4 py-2 rounded-xl disabled:opacity-50 transition-colors whitespace-nowrap ${
+                      manageAddStatus === 'success' ? 'bg-positive/20 text-positive border border-positive/30' :
+                      manageAddStatus === 'error'   ? 'bg-danger-bg text-danger border border-danger/30' :
+                      'bg-brand hover:bg-brand-2 text-white'
+                    }`}
                   >
-                    {manualStatus === 'loading' ? <Spinner /> : null}
-                    {manualStatus === 'loading' ? 'Saving...' : 'Replace Teams'}
+                    {manageAddStatus === 'loading' ? <Spinner size="sm" /> : null}
+                    {manageAddStatus === 'success' ? 'Added!' : manageAddStatus === 'error' ? 'Failed' : 'Add Team'}
                   </button>
                 </div>
-                {manualMessage && (
-                  <p className={`text-xs ${
-                    manualStatus === 'success' ? 'text-positive' :
-                    manualStatus === 'error' ? 'text-danger' : 'text-copy-3'
-                  }`}>{manualMessage}</p>
-                )}
+                <p className="text-xs text-copy-3">{manageTeams.length} team{manageTeams.length !== 1 ? 's' : ''} · press Enter or click Add Team</p>
               </div>
             </div>
           </div>
