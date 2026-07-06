@@ -1533,33 +1533,6 @@ export default function AuctionPage() {
                       );
                     })}
 
-                    {/* Wildcard slots */}
-                    {maxWildcard > 0 && (
-                      <div>
-                        <div className="flex items-center justify-between mb-1.5">
-                          <p className="text-xs font-semibold text-copy-2">Wildcard</p>
-                          <span className={`text-[10px] font-medium ${wildcardLots.length >= maxWildcard ? 'text-positive' : 'text-copy-3'}`}>
-                            {wildcardLots.length}/{maxWildcard}
-                          </span>
-                        </div>
-                        <div className="flex flex-wrap gap-1.5">
-                          {wildcardLots.map(t => {
-                            const info = teamMapRef.current.get(t.teamId);
-                            return (
-                              <div key={t.teamId} title={`${t.teamName} (${fln(info?.sportLeagueId ?? '')})`} className="flex flex-col items-center gap-0.5 w-10">
-                                <TeamLogo logoUrl={t.logoUrl} name={t.teamName} size={8} />
-                                <p className="text-[10px] text-copy-3 text-center leading-tight w-full truncate">
-                                  {info?.shortName ?? t.teamName.split(' ').pop() ?? ''}
-                                </p>
-                              </div>
-                            );
-                          })}
-                          {Array.from({ length: Math.max(0, maxWildcard - wildcardLots.length) }).map((_, i) => (
-                            <div key={`wc-empty-${i}`} className="w-8 h-8 rounded-lg border-2 border-dashed border-warn/40 flex-shrink-0" />
-                          ))}
-                        </div>
-                      </div>
-                    )}
                   </div>
                 </div>
               );
