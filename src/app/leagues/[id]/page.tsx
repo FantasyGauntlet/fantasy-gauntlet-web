@@ -117,7 +117,7 @@ type TxEvent =
   | { type: 'trade'; id: string; date: string; proposerFantasyTeamId: string; receiverFantasyTeamId: string; offeredSportTeamIds: string[]; requestedSportTeamIds: string[]; }
   | { type: 'waiver'; id: string; date: string; claimantUserId: string; claimantDisplayName: string; addTeamId: string; dropTeamId: string; };
 
-type Tab = 'standings' | 'roster' | 'waivers' | 'settings' | 'commissioner';
+type Tab = 'standings' | 'roster' | 'waivers' | 'settings';
 
 const STATE_META: Record<string, { label: string; cls: string }> = {
   draft:     { label: 'Draft',     cls: 'bg-warn-bg text-warn border-warn/20' },
@@ -208,7 +208,6 @@ export default function LeaguePage() {
     { key: 'roster', label: 'Roster' },
     { key: 'waivers', label: 'Waivers' },
     { key: 'settings', label: 'League' },
-    ...(isCommissioner ? [{ key: 'commissioner' as Tab, label: 'Commissioner' }] : []),
   ];
 
   return (
@@ -284,11 +283,8 @@ export default function LeaguePage() {
           selectedSports={league.selectedSports}
         />
       )}
-      {tab === 'commissioner' && isCommissioner && (
-        <CommissionerTab league={league} setLeague={setLeague} leagueId={id} />
-      )}
       {tab === 'settings' && (
-        <SettingsTab league={league} isCommissioner={isCommissioner} leagueId={id} memberCount={members.length} previousLeagueId={league.previousLeagueId} userId={user?.uid} fantasyTeams={fantasyTeams} />
+        <SettingsTab league={league} setLeague={setLeague} isCommissioner={isCommissioner} leagueId={id} memberCount={members.length} previousLeagueId={league.previousLeagueId} userId={user?.uid} fantasyTeams={fantasyTeams} />
       )}
     </div>
   );
@@ -2130,9 +2126,10 @@ function WaiversTab({
 // ─── Settings Tab ─────────────────────────────────────────────────────────────
 
 function SettingsTab({
-  league, isCommissioner, leagueId, memberCount, previousLeagueId, userId, fantasyTeams,
+  league, setLeague, isCommissioner, leagueId, memberCount, previousLeagueId, userId, fantasyTeams,
 }: {
   league: League;
+  setLeague: React.Dispatch<React.SetStateAction<League | null>>;
   isCommissioner: boolean;
   leagueId: string;
   memberCount: number;
@@ -2142,6 +2139,7 @@ function SettingsTab({
 }) {
   const msgEndRef = useRef<HTMLDivElement>(null);
   const [rulesOpen, setRulesOpen] = useState(false);
+  const [commissionerOpen, setCommissionerOpen] = useState(false);
 
   const [transactions, setTransactions] = useState<TxEvent[]>([]);
   const [txLoading, setTxLoading] = useState(true);
@@ -2473,6 +2471,30 @@ function SettingsTab({
         </div>
       </div>
 
+      {/* ── Commissioner (collapsible, commissioner-only) ──────────────────────── */}
+      {isCommissioner && (
+        <div className="bg-card border border-line rounded-2xl overflow-hidden">
+          <button
+            onClick={() => setCommissionerOpen(v => !v)}
+            className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-field/50 transition-colors"
+          >
+            <p className="text-sm font-semibold text-copy">Commissioner Settings</p>
+            <svg
+              width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+              className={`text-copy-3 transition-transform duration-200 ${commissionerOpen ? 'rotate-180' : ''}`}
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+          {commissionerOpen && (
+            <div className="border-t border-line p-4 space-y-4">
+              <CommissionerTab league={league} setLeague={setLeague} leagueId={leagueId} />
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── Rules & Scoring (collapsible) ──────────────────────────────────────── */}
       <div className="bg-card border border-line rounded-2xl overflow-hidden">
         <button
@@ -2532,7 +2554,7 @@ function CommissionerTab({
   const [zonesSaving, setZonesSaving] = useState(false);
 
   const [waiverDay, setWaiverDay] = useState(league.waiverSettings?.processingDay ?? 'tuesday');
-  const [waiverHour, setWaiverHour] = useState(league.waiverSettings?.processingHour ?? 10);
+  const [waiverHour, setWaiverHour] = useState(league.waiverSettings?.processingHour ?? 17);
   const [waiverSettingsSaving, setWaiverSettingsSaving] = useState(false);
 
   const inputCls = 'w-full bg-field border border-line-2 rounded-xl px-4 py-2.5 text-copy text-sm focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors';
@@ -2930,7 +2952,7 @@ function RulesTab({ league }: { league: League }) {
             {(() => {
               const ws = league.waiverSettings;
               const wDay = ws?.processingDay ?? 'tuesday';
-              const wHour = ws?.processingHour ?? 10;
+              const wHour = ws?.processingHour ?? 17;
               const wDayLabel = wDay.charAt(0).toUpperCase() + wDay.slice(1);
               const wTimeLabel = wHour === 0 ? '12:00 AM' : wHour < 12 ? `${wHour}:00 AM` : wHour === 12 ? '12:00 PM' : `${wHour - 12}:00 PM`;
               return [
