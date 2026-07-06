@@ -1019,7 +1019,9 @@ function RosterTab({
                   {viewingIsPrimaryOwner ? 'Your team' : 'Your team (co-owner)'}
                 </p>
               )}
-              <p className="text-xs text-copy-3 mt-0.5">{viewingOwnedTeams.length} team{viewingOwnedTeams.length !== 1 ? 's' : ''}</p>
+              {!loadingTeams && (
+                <p className="text-xs text-copy-3 mt-0.5">{viewingOwnedTeams.length} team{viewingOwnedTeams.length !== 1 ? 's' : ''}</p>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -1053,7 +1055,21 @@ function RosterTab({
           </div>
         </div>
         <div className="divide-y divide-line/50">
-          {viewingOwnedTeams.length === 0 && (
+          {loadingTeams && (
+            <div className="divide-y divide-line/50">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="px-5 py-4 flex items-center gap-3 animate-pulse">
+                  <div className="w-9 h-9 rounded-lg bg-field-2 flex-shrink-0" />
+                  <div className="flex-1 space-y-1.5">
+                    <div className="h-3.5 bg-field-2 rounded w-32" />
+                    <div className="h-3 bg-field-2 rounded w-20" />
+                  </div>
+                  <div className="h-4 bg-field-2 rounded w-12" />
+                </div>
+              ))}
+            </div>
+          )}
+          {!loadingTeams && viewingOwnedTeams.length === 0 && (
             <div className="px-5 py-8 text-center">
               <p className="text-copy-3 text-sm">No teams yet</p>
             </div>
