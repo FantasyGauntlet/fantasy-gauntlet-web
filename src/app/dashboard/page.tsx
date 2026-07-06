@@ -18,22 +18,58 @@ interface League {
   endDate?: string;
 }
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const SPORT_ACRONYMS = new Set(['nhl', 'nba', 'nfl', 'mlb', 'ucl', 'ncaa', 'mls', 'fifa', 'ufc']);
+
+function formatSport(id: string) {
+  return id.split('-').map(w =>
+    SPORT_ACRONYMS.has(w.toLowerCase()) ? w.toUpperCase() : (w[0]?.toUpperCase() ?? '') + w.slice(1)
+  ).join(' ');
+}
+
+function formatSeason(start?: string, end?: string): string | null {
+  if (!start && !end) return null;
+  const fmt = (d: string) => {
+    try { return new Date(d + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', year: '2-digit' }); }
+    catch { return d; }
+  };
+  if (start && end) return `${fmt(start)} – ${fmt(end)}`;
+  if (start) return `From ${fmt(start)}`;
+  return null;
+}
+
 const STATE_META: Record<string, { label: string; cls: string }> = {
   draft:     { label: 'Draft',     cls: 'bg-warn-bg text-warn border-warn/20' },
-  auction:   { label: 'Auction',   cls: 'bg-info-bg text-info border-info/20' },
+  auction:   { label: 'Draft',     cls: 'bg-info-bg text-info border-info/20' },
   active:    { label: 'Active',    cls: 'bg-brand-dim text-brand border-brand/20' },
   completed: { label: 'Completed', cls: 'bg-field text-copy-3 border-line' },
   cancelled: { label: 'Cancelled', cls: 'bg-danger-bg text-danger border-danger/20' },
 };
 
-function PlusIcon() {
+// ─── Skeleton ─────────────────────────────────────────────────────────────────
+
+function SkeletonCard() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-      <line x1="12" y1="5" x2="12" y2="19" />
-      <line x1="5" y1="12" x2="19" y2="12" />
-    </svg>
+    <div className="bg-card border border-line rounded-2xl p-5 animate-pulse">
+      <div className="flex items-start justify-between mb-3">
+        <div className="h-5 bg-field-2 rounded-lg w-40" />
+        <div className="h-6 bg-field-2 rounded-full w-16" />
+      </div>
+      <div className="flex gap-1.5 mb-4">
+        <div className="h-5 bg-field-2 rounded-md w-16" />
+        <div className="h-5 bg-field-2 rounded-md w-12" />
+        <div className="h-5 bg-field-2 rounded-md w-14" />
+      </div>
+      <div className="flex justify-between">
+        <div className="h-3.5 bg-field-2 rounded w-20" />
+        <div className="h-3.5 bg-field-2 rounded w-24" />
+      </div>
+    </div>
   );
 }
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -49,52 +85,62 @@ export default function DashboardPage() {
   }, []);
 
   const firstName = user?.displayName?.split(' ')[0] ?? user?.email?.split('@')[0] ?? 'there';
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+
+  const activeCount = leagues.filter(l => l.state === 'active' || l.state === 'auction').length;
+  const draftingCount = leagues.filter(l => l.state === 'draft' || l.state === 'auction').length;
 
   return (
-    <div>
+    <div className="space-y-8">
       {/* Header */}
-      <div className="flex items-start justify-between mb-8">
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-copy-3 text-sm mb-1">Welcome back</p>
+          <p className="text-copy-3 text-sm mb-0.5">{greeting}</p>
           <h1 className="text-2xl font-bold text-copy">{firstName}</h1>
         </div>
         <Link
           href="/leagues/new"
-          className="flex items-center gap-2 bg-brand hover:bg-brand-2 text-white font-semibold px-4 py-2.5 rounded-xl transition-colors text-sm"
+          className="flex items-center gap-2 bg-brand hover:bg-brand-2 text-white font-semibold px-4 py-2.5 rounded-xl transition-colors text-sm flex-shrink-0"
         >
-          <PlusIcon />
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
           New League
         </Link>
       </div>
 
-      {/* Stats row */}
+      {/* Stats */}
       {!loading && leagues.length > 0 && (
-        <div className="grid grid-cols-3 gap-3 mb-8">
+        <div className="grid grid-cols-3 gap-3">
           {[
             { label: 'My Leagues', value: leagues.length },
-            { label: 'Active', value: leagues.filter(l => l.state === 'active' || l.state === 'auction').length },
-            { label: 'Commissioner', value: leagues.filter(l => l.commissionerId === user?.uid).length },
+            { label: 'In Season',  value: activeCount },
+            { label: 'Drafting',   value: draftingCount },
           ].map(s => (
             <div key={s.label} className="bg-card border border-line rounded-xl p-4">
-              <p className="text-2xl font-bold text-copy">{s.value}</p>
-              <p className="text-copy-3 text-xs mt-0.5">{s.label}</p>
+              <p className="text-2xl font-bold text-copy tabular-nums">{s.value}</p>
+              <p className="text-copy-3 text-xs mt-0.5 font-medium">{s.label}</p>
             </div>
           ))}
         </div>
       )}
 
-      {/* Content */}
-      {loading && (
-        <div className="flex justify-center py-16">
-          <div className="w-8 h-8 border-2 border-brand border-t-transparent rounded-full animate-spin" />
-        </div>
-      )}
-
+      {/* Error */}
       {error && (
         <div className="bg-danger-bg border border-danger/20 rounded-xl p-4 text-danger text-sm">{error}</div>
       )}
 
-      {!loading && !error && leagues.length === 0 && (
+      {/* League grid */}
+      {loading ? (
+        <div>
+          <div className="h-3.5 bg-field-2 rounded w-20 mb-3 animate-pulse" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {[...Array(3)].map((_, i) => <SkeletonCard key={i} />)}
+          </div>
+        </div>
+      ) : leagues.length === 0 ? (
         <div className="text-center py-20 border border-dashed border-line rounded-2xl">
           <div className="w-14 h-14 rounded-2xl bg-brand-dim border border-brand/20 flex items-center justify-center mx-auto mb-4">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-brand">
@@ -107,56 +153,62 @@ export default function DashboardPage() {
             href="/leagues/new"
             className="inline-flex items-center gap-2 bg-brand hover:bg-brand-2 text-white font-semibold px-5 py-2.5 rounded-xl transition-colors text-sm"
           >
-            <PlusIcon />
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
             Create a League
           </Link>
         </div>
-      )}
-
-      {!loading && leagues.length > 0 && (
+      ) : (
         <div>
           <h2 className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-3">My Leagues</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {leagues.map(league => {
               const meta = STATE_META[league.state] ?? STATE_META.completed;
-              const isCommish = league.commissionerId === user?.uid;
+              const season = formatSeason(league.startDate, league.endDate);
               return (
                 <Link
                   key={league.id}
                   href={`/leagues/${league.id}`}
-                  className="group bg-card hover:bg-card-hover border border-line hover:border-brand/40 rounded-2xl p-5 transition-all"
+                  className="group bg-card hover:bg-card-hover border border-line hover:border-brand/30 rounded-2xl p-5 transition-all block"
                 >
-                  <div className="flex items-start justify-between mb-4">
-                    <h3 className="font-semibold text-copy group-hover:text-brand transition-colors leading-tight pr-2">
+                  {/* Name + state */}
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <h3 className="font-semibold text-copy group-hover:text-brand transition-colors leading-snug">
                       {league.name}
                     </h3>
-                    <span className={`flex-shrink-0 text-xs font-medium px-2.5 py-1 rounded-full border ${meta.cls}`}>
+                    <span className={`flex-shrink-0 text-xs font-medium px-2.5 py-1 rounded-full border inline-flex items-center gap-1.5 ${meta.cls}`}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70 flex-shrink-0" />
                       {meta.label}
                     </span>
                   </div>
 
+                  {/* Sports */}
                   {league.selectedSports && league.selectedSports.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mb-4">
-                      {league.selectedSports.slice(0, 4).map(s => (
+                    <div className="flex flex-wrap gap-1.5 mb-4">
+                      {league.selectedSports.slice(0, 3).map(s => (
                         <span key={s} className="text-xs bg-field border border-line text-copy-3 px-2 py-0.5 rounded-md">
-                          {s}
+                          {formatSport(s)}
                         </span>
                       ))}
-                      {league.selectedSports.length > 4 && (
-                        <span className="text-xs text-copy-3">+{league.selectedSports.length - 4}</span>
+                      {league.selectedSports.length > 3 && (
+                        <span className="text-xs text-copy-3 self-center">+{league.selectedSports.length - 3}</span>
                       )}
                     </div>
                   )}
 
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-copy-3">
-                      {league.startDate && league.endDate
-                        ? `${league.startDate} – ${league.endDate}`
-                        : 'Date TBD'}
+                  {/* Footer */}
+                  <div className="flex items-center justify-between gap-2 text-xs text-copy-3">
+                    <span className="flex items-center gap-1">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+                        <circle cx="9" cy="7" r="4" />
+                        <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
+                      </svg>
+                      {league.memberCount}{league.maxMembers ? ` / ${league.maxMembers}` : ''}
                     </span>
-                    {isCommish && (
-                      <span className="text-xs font-medium text-brand">Commissioner</span>
-                    )}
+                    {season && <span>{season}</span>}
                   </div>
                 </Link>
               );
