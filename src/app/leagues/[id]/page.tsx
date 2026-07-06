@@ -388,7 +388,7 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone }: {
                   <tr key={`${s.userId}-bd`} className="border-b border-line/50 bg-field/20">
                     <td colSpan={5} className="px-6 py-4 space-y-3">
                       <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                        {[...s.teamBreakdown].sort((a, b) => a.teamName.localeCompare(b.teamName)).map(t => {
+                        {s.teamBreakdown.map(t => {
                           const teamBonuses = s.bonusBreakdown?.filter(b => b.teamId === t.teamId) ?? [];
                           const teamBonusTotal = teamBonuses.reduce((sum, b) => sum + b.points, 0);
                           const teamTotal = t.points + teamBonusTotal;
