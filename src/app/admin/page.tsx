@@ -30,7 +30,7 @@ const SYNCS = [
   { key: 'records',      label: 'Sync Records',             endpoint: '/admin/ingestion/records' },
 ];
 
-type Tab = 'sync' | 'bonus' | 'scoring' | 'preset' | 'deadlines' | 'leagues';
+type Tab = 'sync' | 'bonus' | 'scoring' | 'preset' | 'deadlines' | 'leagues' | 'elimination';
 
 function Spinner({ size = 'sm' }: { size?: 'sm' | 'md' }) {
   const s = size === 'sm' ? 'w-4 h-4 border-[1.5px]' : 'w-6 h-6 border-2';
@@ -373,13 +373,49 @@ export default function AdminPage() {
     ? allLeagues.filter(l => l.name.toLowerCase().includes(leagueSearch.toLowerCase()))
     : allLeagues;
 
+  // ── Elimination ────────────────────────────────────────────────────────────
+  const [elimSport, setElimSport] = useState('');
+  const [elimTeams, setElimTeams] = useState<Team[]>([]);
+  const [eliminatedSet, setEliminatedSet] = useState<Set<string>>(new Set());
+  const [elimLoading, setElimLoading] = useState(false);
+  const [elimToggling, setElimToggling] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!elimSport || tab !== 'elimination') { setElimTeams([]); setEliminatedSet(new Set()); return; }
+    setElimLoading(true);
+    Promise.all([
+      fetch(`${BASE}/sports/leagues/${elimSport}/teams`).then(r => r.json()),
+      api.get<{ teamId: string }[]>(`/admin/teams/eliminated?sportLeagueId=${elimSport}`).catch(() => []),
+    ]).then(([ts, elim]: [Team[], { teamId: string }[]]) => {
+      setElimTeams([...ts].sort((a, b) => a.name.localeCompare(b.name)));
+      setEliminatedSet(new Set((elim ?? []).map(e => e.teamId)));
+    }).catch(() => {})
+      .finally(() => setElimLoading(false));
+  }, [elimSport, tab]);
+
+  async function toggleElimination(teamId: string) {
+    const isEliminated = eliminatedSet.has(teamId);
+    setElimToggling(prev => new Set([...prev, teamId]));
+    try {
+      if (isEliminated) {
+        await api.delete(`/admin/teams/${teamId}/eliminate`);
+        setEliminatedSet(prev => { const n = new Set(prev); n.delete(teamId); return n; });
+      } else {
+        await api.post(`/admin/teams/${teamId}/eliminate`);
+        setEliminatedSet(prev => new Set([...prev, teamId]));
+      }
+    } catch { /* ignore */ }
+    setElimToggling(prev => { const n = new Set(prev); n.delete(teamId); return n; });
+  }
+
   const tabs: { key: Tab; label: string }[] = [
-    { key: 'sync',      label: 'Data Sync' },
-    { key: 'bonus',     label: 'Bonus Points' },
-    { key: 'scoring',   label: 'League Scoring' },
-    { key: 'preset',    label: 'Auction Preset' },
-    { key: 'deadlines', label: 'Deadlines' },
-    { key: 'leagues',   label: 'Leagues' },
+    { key: 'sync',        label: 'Data Sync' },
+    { key: 'bonus',       label: 'Bonus Points' },
+    { key: 'scoring',     label: 'League Scoring' },
+    { key: 'preset',      label: 'Auction Preset' },
+    { key: 'deadlines',   label: 'Deadlines' },
+    { key: 'leagues',     label: 'Leagues' },
+    { key: 'elimination', label: 'Elimination' },
   ];
 
   return (
@@ -1059,6 +1095,90 @@ export default function AdminPage() {
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/* ── Elimination ── */}
+        {tab === 'elimination' && (
+          <div className="space-y-4">
+            <div className="bg-card border border-line rounded-2xl p-5">
+              <h2 className="text-sm font-semibold text-copy mb-4">Mark Teams as Eliminated</h2>
+              <p className="text-xs text-copy-3 mb-4">
+                Eliminated teams appear grayed out in standings and their owner's active team count is reduced.
+                This data is stored separately from synced team data and persists through re-syncs.
+              </p>
+              <select
+                value={elimSport}
+                onChange={e => setElimSport(e.target.value)}
+                className={inputCls}
+              >
+                <option value="">Select a sport…</option>
+                {sports.map(s => (
+                  <option key={s.id} value={s.id}>{formatLeagueName(s.id)}</option>
+                ))}
+              </select>
+            </div>
+
+            {elimSport && (
+              <div className="bg-card border border-line rounded-2xl p-5">
+                {elimLoading ? (
+                  <div className="flex items-center gap-2 text-copy-3 text-sm">
+                    <Spinner /> Loading teams…
+                  </div>
+                ) : elimTeams.length === 0 ? (
+                  <p className="text-copy-3 text-sm">No teams found for {formatLeagueName(elimSport)}.</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-xs text-copy-3">
+                        {eliminatedSet.size} of {elimTeams.length} teams eliminated
+                      </p>
+                    </div>
+                    {elimTeams.map(team => {
+                      const isElim = eliminatedSet.has(team.id);
+                      const isToggling = elimToggling.has(team.id);
+                      return (
+                        <div
+                          key={team.id}
+                          className={`flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl border transition-colors ${
+                            isElim ? 'bg-danger-bg border-danger/20' : 'bg-field border-line'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            {team.logoUrl && (
+                              <img
+                                src={team.logoUrl}
+                                alt={team.name}
+                                className={`w-6 h-6 object-contain flex-shrink-0 ${isElim ? 'grayscale opacity-50' : ''}`}
+                              />
+                            )}
+                            <span className={`text-sm font-medium truncate ${isElim ? 'line-through text-copy-3' : 'text-copy'}`}>
+                              {team.name}
+                            </span>
+                            {isElim && (
+                              <span className="text-xs bg-danger-bg text-danger border border-danger/20 px-1.5 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">
+                                Out
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => toggleElimination(team.id)}
+                            disabled={isToggling}
+                            className={`flex-shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 ${
+                              isElim
+                                ? 'bg-field border border-line text-copy-2 hover:border-line-2'
+                                : 'bg-danger-bg border border-danger/30 text-danger hover:bg-danger/10'
+                            }`}
+                          >
+                            {isToggling ? <Spinner size="sm" /> : isElim ? 'Restore' : 'Eliminate'}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </main>
