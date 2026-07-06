@@ -5,48 +5,48 @@
 
 /* ── Design tokens (Tailwind v4 @theme → generates utility classes) ──────── */
 @theme {
-  /* Dark-mode defaults */
-  --color-base:         #060d06;
-  --color-card:         #0c1a0c;
-  --color-card-hover:   #112011;
-  --color-field:        #152515;
-  --color-field-2:      #1c321c;
-  --color-line:         #1c321c;
-  --color-line-2:       #274527;
+  /* Dark-mode defaults — neutral blue-charcoal surfaces, electric green accent */
+  --color-base:         #111118;
+  --color-card:         #1a1a26;
+  --color-card-hover:   #202030;
+  --color-field:        #242436;
+  --color-field-2:      #2c2c42;
+  --color-line:         #27273a;
+  --color-line-2:       #343450;
 
-  --color-copy:         #f1fdf2;
-  --color-copy-2:       #8abf8e;
-  --color-copy-3:       #537553;
+  --color-copy:         #f0f0f8;
+  --color-copy-2:       #9494b2;
+  --color-copy-3:       #56566e;
 
-  --color-brand:        #22c55e;
-  --color-brand-2:      #16a34a;
-  --color-brand-3:      #4ade80;
-  --color-brand-dim:    #0d3d1a;
-  --color-brand-text:   #22c55e;
+  --color-brand:        #3dde85;
+  --color-brand-2:      #2ec470;
+  --color-brand-3:      #60efa0;
+  --color-brand-dim:    #0c2a1c;
+  --color-brand-text:   #3dde85;
 
   --color-danger:       #f87171;
-  --color-danger-bg:    #3b0a0a;
+  --color-danger-bg:    #360c0c;
   --color-warn:         #fbbf24;
-  --color-warn-bg:      #3d2000;
+  --color-warn-bg:      #38220a;
   --color-info:         #60a5fa;
-  --color-info-bg:      #0f2340;
-  --color-positive:     #4ade80;
-  --color-positive-bg:  #0d3d1a;
+  --color-info-bg:      #0e2240;
+  --color-positive:     #3dde85;
+  --color-positive-bg:  #0c2a1c;
 }
 
 /* ── Light mode overrides ─────────────────────────────────────────────────── */
 .light {
-  --color-base:         #f7fdf8;
+  --color-base:         #f5f5fa;
   --color-card:         #ffffff;
-  --color-card-hover:   #f0fbf1;
-  --color-field:        #f0f9f1;
-  --color-field-2:      #e2f4e4;
-  --color-line:         #cce8d0;
-  --color-line-2:       #a8d8ae;
+  --color-card-hover:   #ededf8;
+  --color-field:        #eeeef6;
+  --color-field-2:      #e2e2f0;
+  --color-line:         #d0d0e4;
+  --color-line-2:       #b8b8d0;
 
-  --color-copy:         #0c2b10;
-  --color-copy-2:       #2a6636;
-  --color-copy-3:       #6b8e72;
+  --color-copy:         #14142a;
+  --color-copy-2:       #44446a;
+  --color-copy-3:       #72729a;
 
   --color-brand:        #16a34a;
   --color-brand-2:      #15803d;
