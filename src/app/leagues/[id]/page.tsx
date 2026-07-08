@@ -117,7 +117,7 @@ type TxEvent =
   | { type: 'trade'; id: string; date: string; proposerFantasyTeamId: string; receiverFantasyTeamId: string; offeredSportTeamIds: string[]; requestedSportTeamIds: string[]; }
   | { type: 'waiver'; id: string; date: string; claimantUserId: string; claimantDisplayName: string; addTeamId: string; dropTeamId: string; };
 
-type Tab = 'standings' | 'roster' | 'waivers' | 'settings';
+type Tab = 'home' | 'standings' | 'roster' | 'waivers' | 'settings';
 
 const STATE_META: Record<string, { label: string; cls: string }> = {
   draft:     { label: 'Draft',     cls: 'bg-warn-bg text-warn border-warn/20' },
@@ -169,7 +169,7 @@ export default function LeaguePage() {
   const [league, setLeague] = useState<League | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [fantasyTeams, setFantasyTeams] = useState<FantasyTeam[]>([]);
-  const [tab, setTab] = useState<Tab>('standings');
+  const [tab, setTab] = useState<Tab>('home');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -204,6 +204,7 @@ export default function LeaguePage() {
   const isCommissioner = league.commissionerId === user?.uid;
   const stateMeta = STATE_META[league.state] ?? STATE_META.completed;
   const tabs: { key: Tab; label: string }[] = [
+    { key: 'home', label: 'Home' },
     { key: 'standings', label: 'Standings' },
     { key: 'roster', label: 'Roster' },
     { key: 'waivers', label: 'Waivers' },
@@ -214,13 +215,19 @@ export default function LeaguePage() {
     <div>
       {/* League header */}
       <div className="mb-6">
-        <div className="flex items-start justify-between gap-4 flex-wrap mb-3">
+        <div className="flex items-start justify-between gap-4 flex-wrap mb-2">
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2.5 flex-wrap mb-1">
+            <div className="flex items-center gap-2.5 flex-wrap mb-2">
               <h1 className="text-2xl font-bold text-copy">{league.name}</h1>
               <span className={`text-xs font-medium px-2.5 py-1 rounded-full border ${stateMeta.cls}`}>
                 {stateMeta.label}
               </span>
+            </div>
+            <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-copy-3">
+              <span>Multi-Sport Fantasy</span>
+              <span>{league.selectedSports.length} sport{league.selectedSports.length !== 1 ? 's' : ''}</span>
+              <span>{members.length}{league.memberCap ? `/${league.memberCap}` : ''} teams</span>
+              <span>{league.startDate} – {league.endDate}</span>
             </div>
           </div>
           <div className="flex gap-2 flex-wrap">
@@ -263,6 +270,16 @@ export default function LeaguePage() {
         ))}
       </div>
 
+      {tab === 'home' && (
+        <HomeTab
+          leagueId={id}
+          fantasyTeams={fantasyTeams}
+          league={league}
+          isCommissioner={isCommissioner}
+          userId={user?.uid}
+          memberCount={members.length}
+        />
+      )}
       {tab === 'standings' && <StandingsTab leagueId={id} userId={user?.uid} fantasyTeams={fantasyTeams} topZone={league.topZone} bottomZone={league.bottomZone} />}
       {tab === 'roster' && (
         <RosterTab
@@ -286,6 +303,290 @@ export default function LeaguePage() {
       {tab === 'settings' && (
         <SettingsTab league={league} setLeague={setLeague} isCommissioner={isCommissioner} leagueId={id} memberCount={members.length} previousLeagueId={league.previousLeagueId} userId={user?.uid} fantasyTeams={fantasyTeams} />
       )}
+    </div>
+  );
+}
+
+// ─── Home Tab ─────────────────────────────────────────────────────────────────
+
+function HomeTab({
+  leagueId, fantasyTeams, league, isCommissioner, userId, memberCount,
+}: {
+  leagueId: string;
+  fantasyTeams: FantasyTeam[];
+  league: League;
+  isCommissioner: boolean;
+  userId?: string;
+  memberCount: number;
+}) {
+  const [standings, setStandings] = useState<Standing[]>([]);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [newAnnouncement, setNewAnnouncement] = useState('');
+  const [announcementSaving, setAnnouncementSaving] = useState(false);
+  const [showAnnounceForm, setShowAnnounceForm] = useState(false);
+  const [transactions, setTransactions] = useState<TxEvent[]>([]);
+  const [allSportTeams, setAllSportTeams] = useState<SportTeam[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      api.get<Standing[]>(`/leagues/${leagueId}/standings`).catch(() => [] as Standing[]),
+      api.get<Announcement[]>(`/leagues/${leagueId}/announcements`).catch(() => [] as Announcement[]),
+      api.get<TxEvent[]>(`/leagues/${leagueId}/transactions`).catch(() => [] as TxEvent[]),
+      api.get<SportGroup[]>(`/leagues/${leagueId}/sport-teams`).catch(() => [] as SportGroup[]),
+    ]).then(([s, a, t, g]) => {
+      setStandings(s);
+      setAnnouncements(a);
+      setTransactions(t);
+      setAllSportTeams(g.flatMap(sg => sg.teams));
+    }).finally(() => setLoading(false));
+  }, [leagueId]);
+
+  const logoByUserId = useMemo(
+    () => new Map(fantasyTeams.map(ft => [ft.userId, ft.logoUrl ?? null])),
+    [fantasyTeams],
+  );
+  const sportTeamById = useMemo(
+    () => new Map(allSportTeams.map(t => [t.id, t])),
+    [allSportTeams],
+  );
+  const ftById = useMemo(
+    () => new Map(fantasyTeams.map(ft => [ft.id, ft])),
+    [fantasyTeams],
+  );
+
+  async function handleAddAnnouncement(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newAnnouncement.trim()) return;
+    setAnnouncementSaving(true);
+    try {
+      const ann = await api.post<Announcement>(`/leagues/${leagueId}/announcements`, { content: newAnnouncement.trim() });
+      setAnnouncements(prev => [ann, ...prev]);
+      setNewAnnouncement('');
+      setShowAnnounceForm(false);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Failed to post');
+    } finally {
+      setAnnouncementSaving(false);
+    }
+  }
+
+  async function handleDeleteAnnouncement(annId: string) {
+    try {
+      await api.delete(`/leagues/${leagueId}/announcements/${annId}`);
+      setAnnouncements(prev => prev.filter(a => a.id !== annId));
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Failed to delete');
+    }
+  }
+
+  if (loading) return <div className="flex justify-center py-12"><Spinner /></div>;
+
+  const top3 = standings.slice(0, 3);
+
+  // Podium order: 2nd | 1st | 3rd
+  const podiumSlots: (Standing | undefined)[] = top3.length >= 3
+    ? [top3[1], top3[0], top3[2]]
+    : top3.length === 1
+    ? [undefined, top3[0], undefined]
+    : top3.length === 2
+    ? [top3[1], top3[0], undefined]
+    : [];
+
+  const podiumMeta = [
+    { position: 2, pedestal: 'h-20', bg: 'bg-field-2', border: 'border-line-2', text: 'text-copy-2', ring: 'ring-line-2',   avatarSize: 'w-16 h-16', label: '2nd' },
+    { position: 1, pedestal: 'h-28', bg: 'bg-warn-bg',  border: 'border-warn/30', text: 'text-warn',   ring: 'ring-warn/40', avatarSize: 'w-20 h-20', label: '1st' },
+    { position: 3, pedestal: 'h-14', bg: 'bg-field',    border: 'border-line',    text: 'text-copy-3', ring: 'ring-line',    avatarSize: 'w-14 h-14', label: '3rd' },
+  ];
+
+  const medals = ['🥈', '🥇', '🥉'];
+
+  return (
+    <div className="space-y-5">
+
+      {/* Top Finishers podium */}
+      {top3.length >= 1 && (
+        <div className="bg-card border border-line rounded-2xl p-6">
+          <p className="text-xs font-semibold text-copy-3 uppercase tracking-wider mb-8">
+            {league.state === 'completed' ? 'Final Standings' : 'Current Top Finishers'}
+          </p>
+          <div className="flex items-end justify-center gap-4 sm:gap-8">
+            {podiumSlots.map((s, i) => {
+              const meta = podiumMeta[i];
+              if (!s) {
+                return (
+                  <div key={`empty-${i}`} className="flex flex-col items-center gap-2 opacity-0 pointer-events-none">
+                    <div className={`${meta.avatarSize} rounded-full`} />
+                    <div className={`w-20 ${meta.pedestal}`} />
+                  </div>
+                );
+              }
+              const logo = logoByUserId.get(s.userId);
+              const isYou = s.userId === userId;
+              return (
+                <div key={s.userId} className="flex flex-col items-center gap-2">
+                  <div className={`${meta.avatarSize} rounded-full ring-2 ${meta.ring} overflow-hidden flex items-center justify-center bg-field flex-shrink-0`}>
+                    {logo
+                      ? <img src={logo} alt={s.displayName} className="w-full h-full object-cover" />
+                      : <span className={`font-black ${meta.text} ${meta.position === 1 ? 'text-2xl' : 'text-lg'}`}>{s.displayName.charAt(0).toUpperCase()}</span>
+                    }
+                  </div>
+                  <span className="text-2xl leading-none">{medals[i]}</span>
+                  <div className="text-center">
+                    <p className={`text-sm font-semibold max-w-[88px] truncate ${meta.position === 1 ? 'text-copy' : 'text-copy-2'}`}>
+                      {s.displayName}
+                    </p>
+                    {isYou && <span className="text-[10px] font-semibold text-brand uppercase tracking-wide">You</span>}
+                    <p className={`text-xs font-bold ${meta.text} mt-0.5`}>{s.totalPoints.toFixed(1)} pts</p>
+                  </div>
+                  <div className={`w-24 ${meta.pedestal} ${meta.bg} border ${meta.border} rounded-t-lg flex items-start justify-center pt-2`}>
+                    <span className={`text-xs font-black ${meta.text} uppercase tracking-wider`}>{meta.label}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Commissioner's Note */}
+      <div className="bg-card border border-line rounded-2xl overflow-hidden">
+        <div className="px-5 py-4 border-b border-line flex items-center justify-between">
+          <p className="text-sm font-semibold text-copy">Commissioner's Note</p>
+          {isCommissioner && (
+            <button
+              onClick={() => setShowAnnounceForm(v => !v)}
+              className="text-xs text-brand hover:text-brand-2 font-medium transition-colors"
+            >
+              {showAnnounceForm ? 'Cancel' : '+ Add Note'}
+            </button>
+          )}
+        </div>
+        {isCommissioner && showAnnounceForm && (
+          <form onSubmit={handleAddAnnouncement} className="px-5 py-4 border-b border-line bg-field/30 space-y-2">
+            <textarea
+              value={newAnnouncement}
+              onChange={e => setNewAnnouncement(e.target.value)}
+              placeholder="Write a note or custom rule for your league..."
+              rows={3}
+              maxLength={1000}
+              className="w-full bg-field border border-line rounded-xl px-3 py-2 text-sm text-copy placeholder-copy-3 resize-none focus:outline-none focus:border-brand"
+            />
+            <div className="flex justify-end">
+              <button
+                type="submit"
+                disabled={!newAnnouncement.trim() || announcementSaving}
+                className="bg-brand hover:bg-brand-2 disabled:opacity-50 text-white text-xs font-semibold px-4 py-2 rounded-xl transition-colors"
+              >
+                {announcementSaving ? 'Posting...' : 'Post Note'}
+              </button>
+            </div>
+          </form>
+        )}
+        {announcements.length === 0 ? (
+          <div className="text-center py-8">
+            <p className="text-copy-3 text-sm">No notes yet.</p>
+            {isCommissioner && <p className="text-xs text-copy-3 mt-1">Post rules or notes for your league members.</p>}
+          </div>
+        ) : (
+          <div className="divide-y divide-line/30">
+            {announcements.slice(0, 3).map(ann => (
+              <div key={ann.id} className="px-5 py-4 flex items-start gap-3 group">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span className="text-xs font-semibold text-copy-2">{ann.authorDisplayName}</span>
+                    <span className="text-xs text-copy-3">{timeAgo(ann.createdAt)}</span>
+                  </div>
+                  <p className="text-sm text-copy leading-relaxed break-words">{ann.content}</p>
+                </div>
+                {isCommissioner && (
+                  <button
+                    onClick={() => handleDeleteAnnouncement(ann.id)}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity text-copy-3 hover:text-danger flex-shrink-0 p-1"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                      <path d="M18 6L6 18M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Recent Activity */}
+      <div className="bg-card border border-line rounded-2xl overflow-hidden">
+        <div className="px-5 py-4 border-b border-line">
+          <p className="text-sm font-semibold text-copy">Recent Activity</p>
+        </div>
+        {transactions.length === 0 ? (
+          <div className="text-center py-8">
+            <p className="text-copy-3 text-sm">No transactions yet.</p>
+          </div>
+        ) : (
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-line/50 bg-field/30">
+                <th className="text-left px-5 py-2.5 text-xs font-semibold text-copy-3 uppercase tracking-wide w-24">Date</th>
+                <th className="text-left px-4 py-2.5 text-xs font-semibold text-copy-3 uppercase tracking-wide w-20">Type</th>
+                <th className="text-left px-4 py-2.5 text-xs font-semibold text-copy-3 uppercase tracking-wide">Detail</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line/30">
+              {transactions.slice(0, 10).map(tx => {
+                if (tx.type === 'trade') {
+                  const proposerFt = ftById.get(tx.proposerFantasyTeamId);
+                  const receiverFt = ftById.get(tx.receiverFantasyTeamId);
+                  const offered = tx.offeredSportTeamIds.map(id => sportTeamById.get(id)?.name ?? id);
+                  const requested = tx.requestedSportTeamIds.map(id => sportTeamById.get(id)?.name ?? id);
+                  return (
+                    <tr key={tx.id} className="hover:bg-field/20 transition-colors">
+                      <td className="px-5 py-3 text-xs text-copy-3 whitespace-nowrap align-top">{timeAgo(tx.date)}</td>
+                      <td className="px-4 py-3 align-top">
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-info bg-info-bg px-2 py-0.5 rounded-full whitespace-nowrap">
+                          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4" /></svg>
+                          Trade
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-copy leading-relaxed">
+                        <span className="font-semibold">{proposerFt?.displayName ?? '—'}</span>
+                        <span className="text-copy-3"> sent </span>
+                        <span className="text-danger font-medium">{offered.join(', ')}</span>
+                        <span className="text-copy-3"> to </span>
+                        <span className="font-semibold">{receiverFt?.displayName ?? '—'}</span>
+                        <span className="text-copy-3"> for </span>
+                        <span className="text-positive font-medium">{requested.join(', ')}</span>
+                      </td>
+                    </tr>
+                  );
+                } else {
+                  const addName = sportTeamById.get(tx.addTeamId)?.name ?? tx.addTeamId;
+                  const dropName = sportTeamById.get(tx.dropTeamId)?.name ?? tx.dropTeamId;
+                  return (
+                    <tr key={tx.id} className="hover:bg-field/20 transition-colors">
+                      <td className="px-5 py-3 text-xs text-copy-3 whitespace-nowrap align-top">{timeAgo(tx.date)}</td>
+                      <td className="px-4 py-3 align-top">
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-warn bg-warn-bg px-2 py-0.5 rounded-full whitespace-nowrap">
+                          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M8 7h12M8 12h12M8 17h12M4 7h.01M4 12h.01M4 17h.01" /></svg>
+                          Waiver
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-copy leading-relaxed">
+                        <span className="font-semibold">{tx.claimantDisplayName}</span>
+                        <span className="text-copy-3"> added </span>
+                        <span className="text-positive font-medium">{addName}</span>
+                        <span className="text-copy-3"> / dropped </span>
+                        <span className="text-danger font-medium">{dropName}</span>
+                      </td>
+                    </tr>
+                  );
+                }
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
     </div>
   );
 }
