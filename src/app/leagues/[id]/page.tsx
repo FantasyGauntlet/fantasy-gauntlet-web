@@ -2186,8 +2186,8 @@ function SettingsTab({
   fantasyTeams: FantasyTeam[];
 }) {
   const msgEndRef = useRef<HTMLDivElement>(null);
-  const [rulesOpen, setRulesOpen] = useState(false);
-  const [commissionerOpen, setCommissionerOpen] = useState(false);
+  type LeagueSection = 'overview' | 'activity' | 'board' | 'rules' | 'settings';
+  const [section, setSection] = useState<LeagueSection>('overview');
 
   const [transactions, setTransactions] = useState<TxEvent[]>([]);
   const [txLoading, setTxLoading] = useState(true);
@@ -2276,295 +2276,273 @@ function SettingsTab({
     }
   }
 
+  const subTabs: { key: LeagueSection; label: string }[] = [
+    { key: 'overview',  label: 'Overview' },
+    { key: 'activity',  label: 'Activity' },
+    { key: 'board',     label: 'Board' },
+    { key: 'rules',     label: 'Rules' },
+    ...(isCommissioner ? [{ key: 'settings' as LeagueSection, label: 'Settings' }] : []),
+  ];
+
   return (
-    <div className="space-y-4">
-      {/* ── Message Board ──────────────────────────────────────────────────────── */}
-      <div className="bg-card border border-line rounded-2xl overflow-hidden">
-        <div className="px-5 py-4 border-b border-line">
-          <p className="text-sm font-semibold text-copy">Message Board</p>
-          <p className="text-xs text-copy-3 mt-0.5">Share thoughts, predictions, and trash talk with your league.</p>
-        </div>
-        <div className="divide-y divide-line/30 max-h-72 overflow-y-auto">
-          {messages.length === 0 ? (
-            <div className="text-center py-10">
-              <p className="text-copy-3 text-sm">No messages yet — say something!</p>
-            </div>
-          ) : messages.map(msg => {
-            const isOwn = msg.authorUserId === userId;
-            return (
-              <div key={msg.id} className={`px-5 py-3 flex items-start gap-3 group ${isOwn ? 'bg-brand-dim/20' : ''}`}>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-baseline gap-2 flex-wrap mb-0.5">
-                    <span className="text-xs font-semibold text-copy">{msg.authorDisplayName}</span>
-                    {isOwn && <span className="text-xs text-brand">you</span>}
-                    <span className="text-xs text-copy-3">{timeAgo(msg.createdAt)}</span>
-                  </div>
-                  <p className="text-sm text-copy-2 break-words">{msg.content}</p>
-                </div>
-                {(isOwn || isCommissioner) && (
-                  <button
-                    onClick={() => handleDeleteMessage(msg.id)}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity text-copy-3 hover:text-danger flex-shrink-0 p-1 mt-0.5"
-                  >
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                      <path d="M18 6L6 18M6 6l12 12" />
-                    </svg>
-                  </button>
-                )}
-              </div>
-            );
-          })}
-          <div ref={msgEndRef} />
-        </div>
-        <div className="px-5 py-3 border-t border-line">
-          <form onSubmit={handleSendMessage} className="flex gap-2">
-            <input
-              value={newMessage}
-              onChange={e => setNewMessage(e.target.value)}
-              placeholder="Send a message..."
-              maxLength={500}
-              className="flex-1 bg-field border border-line-2 rounded-xl px-4 py-2 text-copy text-sm placeholder-copy-3 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors"
-            />
-            <button
-              type="submit"
-              disabled={!newMessage.trim() || messageSending}
-              className="bg-brand hover:bg-brand-2 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors whitespace-nowrap"
-            >
-              {messageSending ? '...' : 'Send'}
-            </button>
-          </form>
-        </div>
+    <div>
+      {/* Sub-navigation */}
+      <div className="flex gap-0.5 mb-5 border-b border-line">
+        {subTabs.map(t => (
+          <button
+            key={t.key}
+            onClick={() => setSection(t.key)}
+            className={`px-4 py-2.5 text-sm font-medium transition-colors -mb-px border-b-2 ${
+              section === t.key
+                ? 'border-brand text-brand'
+                : 'border-transparent text-copy-3 hover:text-copy-2 hover:border-line-2'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
 
-      {/* ── Commissioner Board ─────────────────────────────────────────────────── */}
-      <div className="bg-card border border-line rounded-2xl overflow-hidden">
-        <div className="px-5 py-4 border-b border-line flex items-start justify-between gap-3">
-          <div>
-            <p className="text-sm font-semibold text-copy">Commissioner Board</p>
-            <p className="text-xs text-copy-3 mt-0.5">Custom rules and announcements from the commissioner.</p>
-          </div>
-          {isCommissioner && (
-            <button
-              onClick={() => setShowAnnounceForm(v => !v)}
-              className="flex-shrink-0 bg-field hover:bg-field-2 border border-line text-copy-2 text-xs font-medium px-3 py-1.5 rounded-xl transition-colors"
-            >
-              {showAnnounceForm ? 'Cancel' : '+ Post'}
-            </button>
-          )}
-        </div>
-        {isCommissioner && showAnnounceForm && (
-          <form onSubmit={handleAddAnnouncement} className="px-5 py-4 border-b border-line bg-field/30 space-y-2">
-            <textarea
-              value={newAnnouncement}
-              onChange={e => setNewAnnouncement(e.target.value)}
-              placeholder="Write an announcement or custom rule..."
-              rows={3}
-              maxLength={1000}
-              className="w-full bg-card border border-line-2 rounded-xl px-4 py-2.5 text-copy text-sm placeholder-copy-3 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors resize-none"
-            />
-            <div className="flex justify-end">
-              <button
-                type="submit"
-                disabled={!newAnnouncement.trim() || announcementSaving}
-                className="bg-brand hover:bg-brand-2 disabled:opacity-50 text-white text-xs font-semibold px-4 py-2 rounded-xl transition-colors"
-              >
-                {announcementSaving ? 'Posting...' : 'Post Announcement'}
-              </button>
-            </div>
-          </form>
-        )}
-        {announcements.length === 0 ? (
-          <div className="text-center py-10">
-            <p className="text-copy-3 text-sm">No announcements yet.</p>
-            {isCommissioner && <p className="text-xs text-copy-3 mt-1">Post custom rules or notes for your league.</p>}
-          </div>
-        ) : (
-          <div className="divide-y divide-line/30">
-            {announcements.map(ann => (
-              <div key={ann.id} className="px-5 py-4 flex items-start gap-3 group">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-baseline gap-2 flex-wrap mb-1">
-                    <span className="text-xs font-semibold text-copy-2">{ann.authorDisplayName}</span>
-                    <span className="text-xs text-copy-3">{timeAgo(ann.createdAt)}</span>
-                  </div>
-                  <p className="text-sm text-copy leading-relaxed break-words">{ann.content}</p>
-                </div>
-                {isCommissioner && (
-                  <button
-                    onClick={() => handleDeleteAnnouncement(ann.id)}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity text-copy-3 hover:text-danger flex-shrink-0 p-1 mt-0.5"
-                  >
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                      <path d="M18 6L6 18M6 6l12 12" />
-                    </svg>
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* ── Transaction History ────────────────────────────────────────────────── */}
-      <div className="bg-card border border-line rounded-2xl overflow-hidden">
-        <div className="px-5 py-4 border-b border-line">
-          <p className="text-sm font-semibold text-copy">Transaction History</p>
-          <p className="text-xs text-copy-3 mt-0.5">Accepted trades and approved waiver pickups.</p>
-        </div>
-        {txLoading ? (
-          <div className="flex justify-center py-8"><Spinner size="sm" /></div>
-        ) : transactions.length === 0 ? (
-          <div className="text-center py-10">
-            <p className="text-copy-3 text-sm">No transactions yet.</p>
-          </div>
-        ) : (
-          <div className="divide-y divide-line/30">
-            {transactions.map(tx => {
-              if (tx.type === 'trade') {
-                const proposerFt = ftById.get(tx.proposerFantasyTeamId);
-                const receiverFt = ftById.get(tx.receiverFantasyTeamId);
-                const offeredNames = tx.offeredSportTeamIds.map(id => sportTeamById.get(id)?.name ?? id);
-                const requestedNames = tx.requestedSportTeamIds.map(id => sportTeamById.get(id)?.name ?? id);
-                return (
-                  <div key={tx.id} className="px-5 py-3.5 flex items-start gap-3">
-                    <div className="w-6 h-6 rounded-full bg-info-bg border border-info/30 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="text-info">
-                        <path d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4" />
-                      </svg>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs text-copy-3 mb-0.5">{timeAgo(tx.date)}</p>
-                      <p className="text-sm text-copy leading-snug">
-                        <span className="font-semibold">{proposerFt?.displayName ?? '—'}</span>
-                        <span className="text-copy-3"> traded </span>
-                        <span className="text-danger font-medium">{offeredNames.join(', ')}</span>
-                        <span className="text-copy-3"> to </span>
-                        <span className="font-semibold">{receiverFt?.displayName ?? '—'}</span>
-                        <span className="text-copy-3"> for </span>
-                        <span className="text-positive font-medium">{requestedNames.join(', ')}</span>
-                      </p>
-                    </div>
-                  </div>
-                );
-              } else {
-                const addTeamName = sportTeamById.get(tx.addTeamId)?.name ?? tx.addTeamId;
-                const dropTeamName = sportTeamById.get(tx.dropTeamId)?.name ?? tx.dropTeamId;
-                return (
-                  <div key={tx.id} className="px-5 py-3.5 flex items-start gap-3">
-                    <div className="w-6 h-6 rounded-full bg-warn-bg border border-warn/30 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="text-warn">
-                        <path d="M8 7h12M8 12h12M8 17h12M4 7h.01M4 12h.01M4 17h.01" />
-                      </svg>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs text-copy-3 mb-0.5">{timeAgo(tx.date)}</p>
-                      <p className="text-sm text-copy leading-snug">
-                        <span className="font-semibold">{tx.claimantDisplayName}</span>
-                        <span className="text-copy-3"> added </span>
-                        <span className="text-positive font-medium">{addTeamName}</span>
-                        <span className="text-copy-3"> and dropped </span>
-                        <span className="text-danger font-medium">{dropTeamName}</span>
-                      </p>
-                    </div>
-                  </div>
-                );
-              }
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* ── League Info ────────────────────────────────────────────────────────── */}
-      <div className="bg-card border border-line rounded-2xl p-5">
-        <h2 className="text-sm font-semibold text-copy mb-4">League Info</h2>
-        <div className="grid grid-cols-2 gap-3 text-sm mb-4">
+      {/* Overview */}
+      {section === 'overview' && (
+        <div className="bg-card border border-line rounded-2xl divide-y divide-line">
           {[
-            { label: 'League ID', value: <code className="text-xs font-mono text-copy-2">{league.id}</code> },
-            { label: 'Visibility', value: <span className="text-copy">{league.isPublic ? 'Public' : 'Private'}</span> },
-            { label: 'Start', value: <span className="text-copy">{league.startDate}</span> },
-            { label: 'End', value: <span className="text-copy">{league.endDate}</span> },
-            { label: 'Members', value: <span className="text-copy">{memberCount}{league.memberCap ? ` / ${league.memberCap}` : ''}</span> },
+            { label: 'Start date',  value: league.startDate },
+            { label: 'End date',    value: league.endDate },
+            { label: 'Teams',       value: `${memberCount}${league.memberCap ? ` / ${league.memberCap}` : ''}` },
+            { label: 'Visibility',  value: league.isPublic ? 'Public' : 'Private' },
+            { label: 'League ID',   value: league.id },
           ].map(row => (
-            <div key={row.label}>
-              <p className="text-xs text-copy-3 mb-0.5">{row.label}</p>
-              {row.value}
+            <div key={row.label} className="flex items-center justify-between px-5 py-3.5">
+              <span className="text-sm text-copy-3">{row.label}</span>
+              <span className="text-sm text-copy font-medium">{row.value}</span>
             </div>
           ))}
-        </div>
-        <div>
-          <p className="text-xs text-copy-3 mb-2">Sports</p>
-          <div className="flex gap-1.5 flex-wrap">
-            {league.selectedSports.map(s => (
-              <span key={s} className="text-xs bg-field border border-line text-copy-2 px-2.5 py-1 rounded-lg">{formatLeagueName(s)}</span>
-            ))}
+          <div className="px-5 py-3.5">
+            <span className="text-sm text-copy-3 block mb-2">Sports</span>
+            <div className="flex gap-1.5 flex-wrap">
+              {league.selectedSports.map(s => (
+                <span key={s} className="text-xs bg-field border border-line text-copy-2 px-2.5 py-1 rounded-lg">{formatLeagueName(s)}</span>
+              ))}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* ── Previous Season ────────────────────────────────────────────────────── */}
-      <div className="bg-card border border-line rounded-2xl p-5">
-        <h2 className="text-sm font-semibold text-copy mb-4">Previous Season</h2>
-        <div className="text-center py-8 border border-dashed border-line rounded-xl">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-copy-3 mx-auto mb-3">
-            <path d="M12 8v4l3 3" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M3.05 11a9 9 0 1 1 .5 4" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M3 16v-5h5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          <p className="text-copy-2 text-sm font-medium">No previous seasons on record.</p>
-          <p className="text-copy-3 text-xs mt-1">
-            {previousLeagueId
-              ? 'Previous season data will appear here once available.'
-              : 'This is the first season of this league.'}
-          </p>
-        </div>
-      </div>
-
-      {/* ── Commissioner (collapsible, commissioner-only) ──────────────────────── */}
-      {isCommissioner && (
+      {/* Activity */}
+      {section === 'activity' && (
         <div className="bg-card border border-line rounded-2xl overflow-hidden">
-          <button
-            onClick={() => setCommissionerOpen(v => !v)}
-            className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-field/50 transition-colors"
-          >
-            <p className="text-sm font-semibold text-copy">Commissioner Settings</p>
-            <svg
-              width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-              className={`text-copy-3 transition-transform duration-200 ${commissionerOpen ? 'rotate-180' : ''}`}
-            >
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
-          </button>
-          {commissionerOpen && (
-            <div className="border-t border-line p-4 space-y-4">
-              <CommissionerTab league={league} setLeague={setLeague} leagueId={leagueId} />
+          {txLoading ? (
+            <div className="flex justify-center py-12"><Spinner size="sm" /></div>
+          ) : transactions.length === 0 ? (
+            <div className="text-center py-14">
+              <p className="text-copy-3 text-sm">No transactions yet.</p>
             </div>
+          ) : (
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-line bg-field/40">
+                  <th className="text-left px-5 py-3 text-xs font-semibold text-copy-3 uppercase tracking-wide w-24">Date</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-copy-3 uppercase tracking-wide w-20">Type</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-copy-3 uppercase tracking-wide">Detail</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line/40">
+                {transactions.map(tx => {
+                  if (tx.type === 'trade') {
+                    const proposerFt = ftById.get(tx.proposerFantasyTeamId);
+                    const receiverFt = ftById.get(tx.receiverFantasyTeamId);
+                    const offered = tx.offeredSportTeamIds.map(id => sportTeamById.get(id)?.name ?? id);
+                    const requested = tx.requestedSportTeamIds.map(id => sportTeamById.get(id)?.name ?? id);
+                    return (
+                      <tr key={tx.id} className="hover:bg-field/30 transition-colors">
+                        <td className="px-5 py-3.5 text-xs text-copy-3 whitespace-nowrap align-top">{timeAgo(tx.date)}</td>
+                        <td className="px-4 py-3.5 align-top">
+                          <span className="inline-flex items-center gap-1 text-xs font-medium text-info bg-info-bg px-2 py-0.5 rounded-full whitespace-nowrap">
+                            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4" /></svg>
+                            Trade
+                          </span>
+                        </td>
+                        <td className="px-4 py-3.5 text-xs text-copy leading-relaxed">
+                          <span className="font-semibold">{proposerFt?.displayName ?? '—'}</span>
+                          <span className="text-copy-3"> sent </span>
+                          <span className="text-danger font-medium">{offered.join(', ')}</span>
+                          <span className="text-copy-3"> to </span>
+                          <span className="font-semibold">{receiverFt?.displayName ?? '—'}</span>
+                          <span className="text-copy-3"> for </span>
+                          <span className="text-positive font-medium">{requested.join(', ')}</span>
+                        </td>
+                      </tr>
+                    );
+                  } else {
+                    const addName = sportTeamById.get(tx.addTeamId)?.name ?? tx.addTeamId;
+                    const dropName = sportTeamById.get(tx.dropTeamId)?.name ?? tx.dropTeamId;
+                    return (
+                      <tr key={tx.id} className="hover:bg-field/30 transition-colors">
+                        <td className="px-5 py-3.5 text-xs text-copy-3 whitespace-nowrap align-top">{timeAgo(tx.date)}</td>
+                        <td className="px-4 py-3.5 align-top">
+                          <span className="inline-flex items-center gap-1 text-xs font-medium text-warn bg-warn-bg px-2 py-0.5 rounded-full whitespace-nowrap">
+                            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M8 7h12M8 12h12M8 17h12M4 7h.01M4 12h.01M4 17h.01" /></svg>
+                            Waiver
+                          </span>
+                        </td>
+                        <td className="px-4 py-3.5 text-xs text-copy leading-relaxed">
+                          <span className="font-semibold">{tx.claimantDisplayName}</span>
+                          <span className="text-copy-3"> added </span>
+                          <span className="text-positive font-medium">{addName}</span>
+                          <span className="text-copy-3"> / dropped </span>
+                          <span className="text-danger font-medium">{dropName}</span>
+                        </td>
+                      </tr>
+                    );
+                  }
+                })}
+              </tbody>
+            </table>
           )}
         </div>
       )}
 
-      {/* ── Rules & Scoring (collapsible) ──────────────────────────────────────── */}
-      <div className="bg-card border border-line rounded-2xl overflow-hidden">
-        <button
-          onClick={() => setRulesOpen(v => !v)}
-          className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-field/50 transition-colors"
-        >
-          <p className="text-sm font-semibold text-copy">Rules &amp; Scoring</p>
-          <svg
-            width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-            className={`text-copy-3 transition-transform duration-200 ${rulesOpen ? 'rotate-180' : ''}`}
-          >
-            <polyline points="6 9 12 15 18 9" />
-          </svg>
-        </button>
-        {rulesOpen && (
-          <div className="border-t border-line px-5 py-5">
-            <RulesTab league={league} />
+      {/* Board — message board + announcements */}
+      {section === 'board' && (
+        <div className="space-y-4">
+          {/* Commissioner announcements */}
+          <div className="bg-card border border-line rounded-2xl overflow-hidden">
+            <div className="px-5 py-4 border-b border-line flex items-center justify-between">
+              <p className="text-sm font-semibold text-copy">Commissioner's Note</p>
+              {isCommissioner && (
+                <button
+                  onClick={() => setShowAnnounceForm(v => !v)}
+                  className="text-xs text-brand hover:text-brand-2 font-medium transition-colors"
+                >
+                  {showAnnounceForm ? 'Cancel' : '+ Post'}
+                </button>
+              )}
+            </div>
+            {isCommissioner && showAnnounceForm && (
+              <form onSubmit={handleAddAnnouncement} className="px-5 py-4 border-b border-line bg-field/30 space-y-2">
+                <textarea
+                  value={newAnnouncement}
+                  onChange={e => setNewAnnouncement(e.target.value)}
+                  placeholder="Write an announcement or custom rule..."
+                  rows={3}
+                  maxLength={1000}
+                  className="w-full bg-card border border-line-2 rounded-xl px-4 py-2.5 text-copy text-sm placeholder-copy-3 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors resize-none"
+                />
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={!newAnnouncement.trim() || announcementSaving}
+                    className="bg-brand hover:bg-brand-2 disabled:opacity-50 text-white text-xs font-semibold px-4 py-2 rounded-xl transition-colors"
+                  >
+                    {announcementSaving ? 'Posting...' : 'Post'}
+                  </button>
+                </div>
+              </form>
+            )}
+            {announcements.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-copy-3 text-sm">No announcements yet.</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-line/30">
+                {announcements.map(ann => (
+                  <div key={ann.id} className="px-5 py-4 flex items-start gap-3 group">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-baseline gap-2 flex-wrap mb-1">
+                        <span className="text-xs font-semibold text-copy-2">{ann.authorDisplayName}</span>
+                        <span className="text-xs text-copy-3">{timeAgo(ann.createdAt)}</span>
+                      </div>
+                      <p className="text-sm text-copy leading-relaxed break-words">{ann.content}</p>
+                    </div>
+                    {isCommissioner && (
+                      <button
+                        onClick={() => handleDeleteAnnouncement(ann.id)}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity text-copy-3 hover:text-danger flex-shrink-0 p-1 mt-0.5"
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                          <path d="M18 6L6 18M6 6l12 12" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-        )}
-      </div>
 
+          {/* Message board */}
+          <div className="bg-card border border-line rounded-2xl overflow-hidden">
+            <div className="px-5 py-4 border-b border-line">
+              <p className="text-sm font-semibold text-copy">Message Board</p>
+            </div>
+            <div className="divide-y divide-line/30 max-h-72 overflow-y-auto">
+              {messages.length === 0 ? (
+                <div className="text-center py-10">
+                  <p className="text-copy-3 text-sm">No messages yet — say something!</p>
+                </div>
+              ) : messages.map(msg => {
+                const isOwn = msg.authorUserId === userId;
+                return (
+                  <div key={msg.id} className={`px-5 py-3 flex items-start gap-3 group ${isOwn ? 'bg-brand-dim/20' : ''}`}>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-baseline gap-2 flex-wrap mb-0.5">
+                        <span className="text-xs font-semibold text-copy">{msg.authorDisplayName}</span>
+                        {isOwn && <span className="text-xs text-brand">you</span>}
+                        <span className="text-xs text-copy-3">{timeAgo(msg.createdAt)}</span>
+                      </div>
+                      <p className="text-sm text-copy-2 break-words">{msg.content}</p>
+                    </div>
+                    {(isOwn || isCommissioner) && (
+                      <button
+                        onClick={() => handleDeleteMessage(msg.id)}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity text-copy-3 hover:text-danger flex-shrink-0 p-1 mt-0.5"
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                          <path d="M18 6L6 18M6 6l12 12" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+              <div ref={msgEndRef} />
+            </div>
+            <div className="px-5 py-3 border-t border-line">
+              <form onSubmit={handleSendMessage} className="flex gap-2">
+                <input
+                  value={newMessage}
+                  onChange={e => setNewMessage(e.target.value)}
+                  placeholder="Send a message..."
+                  maxLength={500}
+                  className="flex-1 bg-field border border-line-2 rounded-xl px-4 py-2 text-copy text-sm placeholder-copy-3 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors"
+                />
+                <button
+                  type="submit"
+                  disabled={!newMessage.trim() || messageSending}
+                  className="bg-brand hover:bg-brand-2 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors whitespace-nowrap"
+                >
+                  {messageSending ? '...' : 'Send'}
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rules */}
+      {section === 'rules' && (
+        <div className="bg-card border border-line rounded-2xl px-5 py-5">
+          <RulesTab league={league} />
+        </div>
+      )}
+
+      {/* Settings (commissioner only) */}
+      {section === 'settings' && isCommissioner && (
+        <div className="p-0">
+          <CommissionerTab league={league} setLeague={setLeague} leagueId={leagueId} />
+        </div>
+      )}
     </div>
   );
 }
