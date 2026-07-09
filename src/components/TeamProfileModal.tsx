@@ -79,7 +79,7 @@ async function fetchEspnArticles(espnPath: string, espnTeamId: string): Promise<
 }
 
 async function fetchTeamNews(teamId: string, sportLeagueId: string | undefined): Promise<TeamNews> {
-  const empty: TeamNews = { description: null, articles: [] };
+  const empty: TeamNews = { articles: [] };
   if (!sportLeagueId || /_m\d+$/.test(teamId)) return empty;
   const espnPath = ESPN_PATH[sportLeagueId];
   const espnTeamId = teamId.split('_').pop();
