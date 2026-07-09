@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ref as storageRef, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '@/context/AuthContext';
+import { useTeamProfile } from '@/context/TeamProfileContext';
 import { api } from '@/lib/api';
 import { storage } from '@/lib/firebase';
 
@@ -297,6 +298,7 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone }: {
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [expandedTeam, setExpandedTeam] = useState<string | null>(null);
+  const { openProfile } = useTeamProfile();
 
   const logoByUserId = new Map(fantasyTeams.map(ft => [ft.userId, ft.logoUrl ?? null]));
 
@@ -416,7 +418,13 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone }: {
                               }`}
                             >
                               <div className="flex items-center justify-between px-3 py-2 gap-2">
-                                <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <div
+                                  className="flex items-center gap-2 min-w-0 flex-1 cursor-pointer hover:opacity-75 transition-opacity"
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    openProfile({ teamId: t.teamId, leagueId, name: t.teamName, logoUrl: t.logoUrl, sportLeagueId: t.sportLeagueId, wins: t.wins, draws: t.draws, losses: t.losses, points: t.points, bonusPoints: teamBonusTotal, ownerDisplayName: s.displayName });
+                                  }}
+                                >
                                   {t.logoUrl && (
                                     <img src={t.logoUrl} alt={t.teamName} className="w-7 h-7 object-contain flex-shrink-0" />
                                   )}
@@ -521,6 +529,7 @@ function RosterTab({
   const [tradeSubmitting, setTradeSubmitting] = useState(false);
   const [tradeMsg, setTradeMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [actingTrade, setActingTrade] = useState<string | null>(null);
+  const { openProfile } = useTeamProfile();
 
   useEffect(() => {
     api.get<SportGroup[]>(`/leagues/${leagueId}/sport-teams`)
@@ -1098,7 +1107,13 @@ function RosterTab({
                   onClick={() => stats && setExpandedRosterTeam(isExpanded ? null : t.id)}
                   className={`flex items-center justify-between px-5 py-3.5 hover:bg-field/30 transition-colors gap-3 ${stats ? 'cursor-pointer' : ''}`}
                 >
-                  <div className="flex items-center gap-3 min-w-0">
+                  <div
+                    className="flex items-center gap-3 min-w-0 cursor-pointer hover:opacity-75 transition-opacity"
+                    onClick={e => {
+                      e.stopPropagation();
+                      openProfile({ teamId: t.id, leagueId, name: t.name, logoUrl: t.logoUrl, sportLeagueId: t.sportLeagueId, wins: stats?.wins, draws: stats?.draws, losses: stats?.losses, points: stats?.points, bonusPoints: bonus > 0 ? bonus : undefined, ownerDisplayName: viewingTeam?.displayName });
+                    }}
+                  >
                     {t.logoUrl ? (
                       <img src={t.logoUrl} alt={t.name} className="w-9 h-9 object-contain flex-shrink-0" />
                     ) : (
@@ -1645,6 +1660,7 @@ function ClaimCard({
   onConfirmDeny: (id: string) => void;
   onCancelDeny: () => void;
 }) {
+  const { openProfile } = useTeamProfile();
   const dropTeam = teamMap.get(claim.dropTeamId);
   const addTeam  = teamMap.get(claim.addTeamId);
   const isReviewing = reviewing === claim.id;
@@ -1669,7 +1685,10 @@ function ClaimCard({
 
           {/* Team transfer */}
           <div className="flex items-center gap-2">
-            <div className="flex-1 bg-danger-bg/40 border border-danger/15 rounded-xl px-3 py-2.5">
+            <div
+              className={`flex-1 bg-danger-bg/40 border border-danger/15 rounded-xl px-3 py-2.5 ${dropTeam ? 'cursor-pointer hover:border-danger/40 transition-colors' : ''}`}
+              onClick={() => dropTeam && openProfile({ teamId: claim.dropTeamId, name: dropTeam.name, logoUrl: dropTeam.logoUrl, sportLeagueId: dropTeam.sportLeagueId, wins: dropTeam.wins, draws: dropTeam.draws, losses: dropTeam.losses, points: dropTeam.points })}
+            >
               <p className="text-xs text-copy-3 mb-1">Drop</p>
               <div className="flex items-center gap-2">
                 {dropTeam?.logoUrl && <img src={dropTeam.logoUrl} alt={dropTeam.name} className="w-6 h-6 object-contain flex-shrink-0" />}
@@ -1687,7 +1706,10 @@ function ClaimCard({
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-copy-3 flex-shrink-0">
               <path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            <div className="flex-1 bg-positive-bg/40 border border-positive/15 rounded-xl px-3 py-2.5">
+            <div
+              className={`flex-1 bg-positive-bg/40 border border-positive/15 rounded-xl px-3 py-2.5 ${addTeam ? 'cursor-pointer hover:border-positive/40 transition-colors' : ''}`}
+              onClick={() => addTeam && openProfile({ teamId: claim.addTeamId, name: addTeam.name, logoUrl: addTeam.logoUrl, sportLeagueId: addTeam.sportLeagueId, wins: addTeam.wins, draws: addTeam.draws, losses: addTeam.losses, points: addTeam.points })}
+            >
               <p className="text-xs text-copy-3 mb-1">Add</p>
               <div className="flex items-center gap-2">
                 {addTeam?.logoUrl && <img src={addTeam.logoUrl} alt={addTeam.name} className="w-6 h-6 object-contain flex-shrink-0" />}

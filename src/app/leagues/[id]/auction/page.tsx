@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
+import { useTeamProfile } from '@/context/TeamProfileContext';
 import { api, WS_URL } from '@/lib/api';
 import { io, type Socket } from 'socket.io-client';
 
@@ -128,6 +129,7 @@ function ToastStack({ toasts }: { toasts: Toast[] }) {
 export default function AuctionPage() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
+  const { openProfile } = useTeamProfile();
   const router = useRouter();
 
   // ── Data ──────────────────────────────────────────────────────────────────
@@ -1492,7 +1494,8 @@ export default function AuctionPage() {
                       return (
                         <div
                           key={team.id}
-                          className={`flex flex-col items-center gap-1 p-1.5 rounded-lg hover:bg-field transition-colors ${greyed ? 'opacity-40 grayscale' : ''}`}
+                          onClick={() => openProfile({ teamId: team.id, leagueId: id, name: team.name, logoUrl: team.logoUrl, sportLeagueId: team.sportLeagueId })}
+                          className={`flex flex-col items-center gap-1 p-1.5 rounded-lg cursor-pointer hover:bg-field transition-colors ${greyed ? 'opacity-40 grayscale' : ''}`}
                           title={team.name}
                         >
                           <TeamLogo logoUrl={team.logoUrl} name={team.name} size={8} />
