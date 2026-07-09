@@ -67,26 +67,34 @@ async function fetchEspnNews(
   if (!espnPath) { setDebug(`no ESPN path for "${sportLeagueId}"`); return empty; }
   const espnTeamId = teamId.split('_').pop();
   if (!espnTeamId || isNaN(Number(espnTeamId))) { setDebug(`bad team id: "${espnTeamId}"`); return empty; }
-  const url = `https://site.api.espn.com/apis/site/v2/sports/${espnPath}/teams/${espnTeamId}/news?limit=5`;
-  try {
-    const res = await fetch(url);
-    if (!res.ok) { setDebug(`HTTP ${res.status} | url: ${url}`); return empty; }
-    const text = await res.text();
-    let data: any = {};
-    try { data = JSON.parse(text); } catch { setDebug(`JSON parse failed | body: ${text.slice(0, 100)}`); return empty; }
-    const rawCount = (data.articles ?? []).length;
-    const articles = ((data.articles ?? []) as any[]).slice(0, 5).map((a: any) => ({
-      title:     a.headline ?? '',
-      summary:   a.description ?? a.story ?? '',
-      published: a.published ?? '',
-      url:       a.links?.web?.href ?? a.links?.mobile?.href ?? '',
-    })).filter((a: any) => a.title);
-    setDebug(`${rawCount} articles | keys: ${Object.keys(data).join(',')} | url: ${url} | body[0:120]: ${text.slice(0, 120)}`);
-    return { description: null, articles };
-  } catch (err: any) {
-    setDebug(`threw: ${err?.message ?? err} | url: ${url}`);
-    return empty;
+  // Try team-filtered news first; if empty fall back to league-level news
+  const urls = [
+    `https://site.api.espn.com/apis/site/v2/sports/${espnPath}/news?teams=${espnTeamId}&limit=5`,
+    `https://site.api.espn.com/apis/site/v2/sports/${espnPath}/news?limit=5`,
+  ];
+  for (const url of urls) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) continue;
+      const text = await res.text();
+      let data: any = {};
+      try { data = JSON.parse(text); } catch { continue; }
+      const rawArticles = (data.articles ?? data.feed ?? []) as any[];
+      if (rawArticles.length === 0) { setDebug(`0 articles from ${url} | keys: ${Object.keys(data).join(',')}`); continue; }
+      const articles = rawArticles.slice(0, 5).map((a: any) => ({
+        title:     a.headline ?? a.title ?? '',
+        summary:   a.description ?? a.story ?? '',
+        published: a.published ?? a.lastModified ?? '',
+        url:       a.links?.web?.href ?? a.links?.mobile?.href ?? a.link ?? '',
+      })).filter((a: any) => a.title);
+      setDebug(`${articles.length} articles from ${url}`);
+      return { description: null, articles };
+    } catch {
+      continue;
+    }
   }
+  setDebug(`all URLs returned empty`);
+  return empty;
 }
 
 export function TeamProfileModal() {
