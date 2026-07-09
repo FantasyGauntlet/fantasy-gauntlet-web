@@ -19,7 +19,6 @@ interface AuctionStats {
 }
 
 interface TeamNews {
-  description: string | null;
   articles: { title: string; summary: string; published: string; url: string }[];
 }
 
@@ -79,31 +78,14 @@ async function fetchEspnArticles(espnPath: string, espnTeamId: string): Promise<
   return [];
 }
 
-async function fetchTeamDescription(teamName: string): Promise<string | null> {
-  try {
-    const res = await fetch(
-      `https://www.thesportsdb.com/api/v1/json/3/searchteams.php?t=${encodeURIComponent(teamName)}`,
-    );
-    if (!res.ok) return null;
-    const data = await res.json();
-    const raw: string | null | undefined = data?.teams?.[0]?.strDescriptionEN;
-    if (!raw) return null;
-    return raw.length > 500 ? raw.slice(0, 497).trimEnd() + '…' : raw;
-  } catch { return null; }
-}
-
-async function fetchTeamNews(teamId: string, teamName: string, sportLeagueId: string | undefined): Promise<TeamNews> {
+async function fetchTeamNews(teamId: string, sportLeagueId: string | undefined): Promise<TeamNews> {
   const empty: TeamNews = { description: null, articles: [] };
   if (!sportLeagueId || /_m\d+$/.test(teamId)) return empty;
   const espnPath = ESPN_PATH[sportLeagueId];
   const espnTeamId = teamId.split('_').pop();
-  const [articles, description] = await Promise.all([
-    espnPath && espnTeamId && !isNaN(Number(espnTeamId))
-      ? fetchEspnArticles(espnPath, espnTeamId)
-      : Promise.resolve([]),
-    teamName ? fetchTeamDescription(teamName) : Promise.resolve(null),
-  ]);
-  return { description, articles };
+  if (!espnPath || !espnTeamId || isNaN(Number(espnTeamId))) return empty;
+  const articles = await fetchEspnArticles(espnPath, espnTeamId);
+  return { articles };
 }
 
 export function TeamProfileModal() {
@@ -133,7 +115,7 @@ export function TeamProfileModal() {
       .then(setAuctionStats).catch(() => setAuctionStats(null)).finally(() => setLoadingStats(false));
 
     setLoadingNews(true);
-    fetchTeamNews(profile.teamId, profile.name ?? '', profile.sportLeagueId)
+    fetchTeamNews(profile.teamId, profile.sportLeagueId)
       .then(setNews).catch(() => setNews(null)).finally(() => setLoadingNews(false));
   }, [profile?.teamId]);
 
@@ -355,23 +337,7 @@ export function TeamProfileModal() {
               </div>
             )}
 
-            {/* Description (soccer via TheSportsDB) */}
-            {(loadingNews || news?.description) && (
-              <div className="px-5 py-4 border-b border-line">
-                <p className="text-xs font-semibold text-copy-3 uppercase tracking-wider mb-2">About</p>
-                {loadingNews && !news ? (
-                  <div className="space-y-1.5 animate-pulse">
-                    <div className="h-3 bg-field-2 rounded w-full" />
-                    <div className="h-3 bg-field-2 rounded w-5/6" />
-                    <div className="h-3 bg-field-2 rounded w-4/6" />
-                  </div>
-                ) : news?.description ? (
-                  <p className="text-xs text-copy-2 leading-relaxed">{news.description}</p>
-                ) : null}
-              </div>
-            )}
-
-            {/* News articles (American sports via ESPN) */}
+            {/* News articles via ESPN */}
             {(loadingNews || (news?.articles && news.articles.length > 0)) && (
               <div className="px-5 py-4">
                 <p className="text-xs font-semibold text-copy-3 uppercase tracking-wider mb-3">Latest News</p>

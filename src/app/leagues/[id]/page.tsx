@@ -1087,7 +1087,7 @@ function RosterTab({
                     className="flex items-center gap-3 min-w-0 cursor-pointer hover:opacity-75 transition-opacity"
                     onClick={e => {
                       e.stopPropagation();
-                      openProfile({ teamId: t.id, leagueId, name: t.name, logoUrl: t.logoUrl, sportLeagueId: t.sportLeagueId, wins: stats?.wins, draws: stats?.draws, losses: stats?.losses, points: stats?.points, bonusPoints: bonus > 0 ? bonus : undefined, ownerDisplayName: viewingTeam?.displayName });
+                      openProfile({ teamId: t.id, leagueId, name: t.name, logoUrl: t.logoUrl, sportLeagueId: t.sportLeagueId, wins: stats?.wins, draws: stats?.draws, losses: stats?.losses, points: stats?.points, bonusPoints: bonus > 0 ? bonus : undefined, bonusBreakdown: bonusItems.length > 0 ? bonusItems.map(b => ({ label: b.label, points: b.points })) : undefined, ownerDisplayName: viewingTeam?.displayName });
                     }}
                   >
                     {t.logoUrl ? (
