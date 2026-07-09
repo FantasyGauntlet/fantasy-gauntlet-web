@@ -190,9 +190,6 @@ export function TeamProfileModal() {
                       <p className="text-[10px] text-copy-3 mb-1">Points</p>
                       <p className="text-sm font-bold text-copy">
                         {((profile.points ?? 0) + (profile.bonusPoints ?? 0)).toFixed(1)}
-                        {(profile.bonusPoints ?? 0) > 0 && (
-                          <span className="text-positive text-xs ml-1">+{profile.bonusPoints!.toFixed(1)}</span>
-                        )}
                       </p>
                     </div>
                   )}
