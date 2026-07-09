@@ -55,32 +55,35 @@ function formatDate(iso: string) {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
-async function fetchEspnNews(teamId: string, sportLeagueId: string | undefined): Promise<TeamNews> {
+async function fetchEspnNews(
+  teamId: string,
+  sportLeagueId: string | undefined,
+  setDebug: (s: string) => void,
+): Promise<TeamNews> {
   const empty: TeamNews = { description: null, articles: [] };
-  if (!sportLeagueId) { console.log('[ESPN] no sportLeagueId'); return empty; }
-  if (/_m\d+$/.test(teamId)) { console.log('[ESPN] manual team, skipping'); return empty; }
+  if (!sportLeagueId) { setDebug('no sportLeagueId'); return empty; }
+  if (/_m\d+$/.test(teamId)) { setDebug('manual team'); return empty; }
   const espnPath = ESPN_PATH[sportLeagueId];
-  if (!espnPath) { console.log('[ESPN] no path for sportLeagueId:', sportLeagueId); return empty; }
+  if (!espnPath) { setDebug(`no ESPN path for "${sportLeagueId}"`); return empty; }
   const espnTeamId = teamId.split('_').pop();
-  if (!espnTeamId || isNaN(Number(espnTeamId))) { console.log('[ESPN] bad team id segment:', espnTeamId); return empty; }
+  if (!espnTeamId || isNaN(Number(espnTeamId))) { setDebug(`bad team id: "${espnTeamId}"`); return empty; }
   const url = `https://site.api.espn.com/apis/site/v2/sports/${espnPath}/teams/${espnTeamId}/news?limit=5`;
-  console.log('[ESPN] fetching:', url);
+  setDebug(`fetching ${url}`);
   try {
     const res = await fetch(url);
-    console.log('[ESPN] status:', res.status);
-    if (!res.ok) { console.log('[ESPN] non-ok response'); return empty; }
+    if (!res.ok) { setDebug(`HTTP ${res.status} from ESPN`); return empty; }
     const data = await res.json();
-    console.log('[ESPN] raw response keys:', Object.keys(data), '| articles count:', (data.articles ?? []).length);
+    const rawCount = (data.articles ?? []).length;
     const articles = ((data.articles ?? []) as any[]).slice(0, 5).map((a: any) => ({
       title:     a.headline ?? '',
       summary:   a.description ?? a.story ?? '',
       published: a.published ?? '',
       url:       a.links?.web?.href ?? a.links?.mobile?.href ?? '',
     })).filter((a: any) => a.title);
-    console.log('[ESPN] mapped articles:', articles.length);
+    setDebug(`OK — ${rawCount} raw articles, ${articles.length} after filter. Keys: ${Object.keys(data).join(', ')}`);
     return { description: null, articles };
-  } catch (err) {
-    console.log('[ESPN] fetch threw:', err);
+  } catch (err: any) {
+    setDebug(`fetch threw: ${err?.message ?? err}`);
     return empty;
   }
 }
@@ -93,6 +96,7 @@ export function TeamProfileModal() {
   const [loadingForm, setLoadingForm] = useState(false);
   const [loadingStats, setLoadingStats] = useState(false);
   const [loadingNews, setLoadingNews] = useState(false);
+  const [newsDebug, setNewsDebug] = useState('');
   const panelRef = useRef<HTMLDivElement>(null);
 
   // Reset + fetch whenever a new profile is opened
@@ -112,7 +116,8 @@ export function TeamProfileModal() {
       .then(setAuctionStats).catch(() => setAuctionStats(null)).finally(() => setLoadingStats(false));
 
     setLoadingNews(true);
-    fetchEspnNews(profile.teamId, profile.sportLeagueId)
+    setNewsDebug('loading…');
+    fetchEspnNews(profile.teamId, profile.sportLeagueId, setNewsDebug)
       .then(setNews).catch(() => setNews(null)).finally(() => setLoadingNews(false));
   }, [profile?.teamId]);
 
@@ -392,6 +397,13 @@ export function TeamProfileModal() {
                     ))}
                   </div>
                 ) : null}
+              </div>
+            )}
+
+            {/* TEMP DEBUG — remove after diagnosis */}
+            {newsDebug && (
+              <div className="px-5 py-3 border-t border-line bg-warn/10">
+                <p className="text-[10px] font-mono text-copy-2 break-all">ESPN debug: {newsDebug}</p>
               </div>
             )}
           </div>
