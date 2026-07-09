@@ -57,26 +57,30 @@ function formatDate(iso: string) {
 
 async function fetchEspnNews(teamId: string, sportLeagueId: string | undefined): Promise<TeamNews> {
   const empty: TeamNews = { description: null, articles: [] };
-  if (!sportLeagueId) return empty;
-  if (/_m\d+$/.test(teamId)) return empty;
+  if (!sportLeagueId) { console.log('[ESPN] no sportLeagueId'); return empty; }
+  if (/_m\d+$/.test(teamId)) { console.log('[ESPN] manual team, skipping'); return empty; }
   const espnPath = ESPN_PATH[sportLeagueId];
-  if (!espnPath) return empty;
+  if (!espnPath) { console.log('[ESPN] no path for sportLeagueId:', sportLeagueId); return empty; }
   const espnTeamId = teamId.split('_').pop();
-  if (!espnTeamId || isNaN(Number(espnTeamId))) return empty;
+  if (!espnTeamId || isNaN(Number(espnTeamId))) { console.log('[ESPN] bad team id segment:', espnTeamId); return empty; }
+  const url = `https://site.api.espn.com/apis/site/v2/sports/${espnPath}/teams/${espnTeamId}/news?limit=5`;
+  console.log('[ESPN] fetching:', url);
   try {
-    const res = await fetch(
-      `https://site.api.espn.com/apis/site/v2/sports/${espnPath}/teams/${espnTeamId}/news?limit=5`,
-    );
-    if (!res.ok) return empty;
+    const res = await fetch(url);
+    console.log('[ESPN] status:', res.status);
+    if (!res.ok) { console.log('[ESPN] non-ok response'); return empty; }
     const data = await res.json();
+    console.log('[ESPN] raw response keys:', Object.keys(data), '| articles count:', (data.articles ?? []).length);
     const articles = ((data.articles ?? []) as any[]).slice(0, 5).map((a: any) => ({
       title:     a.headline ?? '',
       summary:   a.description ?? a.story ?? '',
       published: a.published ?? '',
       url:       a.links?.web?.href ?? a.links?.mobile?.href ?? '',
     })).filter((a: any) => a.title);
+    console.log('[ESPN] mapped articles:', articles.length);
     return { description: null, articles };
-  } catch {
+  } catch (err) {
+    console.log('[ESPN] fetch threw:', err);
     return empty;
   }
 }
