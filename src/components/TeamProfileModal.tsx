@@ -55,19 +55,7 @@ function formatDate(iso: string) {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
-async function fetchEspnNews(
-  teamId: string,
-  sportLeagueId: string | undefined,
-  setDebug: (s: string) => void,
-): Promise<TeamNews> {
-  const empty: TeamNews = { description: null, articles: [] };
-  if (!sportLeagueId) { setDebug('no sportLeagueId'); return empty; }
-  if (/_m\d+$/.test(teamId)) { setDebug('manual team'); return empty; }
-  const espnPath = ESPN_PATH[sportLeagueId];
-  if (!espnPath) { setDebug(`no ESPN path for "${sportLeagueId}"`); return empty; }
-  const espnTeamId = teamId.split('_').pop();
-  if (!espnTeamId || isNaN(Number(espnTeamId))) { setDebug(`bad team id: "${espnTeamId}"`); return empty; }
-  // Try team-filtered news first; if empty fall back to league-level news
+async function fetchEspnArticles(espnPath: string, espnTeamId: string): Promise<TeamNews['articles']> {
   const urls = [
     `https://site.api.espn.com/apis/site/v2/sports/${espnPath}/news?teams=${espnTeamId}&limit=5`,
     `https://site.api.espn.com/apis/site/v2/sports/${espnPath}/news?limit=5`,
@@ -76,25 +64,46 @@ async function fetchEspnNews(
     try {
       const res = await fetch(url);
       if (!res.ok) continue;
-      const text = await res.text();
-      let data: any = {};
-      try { data = JSON.parse(text); } catch { continue; }
-      const rawArticles = (data.articles ?? data.feed ?? []) as any[];
-      if (rawArticles.length === 0) { setDebug(`0 articles from ${url} | keys: ${Object.keys(data).join(',')}`); continue; }
-      const articles = rawArticles.slice(0, 5).map((a: any) => ({
+      const data = await res.json();
+      const raw = (data.articles ?? data.feed ?? []) as any[];
+      if (!raw.length) continue;
+      const mapped = raw.slice(0, 5).map((a: any) => ({
         title:     a.headline ?? a.title ?? '',
         summary:   a.description ?? a.story ?? '',
         published: a.published ?? a.lastModified ?? '',
         url:       a.links?.web?.href ?? a.links?.mobile?.href ?? a.link ?? '',
       })).filter((a: any) => a.title);
-      setDebug(`${articles.length} articles from ${url}`);
-      return { description: null, articles };
-    } catch {
-      continue;
-    }
+      if (mapped.length) return mapped;
+    } catch { continue; }
   }
-  setDebug(`all URLs returned empty`);
-  return empty;
+  return [];
+}
+
+async function fetchTeamDescription(teamName: string): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `https://www.thesportsdb.com/api/v1/json/3/searchteams.php?t=${encodeURIComponent(teamName)}`,
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    const raw: string | null | undefined = data?.teams?.[0]?.strDescriptionEN;
+    if (!raw) return null;
+    return raw.length > 500 ? raw.slice(0, 497).trimEnd() + '…' : raw;
+  } catch { return null; }
+}
+
+async function fetchTeamNews(teamId: string, teamName: string, sportLeagueId: string | undefined): Promise<TeamNews> {
+  const empty: TeamNews = { description: null, articles: [] };
+  if (!sportLeagueId || /_m\d+$/.test(teamId)) return empty;
+  const espnPath = ESPN_PATH[sportLeagueId];
+  const espnTeamId = teamId.split('_').pop();
+  const [articles, description] = await Promise.all([
+    espnPath && espnTeamId && !isNaN(Number(espnTeamId))
+      ? fetchEspnArticles(espnPath, espnTeamId)
+      : Promise.resolve([]),
+    teamName ? fetchTeamDescription(teamName) : Promise.resolve(null),
+  ]);
+  return { description, articles };
 }
 
 export function TeamProfileModal() {
@@ -105,7 +114,6 @@ export function TeamProfileModal() {
   const [loadingForm, setLoadingForm] = useState(false);
   const [loadingStats, setLoadingStats] = useState(false);
   const [loadingNews, setLoadingNews] = useState(false);
-  const [newsDebug, setNewsDebug] = useState('');
   const panelRef = useRef<HTMLDivElement>(null);
 
   // Reset + fetch whenever a new profile is opened
@@ -125,8 +133,7 @@ export function TeamProfileModal() {
       .then(setAuctionStats).catch(() => setAuctionStats(null)).finally(() => setLoadingStats(false));
 
     setLoadingNews(true);
-    setNewsDebug('loading…');
-    fetchEspnNews(profile.teamId, profile.sportLeagueId, setNewsDebug)
+    fetchTeamNews(profile.teamId, profile.name ?? '', profile.sportLeagueId)
       .then(setNews).catch(() => setNews(null)).finally(() => setLoadingNews(false));
   }, [profile?.teamId]);
 
@@ -409,12 +416,7 @@ export function TeamProfileModal() {
               </div>
             )}
 
-            {/* TEMP DEBUG — remove after diagnosis */}
-            {newsDebug && (
-              <div className="px-5 py-3 border-t border-line bg-warn/10">
-                <p className="text-[10px] font-mono text-copy-2 break-all">ESPN debug: {newsDebug}</p>
-              </div>
-            )}
+
           </div>
         )}
       </div>
