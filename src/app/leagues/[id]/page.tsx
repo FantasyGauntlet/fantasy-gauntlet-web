@@ -331,7 +331,7 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone }: {
             <th className="text-left px-4 py-3 text-xs font-semibold text-copy-3 uppercase tracking-wider">Rank</th>
             <th className="text-left px-4 py-3 text-xs font-semibold text-copy-3 uppercase tracking-wider">Manager</th>
             <th className="text-right px-4 py-3 text-xs font-semibold text-copy-3 uppercase tracking-wider">Points</th>
-            <th className="text-right px-4 py-3 text-xs font-semibold text-copy-3 uppercase tracking-wider hidden sm:table-cell">Active</th>
+            <th className="text-right px-4 py-3 text-xs font-semibold text-copy-3 uppercase tracking-wider hidden sm:table-cell">Teams</th>
             <th className="text-right px-4 py-3 text-xs font-semibold text-copy-3 uppercase tracking-wider hidden sm:table-cell">Bonus</th>
           </tr>
         </thead>
@@ -370,15 +370,7 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone }: {
                     <span className="text-sm font-bold text-copy">{s.totalPoints.toFixed(1)}</span>
                   </td>
                   <td className="px-4 py-3.5 text-right hidden sm:table-cell">
-                    {(() => {
-                      const activeCount = s.teamBreakdown.filter(t => t.seasonActive && !t.eliminated).length;
-                      const total = s.teamBreakdown.length;
-                      return (
-                        <span className="text-sm text-copy-3">
-                          {activeCount < total ? <><span className="text-copy font-medium">{activeCount}</span>/{total}</> : activeCount}
-                        </span>
-                      );
-                    })()}
+                    <span className="text-sm text-copy-3">{s.teamBreakdown.length}</span>
                   </td>
                   <td className="px-4 py-3.5 text-right hidden sm:table-cell">
                     <span className="text-sm text-positive">{s.bonusPoints > 0 ? `+${s.bonusPoints.toFixed(1)}` : '—'}</span>
@@ -406,25 +398,21 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone }: {
                           return (
                             <div
                               key={t.teamId}
-                              onClick={() => hasBonus && t.seasonActive && !t.eliminated && setExpandedTeam(isTeamExpanded ? null : teamKey)}
+                              onClick={() => hasBonus && setExpandedTeam(isTeamExpanded ? null : teamKey)}
                               className={`bg-card border rounded-lg overflow-hidden transition-colors ${
-                                t.eliminated ? 'border-line opacity-50'
-                                : !t.seasonActive ? 'border-line opacity-40'
-                                : hasBonus ? 'border-positive/30 cursor-pointer hover:border-positive/60'
-                                : 'border-line'
+                                hasBonus ? 'border-positive/30 cursor-pointer hover:border-positive/60' : 'border-line'
                               }`}
                             >
                               <div className="flex items-center justify-between px-3 py-2 gap-2">
                                 <div className="flex items-center gap-2 min-w-0 flex-1">
                                   {t.logoUrl && (
-                                    <img src={t.logoUrl} alt={t.teamName} className={`w-7 h-7 object-contain flex-shrink-0 ${(!t.seasonActive || t.eliminated) ? 'grayscale' : ''}`} />
+                                    <img src={t.logoUrl} alt={t.teamName} className="w-7 h-7 object-contain flex-shrink-0" />
                                   )}
                                   <div className="min-w-0">
                                     <div className="flex items-center gap-1">
-                                      <p className={`text-xs font-medium truncate ${t.eliminated ? 'line-through text-copy-3' : 'text-copy'}`}>{t.teamName}</p>
-                                      {hasBonus && t.seasonActive && !t.eliminated && <span className="text-positive text-xs flex-shrink-0">★</span>}
-                                      {isWildCard && t.seasonActive && !t.eliminated && <span className="text-xs bg-warn-bg text-warn border border-warn/20 px-1.5 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">Wild Card</span>}
-                                      {t.eliminated && <span className="text-xs bg-danger-bg text-danger border border-danger/20 px-1.5 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">Out</span>}
+                                      <p className="text-xs font-medium truncate text-copy">{t.teamName}</p>
+                                      {hasBonus && <span className="text-positive text-xs flex-shrink-0">★</span>}
+                                      {isWildCard && <span className="text-xs bg-warn-bg text-warn border border-warn/20 px-1.5 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">Wild Card</span>}
                                     </div>
                                     <p className="text-xs text-copy-3 mt-0.5">{formatLeagueName(t.sportLeagueId)}</p>
                                   </div>
