@@ -331,7 +331,7 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone }: {
             <th className="text-left px-4 py-3 text-xs font-semibold text-copy-3 uppercase tracking-wider">Rank</th>
             <th className="text-left px-4 py-3 text-xs font-semibold text-copy-3 uppercase tracking-wider">Manager</th>
             <th className="text-right px-4 py-3 text-xs font-semibold text-copy-3 uppercase tracking-wider">Points</th>
-            <th className="text-right px-4 py-3 text-xs font-semibold text-copy-3 uppercase tracking-wider hidden sm:table-cell">Teams</th>
+            <th className="text-right px-4 py-3 text-xs font-semibold text-copy-3 uppercase tracking-wider hidden sm:table-cell">Active</th>
             <th className="text-right px-4 py-3 text-xs font-semibold text-copy-3 uppercase tracking-wider hidden sm:table-cell">Bonus</th>
           </tr>
         </thead>
@@ -370,7 +370,15 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone }: {
                     <span className="text-sm font-bold text-copy">{s.totalPoints.toFixed(1)}</span>
                   </td>
                   <td className="px-4 py-3.5 text-right hidden sm:table-cell">
-                    <span className="text-sm text-copy-3">{s.teamBreakdown.length}</span>
+                    {(() => {
+                      const active = s.teamBreakdown.filter(t => t.seasonActive && !t.eliminated).length;
+                      const total = s.teamBreakdown.length;
+                      return (
+                        <span className="text-sm text-copy-3">
+                          {active < total ? <><span className="text-copy font-medium">{active}</span>/{total}</> : active}
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td className="px-4 py-3.5 text-right hidden sm:table-cell">
                     <span className="text-sm text-positive">{s.bonusPoints > 0 ? `+${s.bonusPoints.toFixed(1)}` : '—'}</span>
