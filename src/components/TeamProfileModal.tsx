@@ -30,6 +30,18 @@ const SPORT_LABELS: Record<string, string> = {
   'world-cup': 'FIFA World Cup',
 };
 
+const ESPN_PATH: Record<string, string> = {
+  'premier-league': 'soccer/eng.1',
+  ucl:              'soccer/uefa.champions',
+  'world-cup':      'soccer/fifa.world',
+  nfl:              'football/nfl',
+  'ncaa-football':  'football/college-football',
+  nba:              'basketball/nba',
+  'ncaa-basketball':'basketball/mens-college-basketball',
+  nhl:              'hockey/nhl',
+  mlb:              'baseball/mlb',
+};
+
 const RESULT_COLORS = {
   W: 'bg-positive text-white',
   L: 'bg-danger text-white',
@@ -37,7 +49,36 @@ const RESULT_COLORS = {
 };
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+async function fetchEspnNews(teamId: string, sportLeagueId: string | undefined): Promise<TeamNews> {
+  const empty: TeamNews = { description: null, articles: [] };
+  if (!sportLeagueId) return empty;
+  if (/_m\d+$/.test(teamId)) return empty;
+  const espnPath = ESPN_PATH[sportLeagueId];
+  if (!espnPath) return empty;
+  const espnTeamId = teamId.split('_').pop();
+  if (!espnTeamId || isNaN(Number(espnTeamId))) return empty;
+  try {
+    const res = await fetch(
+      `https://site.api.espn.com/apis/site/v2/sports/${espnPath}/teams/${espnTeamId}/news?limit=5`,
+    );
+    if (!res.ok) return empty;
+    const data = await res.json();
+    const articles = ((data.articles ?? []) as any[]).slice(0, 5).map((a: any) => ({
+      title:     a.headline ?? '',
+      summary:   a.description ?? a.story ?? '',
+      published: a.published ?? '',
+      url:       a.links?.web?.href ?? a.links?.mobile?.href ?? '',
+    })).filter((a: any) => a.title);
+    return { description: null, articles };
+  } catch {
+    return empty;
+  }
 }
 
 export function TeamProfileModal() {
@@ -67,7 +108,7 @@ export function TeamProfileModal() {
       .then(setAuctionStats).catch(() => setAuctionStats(null)).finally(() => setLoadingStats(false));
 
     setLoadingNews(true);
-    api.get<TeamNews>(`/sports/teams/${profile.teamId}/news`)
+    fetchEspnNews(profile.teamId, profile.sportLeagueId)
       .then(setNews).catch(() => setNews(null)).finally(() => setLoadingNews(false));
   }, [profile?.teamId]);
 
