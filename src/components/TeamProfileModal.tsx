@@ -18,6 +18,11 @@ interface AuctionStats {
   leaguesDrafted: number;
 }
 
+interface TeamNews {
+  description: string | null;
+  articles: { title: string; summary: string; published: string; url: string }[];
+}
+
 const SPORT_LABELS: Record<string, string> = {
   nfl: 'NFL', nba: 'NBA', mlb: 'MLB', nhl: 'NHL',
   'ncaa-football': 'NCAA Football', 'ncaa-basketball': 'NCAA Basketball',
@@ -39,16 +44,19 @@ export function TeamProfileModal() {
   const { profile, closeProfile } = useTeamProfile();
   const [form, setForm] = useState<FormResult[] | null>(null);
   const [auctionStats, setAuctionStats] = useState<AuctionStats | null>(null);
+  const [news, setNews] = useState<TeamNews | null>(null);
   const [loadingForm, setLoadingForm] = useState(false);
   const [loadingStats, setLoadingStats] = useState(false);
+  const [loadingNews, setLoadingNews] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
 
   // Reset + fetch whenever a new profile is opened
   useEffect(() => {
-    if (!profile) { setForm(null); setAuctionStats(null); return; }
+    if (!profile) { setForm(null); setAuctionStats(null); setNews(null); return; }
 
     setForm(null);
     setAuctionStats(null);
+    setNews(null);
 
     setLoadingForm(true);
     api.get<FormResult[]>(`/sports/teams/${profile.teamId}/form`)
@@ -57,6 +65,10 @@ export function TeamProfileModal() {
     setLoadingStats(true);
     api.get<AuctionStats>(`/sports/teams/${profile.teamId}/auction-stats`)
       .then(setAuctionStats).catch(() => setAuctionStats(null)).finally(() => setLoadingStats(false));
+
+    setLoadingNews(true);
+    api.get<TeamNews>(`/sports/teams/${profile.teamId}/news`)
+      .then(setNews).catch(() => setNews(null)).finally(() => setLoadingNews(false));
   }, [profile?.teamId]);
 
   // Close on backdrop click
@@ -274,6 +286,67 @@ export function TeamProfileModal() {
                     <> · avg <span className="text-copy font-medium">${auctionStats.avgPrice}</span></>
                   )}
                 </p>
+              </div>
+            )}
+
+            {/* Description (soccer via TheSportsDB) */}
+            {(loadingNews || news?.description) && (
+              <div className="px-5 py-4 border-b border-line">
+                <p className="text-xs font-semibold text-copy-3 uppercase tracking-wider mb-2">About</p>
+                {loadingNews && !news ? (
+                  <div className="space-y-1.5 animate-pulse">
+                    <div className="h-3 bg-field-2 rounded w-full" />
+                    <div className="h-3 bg-field-2 rounded w-5/6" />
+                    <div className="h-3 bg-field-2 rounded w-4/6" />
+                  </div>
+                ) : news?.description ? (
+                  <p className="text-xs text-copy-2 leading-relaxed">{news.description}</p>
+                ) : null}
+              </div>
+            )}
+
+            {/* News articles (American sports via ESPN) */}
+            {(loadingNews || (news?.articles && news.articles.length > 0)) && (
+              <div className="px-5 py-4">
+                <p className="text-xs font-semibold text-copy-3 uppercase tracking-wider mb-3">Latest News</p>
+                {loadingNews && !news ? (
+                  <div className="space-y-3 animate-pulse">
+                    {[...Array(3)].map((_, i) => (
+                      <div key={i} className="space-y-1.5">
+                        <div className="h-3.5 bg-field-2 rounded w-4/5" />
+                        <div className="h-3 bg-field-2 rounded w-full" />
+                        <div className="h-3 bg-field-2 rounded w-2/3" />
+                      </div>
+                    ))}
+                  </div>
+                ) : news?.articles && news.articles.length > 0 ? (
+                  <div className="space-y-3">
+                    {news.articles.map((a, i) => (
+                      <div key={i} className="border-b border-line/40 pb-3 last:border-0 last:pb-0">
+                        {a.url ? (
+                          <a
+                            href={a.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs font-semibold text-copy hover:text-brand transition-colors leading-snug block mb-1"
+                          >
+                            {a.title}
+                          </a>
+                        ) : (
+                          <p className="text-xs font-semibold text-copy leading-snug mb-1">{a.title}</p>
+                        )}
+                        {a.summary && (
+                          <p className="text-xs text-copy-3 leading-relaxed line-clamp-2">{a.summary}</p>
+                        )}
+                        {a.published && (
+                          <p className="text-[10px] text-copy-3/60 mt-1">
+                            {new Date(a.published).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             )}
           </div>

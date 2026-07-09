@@ -422,7 +422,6 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone }: {
                                   <div className="min-w-0">
                                     <div className="flex items-center gap-1">
                                       <p className="text-xs font-medium truncate text-copy">{t.teamName}</p>
-                                      {hasBonus && <span className="text-positive text-xs flex-shrink-0">★</span>}
                                       {isWildCard && <span className="text-xs bg-warn-bg text-warn border border-warn/20 px-1.5 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">Wild Card</span>}
                                     </div>
                                     <p className="text-xs text-copy-3 mt-0.5">{formatLeagueName(t.sportLeagueId)}</p>
