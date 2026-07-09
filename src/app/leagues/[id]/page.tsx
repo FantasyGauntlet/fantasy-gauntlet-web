@@ -127,7 +127,7 @@ const STATE_META: Record<string, { label: string; cls: string }> = {
   cancelled: { label: 'Cancelled', cls: 'bg-danger-bg text-danger border-danger/20' },
 };
 
-const SPORT_ORDER = ['world-cup', 'nfl', 'nba', 'mlb', 'nhl', 'ncaa-football', 'ncaa-basketball', 'premier-league', 'ucl'];
+const SPORT_ORDER = ['nfl', 'nba', 'mlb', 'nhl', 'ncaa-football', 'ncaa-basketball', 'premier-league', 'ucl', 'world-cup'];
 
 const LEAGUE_ACRONYMS = new Set(['nhl', 'nba', 'nfl', 'mlb', 'ucl', 'ncaa', 'mls', 'fifa', 'ufc']);
 
@@ -395,7 +395,11 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone }: {
                   <tr key={`${s.userId}-bd`} className="border-b border-line/50 bg-field/20">
                     <td colSpan={5} className="px-6 py-4 space-y-3">
                       <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                        {s.teamBreakdown.map(t => {
+                        {[...s.teamBreakdown].sort((a, b) => {
+                            const ai = SPORT_ORDER.indexOf(a.sportLeagueId);
+                            const bi = SPORT_ORDER.indexOf(b.sportLeagueId);
+                            return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+                          }).map(t => {
                           const teamBonuses = s.bonusBreakdown?.filter(b => b.teamId === t.teamId) ?? [];
                           const teamBonusTotal = teamBonuses.reduce((sum, b) => sum + b.points, 0);
                           const teamTotal = t.points + teamBonusTotal;
