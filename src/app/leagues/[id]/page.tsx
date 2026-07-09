@@ -297,7 +297,6 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone }: {
   const [standings, setStandings] = useState<Standing[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [expandedTeam, setExpandedTeam] = useState<string | null>(null);
   const { openProfile } = useTeamProfile();
 
   const logoByUserId = new Map(fantasyTeams.map(ft => [ft.userId, ft.logoUrl ?? null]));
@@ -405,26 +404,18 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone }: {
                           const teamBonuses = s.bonusBreakdown?.filter(b => b.teamId === t.teamId) ?? [];
                           const teamBonusTotal = teamBonuses.reduce((sum, b) => sum + b.points, 0);
                           const teamTotal = t.points + teamBonusTotal;
-                          const teamKey = `${s.userId}_${t.teamId}`;
-                          const isTeamExpanded = expandedTeam === teamKey;
                           const hasBonus = teamBonuses.length > 0;
                           const isWildCard = wcIds.has(t.teamId);
                           return (
                             <div
                               key={t.teamId}
-                              onClick={() => hasBonus && setExpandedTeam(isTeamExpanded ? null : teamKey)}
-                              className={`bg-card border rounded-lg overflow-hidden transition-colors ${
-                                hasBonus ? 'border-positive/30 cursor-pointer hover:border-positive/60' : 'border-line'
+                              onClick={() => openProfile({ teamId: t.teamId, leagueId, name: t.teamName, logoUrl: t.logoUrl, sportLeagueId: t.sportLeagueId, wins: t.wins, draws: t.draws, losses: t.losses, points: t.points, bonusPoints: teamBonusTotal, bonusBreakdown: teamBonuses.map(b => ({ label: b.label, points: b.points })), ownerDisplayName: s.displayName })}
+                              className={`bg-card border rounded-lg overflow-hidden cursor-pointer transition-colors ${
+                                hasBonus ? 'border-positive/30 hover:border-positive/60' : 'border-line hover:border-line-2'
                               }`}
                             >
                               <div className="flex items-center justify-between px-3 py-2 gap-2">
-                                <div
-                                  className="flex items-center gap-2 min-w-0 flex-1 cursor-pointer hover:opacity-75 transition-opacity"
-                                  onClick={e => {
-                                    e.stopPropagation();
-                                    openProfile({ teamId: t.teamId, leagueId, name: t.teamName, logoUrl: t.logoUrl, sportLeagueId: t.sportLeagueId, wins: t.wins, draws: t.draws, losses: t.losses, points: t.points, bonusPoints: teamBonusTotal, ownerDisplayName: s.displayName });
-                                  }}
-                                >
+                                <div className="flex items-center gap-2 min-w-0 flex-1">
                                   {t.logoUrl && (
                                     <img src={t.logoUrl} alt={t.teamName} className="w-7 h-7 object-contain flex-shrink-0" />
                                   )}
@@ -442,20 +433,6 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone }: {
                                   <p className="text-xs text-copy-3">{formatRecord(t.wins, t.draws, t.losses, t.sport)}</p>
                                 </div>
                               </div>
-                              {isTeamExpanded && (
-                                <div className="border-t border-line/50 bg-field/40 px-3 py-2 space-y-1">
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-xs text-copy-3">Season</span>
-                                    <span className="text-xs text-copy">{t.points.toFixed(1)}</span>
-                                  </div>
-                                  {teamBonuses.map((b, i) => (
-                                    <div key={i} className="flex items-center justify-between">
-                                      <span className="text-xs text-positive">{b.label}</span>
-                                      <span className="text-xs font-semibold text-positive">+{b.points.toFixed(1)}</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
                             </div>
                           );
                         })}

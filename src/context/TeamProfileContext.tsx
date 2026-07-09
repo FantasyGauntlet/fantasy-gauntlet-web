@@ -14,6 +14,7 @@ export interface TeamProfileArgs {
   losses?: number;
   points?: number;
   bonusPoints?: number;
+  bonusBreakdown?: { label: string; points: number }[];
   draftPrice?: number | null;
   ownerDisplayName?: string;
 }

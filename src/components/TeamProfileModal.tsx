@@ -214,6 +214,29 @@ export function TeamProfileModal() {
                     </div>
                   )}
                 </div>
+
+                {/* Bonus breakdown */}
+                {profile.bonusBreakdown && profile.bonusBreakdown.length > 0 && (
+                  <div className="mt-3 border-t border-line/50 pt-3 space-y-1.5">
+                    <p className="text-[10px] font-semibold text-copy-3 uppercase tracking-wider mb-2">Bonus Points</p>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-copy-3">Season pts</span>
+                      <span className="text-copy">{(profile.points ?? 0).toFixed(1)}</span>
+                    </div>
+                    {profile.bonusBreakdown.map((b, i) => (
+                      <div key={i} className="flex items-center justify-between text-xs">
+                        <span className="text-positive">{b.label}</span>
+                        <span className="text-positive font-semibold">+{b.points.toFixed(1)}</span>
+                      </div>
+                    ))}
+                    <div className="flex items-center justify-between text-xs pt-1.5 border-t border-line/50">
+                      <span className="text-copy-3">Total</span>
+                      <span className="text-copy font-semibold">
+                        {((profile.points ?? 0) + (profile.bonusPoints ?? 0)).toFixed(1)}
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
