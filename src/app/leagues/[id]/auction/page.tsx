@@ -170,6 +170,7 @@ export default function AuctionPage() {
   const [bidFlash, setBidFlash] = useState(false);
   const [pendingBidAmt, setPendingBidAmt] = useState<number | null>(null);
   const [availableFilter, setAvailableFilter] = useState('');
+  const [teamViewMode, setTeamViewMode] = useState<'available' | 'all' | 'drafted'>('available');
   // Snake draft state
   const [snakeDraftOrder, setSnakeDraftOrder] = useState<string[]>([]);
   const [snakePickerUserId, setSnakePickerUserId] = useState<string | null>(null);
@@ -744,6 +745,31 @@ export default function AuctionPage() {
   const filteredAvailableTeams = availableFilter
     ? availableTeams.filter(t => t.sportLeagueId === availableFilter)
     : availableTeams;
+
+  // Won teams (not passed), with full SportTeam data for sport filtering
+  const draftedTeams = soldLots
+    .filter(l => !l.passed)
+    .map(l => teamMapRef.current.get(l.teamId))
+    .filter((t): t is SportTeam => !!t);
+
+  // Base list for the Teams panel depending on view mode
+  const teamPanelBase: SportTeam[] = (() => {
+    if (teamViewMode === 'drafted') return draftedTeams;
+    if (teamViewMode === 'all') {
+      const takenTeams = [...soldOrPassedIds]
+        .map(id => teamMapRef.current.get(id))
+        .filter((t): t is SportTeam => !!t);
+      return [...availableTeams, ...takenTeams].sort((a, b) => a.name.localeCompare(b.name));
+    }
+    return availableTeams;
+  })();
+
+  const teamPanelList = availableFilter
+    ? teamPanelBase.filter(t => t.sportLeagueId === availableFilter)
+    : teamPanelBase;
+
+  // Set of IDs that should appear greyscale (sold/passed)
+  const greyedIds = teamViewMode !== 'available' ? soldOrPassedIds : new Set<string>();
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -1393,12 +1419,20 @@ export default function AuctionPage() {
                 </div>
               </div>
             )}
-            {/* Available Teams — auction mode only (snake shows teams in draft clock card) */}
+            {/* Teams panel — auction mode only (snake shows teams in draft clock card) */}
             {!isSnake && allAuctionTeams.length > 0 && status !== 'closed' && (
               <div className="bg-card border border-line rounded-2xl p-4">
                 <div className="flex items-center justify-between mb-3">
-                  <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide">Available Teams</p>
-                  <span className="text-xs text-copy-3">{availableTeams.length} remaining</span>
+                  <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide">Teams</p>
+                  <select
+                    value={teamViewMode}
+                    onChange={e => setTeamViewMode(e.target.value as typeof teamViewMode)}
+                    className="bg-field border border-line-2 rounded-lg px-2 py-1 text-xs text-copy-2 focus:outline-none focus:border-brand transition-colors cursor-pointer"
+                  >
+                    <option value="available">Available</option>
+                    <option value="all">All</option>
+                    <option value="drafted">Drafted</option>
+                  </select>
                 </div>
 
                 {/* Sport filter tabs */}
@@ -1413,7 +1447,7 @@ export default function AuctionPage() {
                       All
                     </button>
                     {orderedLeagueSports.map(sport => {
-                      const count = availableTeams.filter(t => t.sportLeagueId === sport).length;
+                      const count = teamPanelBase.filter(t => t.sportLeagueId === sport).length;
                       return (
                         <button
                           key={sport}
@@ -1429,18 +1463,27 @@ export default function AuctionPage() {
                   </div>
                 )}
 
-                {filteredAvailableTeams.length > 0 ? (
+                {teamPanelList.length > 0 ? (
                   <div className="grid gap-1.5 max-h-72 overflow-y-auto" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(56px, 1fr))' }}>
-                    {filteredAvailableTeams.map(team => (
-                      <div key={team.id} className="flex flex-col items-center gap-1 p-1.5 rounded-lg hover:bg-field transition-colors" title={team.name}>
-                        <TeamLogo logoUrl={team.logoUrl} name={team.name} size={8} />
-                        <p className="text-[10px] text-copy-3 text-center leading-tight w-full truncate">{team.shortName}</p>
-                      </div>
-                    ))}
+                    {teamPanelList.map(team => {
+                      const greyed = greyedIds.has(team.id);
+                      return (
+                        <div
+                          key={team.id}
+                          className={`flex flex-col items-center gap-1 p-1.5 rounded-lg hover:bg-field transition-colors ${greyed ? 'opacity-40 grayscale' : ''}`}
+                          title={team.name}
+                        >
+                          <TeamLogo logoUrl={team.logoUrl} name={team.name} size={8} />
+                          <p className="text-[10px] text-copy-3 text-center leading-tight w-full truncate">{team.shortName}</p>
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : (
                   <p className="text-xs text-copy-3 text-center py-4">
-                    {availableFilter ? `No ${fln(availableFilter)} teams remaining` : 'All teams have been auctioned'}
+                    {teamViewMode === 'drafted'
+                      ? (availableFilter ? `No ${fln(availableFilter)} teams drafted yet` : 'No teams drafted yet')
+                      : (availableFilter ? `No ${fln(availableFilter)} teams remaining` : 'All teams have been auctioned')}
                   </p>
                 )}
               </div>
