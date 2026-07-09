@@ -2967,6 +2967,26 @@ function CommissionerTab({
 // ─── Rules Tab ────────────────────────────────────────────────────────────────
 
 function RulesTab({ league }: { league: League }) {
+  const [deadlines, setDeadlines] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    api.get<Record<string, string>>('/sports/deadlines')
+      .then(setDeadlines)
+      .catch(() => {});
+  }, []);
+
+  const today = new Date().toISOString().slice(0, 10);
+
+  // Only show deadlines for sports this league actually uses
+  const leagueDeadlines = league.selectedSports
+    .filter(s => deadlines[s])
+    .map(s => {
+      const date = deadlines[s];
+      const msUntil = new Date(date + 'T00:00:00').getTime() - new Date(today + 'T00:00:00').getTime();
+      const daysUntil = Math.ceil(msUntil / 86_400_000);
+      return { sport: s, date, daysUntil, locked: daysUntil <= 0 };
+    });
+
   return (
     <div className="space-y-6">
       <section className="space-y-5">
@@ -3008,10 +3028,47 @@ function RulesTab({ league }: { league: League }) {
                 `Waivers are processed every ${wDayLabel} morning at ${wTimeLabel} EST by standard rule sets.`,
                 'Tiebreaker order is reverse current standings (Lowest in the standings is #1 priority.)',
                 'Trades are allowed to be made as long as both teams are upholding roster limits.',
-                'Every sport has a deadline for transactions, this is set by the Admin panel.',
               ];
             })().map((r, i) => <li key={i} className="text-sm text-copy-2 leading-relaxed pl-1">{r}</li>)}
           </ul>
+        </div>
+
+        {/* Waiver Deadlines */}
+        <div>
+          <p className="text-xs font-semibold text-copy-2 uppercase tracking-wide mb-2">Waiver Deadlines</p>
+          {leagueDeadlines.length === 0 ? (
+            <p className="text-sm text-copy-3">No deadlines currently set.</p>
+          ) : (
+            <div className="space-y-2">
+              {leagueDeadlines.map(({ sport, date, daysUntil, locked }) => {
+                const formatted = new Date(date + 'T00:00:00').toLocaleDateString('en-US', {
+                  month: 'long', day: 'numeric', year: 'numeric',
+                });
+                const urgentSoon = !locked && daysUntil <= 7;
+                return (
+                  <div key={sport} className={`flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl border ${
+                    locked ? 'bg-danger-bg border-danger/20' : urgentSoon ? 'bg-warn/5 border-warn/20' : 'bg-field border-line'
+                  }`}>
+                    <div>
+                      <p className={`text-sm font-medium ${locked ? 'text-danger' : 'text-copy'}`}>
+                        {formatLeagueName(sport)}
+                      </p>
+                      <p className="text-xs text-copy-3 mt-0.5">{formatted}</p>
+                    </div>
+                    {locked ? (
+                      <span className="text-[10px] font-bold bg-danger text-white px-2 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">LOCKED</span>
+                    ) : daysUntil === 1 ? (
+                      <span className="text-[10px] font-bold bg-danger text-white px-2 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">1 DAY LEFT</span>
+                    ) : urgentSoon ? (
+                      <span className="text-[10px] font-bold bg-warn text-white px-2 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">{daysUntil} DAYS LEFT</span>
+                    ) : (
+                      <span className="text-xs text-copy-3 whitespace-nowrap flex-shrink-0">{daysUntil}d left</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </section>
 
