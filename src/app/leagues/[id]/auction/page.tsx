@@ -933,9 +933,27 @@ export default function AuctionPage() {
                     </div>
                   </div>
                 ) : (
-                  <p className="text-xs text-copy-3 text-center py-2">
-                    Waiting for {participantName(snakePickerUserId ?? '')} to make their pick…
-                  </p>
+                  <div className="text-center py-2 space-y-2">
+                    <p className="text-xs text-copy-3">
+                      Waiting for {participantName(snakePickerUserId ?? '')} to make their pick…
+                    </p>
+                    {(() => {
+                      const n = snakeDraftOrder.length;
+                      if (!n) return null;
+                      const nextIdx = snakePickIndex + 1;
+                      const round = Math.floor(nextIdx / n);
+                      const pos = nextIdx % n;
+                      const nextUid = round % 2 === 0 ? snakeDraftOrder[pos] : snakeDraftOrder[n - 1 - pos];
+                      if (!nextUid) return null;
+                      const isMe = nextUid === user?.uid;
+                      return (
+                        <p className={`text-xs font-medium ${isMe ? 'text-brand' : 'text-copy-2'}`}>
+                          {isMe ? 'You are up next!' : `Up next: ${participantName(nextUid)}`}
+                          <span className="text-copy-3 font-normal"> · Pick #{nextIdx + 1}</span>
+                        </p>
+                      );
+                    })()}
+                  </div>
                 )}
               </div>
             )}
@@ -1333,14 +1351,15 @@ export default function AuctionPage() {
                         ? snakeDraftOrder[posInRound]
                         : snakeDraftOrder[n - 1 - posInRound];
                       const isCurrent = i === snakePickIndex && status === 'active';
+                      const isNext = i === snakePickIndex + 1;
                       const isDone = i < snakePickIndex;
                       const isMe = uid === user?.uid;
                       rows.push(
-                        <div key={i} className={`flex items-center gap-2.5 px-2 py-1.5 rounded-lg ${isCurrent ? 'bg-brand/10' : ''}`}>
-                          <span className={`text-xs tabular-nums w-5 text-right flex-shrink-0 ${isDone ? 'text-copy-3' : isCurrent ? 'text-brand font-bold' : 'text-copy-3'}`}>
+                        <div key={i} className={`flex items-center gap-2.5 px-2 py-1.5 rounded-lg ${isCurrent ? 'bg-brand/10' : isNext ? 'bg-warn/8' : ''}`}>
+                          <span className={`text-xs tabular-nums w-5 text-right flex-shrink-0 ${isDone ? 'text-copy-3' : isCurrent ? 'text-brand font-bold' : isNext ? 'text-warn font-semibold' : 'text-copy-3'}`}>
                             {i + 1}
                           </span>
-                          <span className={`text-sm flex-1 truncate ${isDone ? 'text-copy-3 line-through' : isCurrent ? 'text-brand font-semibold' : isMe ? 'text-brand font-medium' : 'text-copy'}`}>
+                          <span className={`text-sm flex-1 truncate ${isDone ? 'text-copy-3 line-through' : isCurrent ? 'text-brand font-semibold' : isNext ? (isMe ? 'text-brand font-semibold' : 'text-warn font-semibold') : isMe ? 'text-brand font-medium' : 'text-copy'}`}>
                             {isMe ? 'You' : participantName(uid)}
                           </span>
                           {isDone && snakePickHistory[i] && (
@@ -1349,7 +1368,10 @@ export default function AuctionPage() {
                           {isCurrent && (
                             <span className="text-[10px] font-bold bg-brand text-white px-1.5 py-0.5 rounded-full flex-shrink-0">NOW</span>
                           )}
-                          {!isCurrent && !isDone && i > 0 && posInRound === 0 && (
+                          {isNext && (
+                            <span className="text-[10px] font-bold bg-warn text-white px-1.5 py-0.5 rounded-full flex-shrink-0">NEXT</span>
+                          )}
+                          {!isCurrent && !isNext && !isDone && posInRound === 0 && (
                             <span className="text-[10px] text-copy-3 flex-shrink-0">R{round + 1}</span>
                           )}
                         </div>
@@ -1492,6 +1514,38 @@ export default function AuctionPage() {
 
           {/* ── Right sidebar ─────────────────────────────────────── */}
           <div className="space-y-4">
+
+            {/* Nomination order — manual mode only */}
+            {nominationMode === 'manual' && nominationOrderState.length > 0 && status !== 'closed' && (
+              <div className="bg-card border border-line rounded-2xl p-4">
+                <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide mb-3">Nomination Order</p>
+                <div className="space-y-0.5">
+                  {nominationOrderState.map((uid, idx) => {
+                    const currentIdx = nominationOrderState.findIndex(id => id === nominatorUserId);
+                    const offset = currentIdx >= 0 ? (idx - currentIdx + nominationOrderState.length) % nominationOrderState.length : -1;
+                    const isNow = offset === 0 && nominatorUserId !== null;
+                    const isNext = offset === 1 && nominatorUserId !== null;
+                    const isMe = uid === user?.uid;
+                    return (
+                      <div key={uid} className={`flex items-center gap-2.5 px-2 py-1.5 rounded-lg ${isNow ? 'bg-brand/10' : isNext ? 'bg-warn/8' : ''}`}>
+                        <span className={`text-xs tabular-nums w-4 text-right flex-shrink-0 ${isNow ? 'text-brand font-bold' : isNext ? 'text-warn font-semibold' : 'text-copy-3'}`}>
+                          {idx + 1}
+                        </span>
+                        <span className={`text-sm flex-1 truncate ${isNow ? 'text-brand font-semibold' : isNext ? (isMe ? 'text-brand font-semibold' : 'text-warn font-semibold') : isMe ? 'text-brand font-medium' : 'text-copy'}`}>
+                          {isMe ? 'You' : participantName(uid)}
+                        </span>
+                        {isNow && (
+                          <span className="text-[10px] font-bold bg-brand text-white px-1.5 py-0.5 rounded-full flex-shrink-0">NOW</span>
+                        )}
+                        {isNext && (
+                          <span className="text-[10px] font-bold bg-warn text-white px-1.5 py-0.5 rounded-full flex-shrink-0">NEXT</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* My budget — auction mode only */}
             {!isSnake && (
