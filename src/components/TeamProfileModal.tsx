@@ -16,6 +16,7 @@ interface FormResult {
 interface AuctionStats {
   avgPrice: number | null;
   leaguesDrafted: number;
+  leaguePrice: number | null;
 }
 
 interface TeamNews {
@@ -111,7 +112,8 @@ export function TeamProfileModal() {
       .then(setForm).catch(() => setForm([])).finally(() => setLoadingForm(false));
 
     setLoadingStats(true);
-    api.get<AuctionStats>(`/sports/teams/${profile.teamId}/auction-stats`)
+    const leagueQ = profile.leagueId ? `?leagueId=${profile.leagueId}` : '';
+    api.get<AuctionStats>(`/sports/teams/${profile.teamId}/auction-stats${leagueQ}`)
       .then(setAuctionStats).catch(() => setAuctionStats(null)).finally(() => setLoadingStats(false));
 
     setLoadingNews(true);
@@ -235,7 +237,6 @@ export function TeamProfileModal() {
             {/* League context */}
             {(profile.wins != null || profile.draftPrice != null) && (
               <div className="px-5 py-4 border-b border-line">
-                <p className="text-xs font-semibold text-copy-3 uppercase tracking-wider mb-3">This League</p>
                 <div className="grid grid-cols-2 gap-3">
                   {profile.wins != null && (
                     <div className="bg-field rounded-xl px-3 py-2.5">
@@ -315,8 +316,10 @@ export function TeamProfileModal() {
                       </p>
                     </div>
                     <div className="bg-field rounded-xl px-3 py-2.5">
-                      <p className="text-[10px] text-copy-3 mb-1">Times drafted</p>
-                      <p className="text-sm font-bold text-copy">{auctionStats.leaguesDrafted}</p>
+                      <p className="text-[10px] text-copy-3 mb-1">Draft Price</p>
+                      <p className="text-sm font-bold text-brand">
+                        {auctionStats.leaguePrice != null ? `$${auctionStats.leaguePrice}` : '—'}
+                      </p>
                     </div>
                   </div>
                 ) : null}
