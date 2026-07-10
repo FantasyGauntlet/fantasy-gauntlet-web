@@ -198,36 +198,23 @@ export function TeamProfileModal() {
                   ))}
                 </div>
               ) : form && form.length > 0 ? (
-                <div className="space-y-2">
-                  <div className="flex gap-1.5">
-                    {form.map((r, i) => (
-                      <div
-                        key={i}
-                        title={`${r.wasHome ? 'vs' : '@'} ${r.opponent.name}: ${r.myScore}–${r.theirScore}`}
-                        className={`w-8 h-8 rounded-lg text-xs font-bold flex items-center justify-center flex-shrink-0 ${RESULT_COLORS[r.result]}`}
-                      >
-                        {r.result}
-                      </div>
-                    ))}
-                  </div>
-                  <div className="space-y-1.5 mt-3">
-                    {form.map((r, i) => (
-                      <div key={i} className="flex items-center justify-between text-xs">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className={`w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${RESULT_COLORS[r.result]}`}>
-                            {r.result}
-                          </span>
-                          <span className="text-copy-3 truncate">
-                            {r.wasHome ? 'vs' : '@'} {r.opponent.shortName || r.opponent.name}
-                          </span>
-                        </div>
-                        <span className="text-copy font-medium ml-2 flex-shrink-0">
-                          {r.myScore}–{r.theirScore}
-                          <span className="text-copy-3 ml-1.5">{formatDate(r.date)}</span>
+                <div className="space-y-1.5">
+                  {form.map((r, i) => (
+                    <div key={i} className="flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className={`w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${RESULT_COLORS[r.result]}`}>
+                          {r.result}
+                        </span>
+                        <span className="text-copy-3 truncate">
+                          {r.wasHome ? 'vs' : '@'} {r.opponent.shortName || r.opponent.name}
                         </span>
                       </div>
-                    ))}
-                  </div>
+                      <span className="text-copy font-medium ml-2 flex-shrink-0">
+                        {r.myScore}–{r.theirScore}
+                        <span className="text-copy-3 ml-1.5">{formatDate(r.date)}</span>
+                      </span>
+                    </div>
+                  ))}
                 </div>
               ) : form !== null ? (
                 <p className="text-xs text-copy-3">No completed results yet.</p>
