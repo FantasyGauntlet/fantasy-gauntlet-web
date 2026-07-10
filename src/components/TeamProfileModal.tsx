@@ -58,7 +58,7 @@ function formatDate(iso: string) {
 async function fetchEspnArticles(espnPath: string, espnTeamId: string): Promise<TeamNews['articles']> {
   try {
     const res = await fetch(
-      `https://site.api.espn.com/apis/site/v2/sports/${espnPath}/news?teams=${espnTeamId}&limit=5`,
+      `https://site.api.espn.com/apis/site/v2/sports/${espnPath}/teams/${espnTeamId}/news?limit=5`,
     );
     if (!res.ok) return [];
     const data = await res.json();
