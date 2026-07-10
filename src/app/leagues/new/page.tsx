@@ -24,6 +24,8 @@ export default function NewLeaguePage() {
     selectedSports: [] as string[],
     memberCap: '',
     isPublic: false,
+    waiverType: 'reserve-standings' as 'reserve-standings' | 'faab',
+    faabStartingBudget: 1000,
   });
   const [retroMode, setRetroMode] = useState(false);
   const [retroYear, setRetroYear] = useState(new Date().getFullYear() - 1);
@@ -58,6 +60,8 @@ export default function NewLeaguePage() {
         selectedSports: form.selectedSports,
         memberCap: form.memberCap ? Number(form.memberCap) : null,
         isPublic: form.isPublic,
+        waiverType: form.waiverType,
+        ...(form.waiverType === 'faab' ? { faabStartingBudget: form.faabStartingBudget } : {}),
         ...(retroMode ? { referenceDate: `${retroYear}-08-01` } : {}),
       });
       router.push(`/leagues/${league.id}`);
@@ -197,6 +201,49 @@ export default function NewLeaguePage() {
                   </button>
                 );
               })}
+            </div>
+          )}
+        </div>
+
+        {/* Waiver system */}
+        <div className="bg-card border border-line rounded-2xl p-5 space-y-3">
+          <div>
+            <p className="text-sm font-semibold text-copy mb-0.5">Waiver System</p>
+            <p className="text-xs text-copy-3">How free agent claims are resolved</p>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {(['reserve-standings', 'faab'] as const).map(type => (
+              <button
+                key={type}
+                type="button"
+                onClick={() => setForm(f => ({ ...f, waiverType: type }))}
+                className={`rounded-xl border px-4 py-3 text-left transition-all ${
+                  form.waiverType === type
+                    ? 'bg-brand-dim border-brand text-brand'
+                    : 'bg-field border-line text-copy-2 hover:border-line-2 hover:text-copy'
+                }`}
+              >
+                <p className="text-sm font-semibold">
+                  {type === 'reserve-standings' ? 'Reserve Standings' : 'FAAB'}
+                </p>
+                <p className="text-xs mt-0.5 leading-snug opacity-75">
+                  {type === 'reserve-standings'
+                    ? 'Worst-ranked team picks first'
+                    : 'Blind bidding — highest bid wins'}
+                </p>
+              </button>
+            ))}
+          </div>
+          {form.waiverType === 'faab' && (
+            <div>
+              <label className={labelCls}>Starting FAAB budget per team</label>
+              <input
+                type="number"
+                min={1}
+                value={form.faabStartingBudget}
+                onChange={e => setForm(f => ({ ...f, faabStartingBudget: Number(e.target.value) || 1000 }))}
+                className={inputCls}
+              />
             </div>
           )}
         </div>

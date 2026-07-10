@@ -33,6 +33,8 @@ interface League {
   topZone?: number | null;
   bottomZone?: number | null;
   waiverSettings?: { processingDay: string; processingHour: number } | null;
+  waiverType?: 'reserve-standings' | 'faab';
+  faabStartingBudget?: number;
 }
 
 interface Member { id: string; userId: string; role: 'commissioner' | 'member'; joinedAt: string; }
@@ -48,6 +50,7 @@ interface FantasyTeam {
   logoUrl?: string | null;
   isPlaceholder: boolean; ownedTeamIds: string[];
   remainingBudget: number; totalPoints: number;
+  faabRemaining?: number;
   coOwnerIds?: string[];
 }
 
@@ -84,6 +87,7 @@ interface WaiverClaim {
   addTeamId: string;
   status: 'pending' | 'approved' | 'denied';
   claimantRank: number;
+  faabBid?: number;
   requestedAt: string;
   reviewedAt: string | null;
   reviewedBy: string | null;
@@ -282,6 +286,7 @@ export default function LeaguePage() {
           userId={user?.uid}
           fantasyTeams={fantasyTeams}
           selectedSports={league.selectedSports}
+          waiverType={league.waiverType ?? 'reserve-standings'}
         />
       )}
       {tab === 'settings' && (
@@ -1714,6 +1719,11 @@ function ClaimCard({
                 Reviewed {new Date(claim.reviewedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
               </p>
             )}
+            {typeof claim.faabBid === 'number' && (
+              <span className="text-xs bg-brand-dim text-brand border border-brand/20 px-2 py-0.5 rounded-full font-medium">
+                ${claim.faabBid} bid
+              </span>
+            )}
           </div>
           {claim.denialReason && (
             <p className="text-xs text-danger mt-1.5 bg-danger-bg/40 rounded-lg px-2.5 py-1.5">
@@ -1778,13 +1788,14 @@ function ClaimCard({
 }
 
 function WaiversTab({
-  leagueId, isCommissioner, userId, fantasyTeams, selectedSports,
+  leagueId, isCommissioner, userId, fantasyTeams, selectedSports, waiverType,
 }: {
   leagueId: string;
   isCommissioner: boolean;
   userId?: string;
   fantasyTeams: FantasyTeam[];
   selectedSports: string[];
+  waiverType: 'reserve-standings' | 'faab';
 }) {
   const [claims, setClaims] = useState<WaiverClaim[]>([]);
   const [pool, setPool] = useState<TeamWithRecord[]>([]);
@@ -1794,6 +1805,7 @@ function WaiversTab({
   const [showForm, setShowForm] = useState(false);
   const [dropTeamId, setDropTeamId] = useState('');
   const [addTeamId, setAddTeamId] = useState('');
+  const [faabBid, setFaabBid] = useState(0);
   const [sportFilter, setSportFilter] = useState('all');
   const [poolSearch, setPoolSearch] = useState('');
   const [poolSort, setPoolSort] = useState<'alpha' | 'points'>('alpha');
@@ -1859,14 +1871,16 @@ function WaiversTab({
   const canSubmit = !!myTeam;
 
   function closeForm() {
-    setShowForm(false); setDropTeamId(''); setAddTeamId(''); setSubmitError('');
+    setShowForm(false); setDropTeamId(''); setAddTeamId(''); setFaabBid(0); setSubmitError('');
   }
 
   async function submitClaim() {
     if (!dropTeamId || !addTeamId) return;
     setSubmitting(true); setSubmitError('');
     try {
-      const claim = await api.post<WaiverClaim>(`/leagues/${leagueId}/waivers`, { dropTeamId, addTeamId });
+      const body: Record<string, unknown> = { dropTeamId, addTeamId };
+      if (waiverType === 'faab') body.faabBid = faabBid;
+      const claim = await api.post<WaiverClaim>(`/leagues/${leagueId}/waivers`, body);
       setClaims(c => [claim, ...c]);
       closeForm();
       setSubmitSuccess('Claim submitted.');
@@ -1926,6 +1940,11 @@ function WaiversTab({
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h2 className="text-sm font-semibold text-copy">Waiver Claims</h2>
+          {waiverType === 'faab' && myTeam && (
+            <p className="text-xs text-copy-3 mt-0.5">
+              FAAB remaining: <span className="font-semibold text-copy">${myTeam.faabRemaining ?? 0}</span>
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {isCommissioner && pending.length > 0 && (
@@ -2086,6 +2105,32 @@ function WaiversTab({
               </div>
             )}
           </div>
+
+          {/* FAAB bid */}
+          {waiverType === 'faab' && (
+            <div>
+              <p className="text-xs font-semibold text-copy-3 uppercase tracking-wider mb-2">
+                3. Your FAAB bid
+              </p>
+              <div className="flex items-center gap-2">
+                <span className="text-copy-2 text-sm">$</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={myTeam?.faabRemaining ?? 0}
+                  value={faabBid}
+                  onChange={e => setFaabBid(Math.max(0, Number(e.target.value)))}
+                  className="w-full bg-field border border-line-2 rounded-xl px-4 py-2.5 text-sm text-copy focus:outline-none focus:border-brand transition-colors"
+                  placeholder="0"
+                />
+              </div>
+              {myTeam && (
+                <p className="text-xs text-copy-3 mt-1.5">
+                  Budget remaining: <span className="font-medium text-copy">${myTeam.faabRemaining ?? 0}</span>
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Summary pill */}
           {(dropTeamId || addTeamId) && (
