@@ -274,7 +274,7 @@ export default function LeaguePage() {
                 : 'border-transparent text-copy-3 hover:text-copy-2 hover:border-line-2'
             }`}
           >
-            {t.charAt(0).toUpperCase() + t.slice(1)}
+            {t === 'waivers' ? 'Teams' : t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
         ))}
 
@@ -1855,21 +1855,26 @@ function WaiversTab({
 }) {
   const [claims, setClaims] = useState<WaiverClaim[]>([]);
   const [pool, setPool] = useState<TeamWithRecord[]>([]);
+  const [allLeagueTeams, setAllLeagueTeams] = useState<TeamWithRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Submit form
+  // Team browser filters
+  const [browseSport, setBrowseSport] = useState('all');
+  const [browseSearch, setBrowseSearch] = useState('');
+  const [browseSort, setBrowseSort] = useState<'points' | 'alpha'>('points');
+  const [browseAvailability, setBrowseAvailability] = useState<'available' | 'all'>('available');
+
+  // Waiver claim form
   const [showForm, setShowForm] = useState(false);
   const [dropTeamId, setDropTeamId] = useState('');
   const [addTeamId, setAddTeamId] = useState('');
+  const [formSearch, setFormSearch] = useState('');
   const [faabBid, setFaabBid] = useState(0);
-  const [sportFilter, setSportFilter] = useState('all');
-  const [poolSearch, setPoolSearch] = useState('');
-  const [poolSort, setPoolSort] = useState<'alpha' | 'points'>('alpha');
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [submitSuccess, setSubmitSuccess] = useState('');
 
-  // Inline deny state
+  // Commissioner state
   const [denyingId, setDenyingId] = useState<string | null>(null);
   const [denyReason, setDenyReason] = useState('');
   const [reviewing, setReviewing] = useState<string | null>(null);
@@ -1879,55 +1884,91 @@ function WaiversTab({
     Promise.all([
       api.get<WaiverClaim[]>(`/leagues/${leagueId}/waivers`),
       api.get<TeamWithRecord[]>(`/leagues/${leagueId}/waiver-pool`),
-    ]).then(([c, p]) => { setClaims(c); setPool(p); })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+      api.get<SportGroup[]>(`/leagues/${leagueId}/sport-teams`).catch(() => [] as SportGroup[]),
+    ]).then(([c, p, groups]) => {
+      setClaims(c);
+      setPool(p);
+      setAllLeagueTeams(
+        groups.flatMap(g => g.teams.map(t => ({
+          id: t.id, name: t.name, shortName: t.shortName,
+          sportLeagueId: t.sportLeagueId, logoUrl: t.logoUrl,
+          sport: g.sport, wins: 0, draws: 0, losses: 0, points: 0,
+        }))),
+      );
+    }).catch(() => {}).finally(() => setLoading(false));
   }, [leagueId]);
 
-  const teamMap = useMemo(() => {
+  const ownerMap = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const ft of fantasyTeams) {
+      for (const id of ft.ownedTeamIds) m.set(id, ft.displayName);
+    }
+    return m;
+  }, [fantasyTeams]);
+
+  // Comprehensive map: all league teams as base, pool overrides with real stats
+  const comprehensiveTeamMap = useMemo(() => {
     const m = new Map<string, TeamWithRecord>();
+    for (const t of allLeagueTeams) m.set(t.id, t);
     for (const t of pool) m.set(t.id, t);
     return m;
-  }, [pool]);
-
-  const allOwnedIds = useMemo(() => {
-    const s = new Set<string>();
-    for (const ft of fantasyTeams) for (const id of ft.ownedTeamIds) s.add(id);
-    return s;
-  }, [fantasyTeams]);
+  }, [allLeagueTeams, pool]);
 
   const myTeam = fantasyTeams.find(ft =>
     !ft.isPlaceholder && (ft.userId === userId || (ft.coOwnerIds ?? []).includes(userId ?? '')),
   );
 
-  const availableTeams = useMemo(
-    () => pool.filter(t => !allOwnedIds.has(t.id)),
-    [pool, allOwnedIds],
-  );
+  const allDisplayTeams = useMemo(() => allLeagueTeams.map(t => {
+    const stats = comprehensiveTeamMap.get(t.id);
+    return {
+      ...t,
+      wins: stats?.wins ?? 0, draws: stats?.draws ?? 0,
+      losses: stats?.losses ?? 0, points: stats?.points ?? 0,
+      sport: stats?.sport ?? t.sport,
+      isAvailable: !ownerMap.has(t.id),
+      ownerName: ownerMap.get(t.id),
+    };
+  }), [allLeagueTeams, comprehensiveTeamMap, ownerMap]);
 
-  const filteredAvailable = useMemo(() => {
-    let list = sportFilter === 'all' ? availableTeams : availableTeams.filter(t => t.sportLeagueId === sportFilter);
-    if (poolSearch.trim()) {
-      const q = poolSearch.trim().toLowerCase();
+  const filteredTeams = useMemo(() => {
+    let list = browseAvailability === 'available'
+      ? allDisplayTeams.filter(t => t.isAvailable)
+      : allDisplayTeams;
+    if (browseSport !== 'all') list = list.filter(t => t.sportLeagueId === browseSport);
+    if (browseSearch.trim()) {
+      const q = browseSearch.trim().toLowerCase();
       list = list.filter(t => t.name.toLowerCase().includes(q) || t.shortName.toLowerCase().includes(q));
     }
-    return poolSort === 'points'
+    return browseSort === 'points'
       ? [...list].sort((a, b) => b.points - a.points)
       : [...list].sort((a, b) => a.name.localeCompare(b.name));
-  }, [availableTeams, sportFilter, poolSearch, poolSort]);
+  }, [allDisplayTeams, browseAvailability, browseSport, browseSearch, browseSort]);
 
-  const myRosterTeams = (myTeam?.ownedTeamIds ?? [])
-    .map(id => teamMap.get(id)).filter(Boolean) as TeamWithRecord[];
+  const myRosterTeams = useMemo(() =>
+    (myTeam?.ownedTeamIds ?? []).map(id => comprehensiveTeamMap.get(id)).filter(Boolean) as TeamWithRecord[],
+    [myTeam, comprehensiveTeamMap],
+  );
+
+  const formFilteredPool = useMemo(() => {
+    if (!formSearch.trim()) return pool;
+    const q = formSearch.trim().toLowerCase();
+    return pool.filter(t => t.name.toLowerCase().includes(q) || t.shortName.toLowerCase().includes(q));
+  }, [pool, formSearch]);
 
   const pending = claims.filter(c => c.status === 'pending');
-  // Non-commissioners only see approved claims; pending and denied are commissioner-only
   const history = isCommissioner
     ? claims.filter(c => c.status !== 'pending')
     : claims.filter(c => c.status === 'approved');
   const canSubmit = !!myTeam;
 
+  function openAddForm(teamId?: string) {
+    if (teamId) setAddTeamId(teamId);
+    setShowForm(true);
+  }
+
   function closeForm() {
-    setShowForm(false); setDropTeamId(''); setAddTeamId(''); setFaabBid(0); setSubmitError('');
+    setShowForm(false); setDropTeamId(''); setAddTeamId('');
+    setFaabBid(0); setSubmitError(''); setFormSearch('');
   }
 
   async function submitClaim() {
@@ -1982,7 +2023,7 @@ function WaiversTab({
   if (loading) return <div className="flex justify-center py-12"><Spinner /></div>;
 
   const claimCardProps = {
-    isCommissioner, teamMap, reviewing, denyingId, denyReason,
+    isCommissioner, teamMap: comprehensiveTeamMap, reviewing, denyingId, denyReason,
     onApprove: approve,
     onStartDeny: (id: string) => { setDenyingId(id); setDenyReason(''); },
     onDenyReasonChange: setDenyReason,
@@ -1990,12 +2031,14 @@ function WaiversTab({
     onCancelDeny: () => setDenyingId(null),
   };
 
+  const addedTeam = addTeamId ? comprehensiveTeamMap.get(addTeamId) : null;
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <h2 className="text-sm font-semibold text-copy">Waiver Claims</h2>
+          <h2 className="text-sm font-semibold text-copy">Teams</h2>
           {waiverType === 'faab' && myTeam && (
             <p className="text-xs text-copy-3 mt-0.5">
               FAAB remaining: <span className="font-semibold text-copy">${myTeam.faabRemaining ?? 0}</span>
@@ -2014,10 +2057,10 @@ function WaiversTab({
           )}
           {canSubmit && !showForm && (
             <button
-              onClick={() => setShowForm(true)}
+              onClick={() => openAddForm()}
               className="bg-brand hover:bg-brand-2 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors"
             >
-              + Submit Claim
+              Waiver Claim
             </button>
           )}
         </div>
@@ -2029,7 +2072,7 @@ function WaiversTab({
         </div>
       )}
 
-      {/* Submit form */}
+      {/* Waiver claim form */}
       {showForm && canSubmit && (
         <div className="bg-card border border-line rounded-2xl p-5 space-y-5">
           <div className="flex items-center justify-between">
@@ -2066,9 +2109,6 @@ function WaiversTab({
                       <p className="font-medium text-xs leading-snug">{t.name}</p>
                     </div>
                     <p className="text-xs text-copy-3">{formatLeagueName(t.sportLeagueId)}</p>
-                    <p className="text-xs text-copy-2 mt-1">
-                      {formatRecord(t.wins, t.draws, t.losses, t.sport)} · {t.points.toFixed(1)} pts
-                    </p>
                   </button>
                 ))}
               </div>
@@ -2081,83 +2121,74 @@ function WaiversTab({
               <p className="text-xs font-semibold text-copy-3 uppercase tracking-wider">
                 2. Add from available pool
               </p>
-              <span className="text-xs text-copy-3">{filteredAvailable.length} available</span>
             </div>
 
-            {/* Filters row */}
-            <div className="flex gap-2 mb-2 flex-wrap">
-              <div className="relative flex-1 min-w-0">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="absolute left-2.5 top-1/2 -translate-y-1/2 text-copy-3 pointer-events-none">
-                  <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" strokeLinecap="round" />
-                </svg>
-                <input
-                  type="text"
-                  value={poolSearch}
-                  onChange={e => setPoolSearch(e.target.value)}
-                  placeholder="Search teams…"
-                  className="w-full bg-field border border-line-2 rounded-lg pl-7 pr-3 py-1.5 text-xs text-copy placeholder-copy-3 focus:outline-none focus:border-brand transition-colors"
-                />
-              </div>
-              <select
-                value={sportFilter}
-                onChange={e => setSportFilter(e.target.value)}
-                className="bg-field border border-line-2 text-xs text-copy rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-brand transition-colors"
-              >
-                <option value="all">All sports</option>
-                {selectedSports.map(s => <option key={s} value={s}>{formatLeagueName(s)}</option>)}
-              </select>
-              <select
-                value={poolSort}
-                onChange={e => setPoolSort(e.target.value as 'alpha' | 'points')}
-                className="bg-field border border-line-2 text-xs text-copy rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-brand transition-colors"
-              >
-                <option value="alpha">A–Z</option>
-                <option value="points">Top Points</option>
-              </select>
-            </div>
-
-            {/* Team list */}
-            {filteredAvailable.length === 0 ? (
-              <div className="text-center py-8 border border-dashed border-line rounded-xl">
-                <p className="text-copy-3 text-xs">
-                  No available teams{sportFilter !== 'all' ? ` in ${formatLeagueName(sportFilter)}` : ''}.
-                </p>
+            {/* Step 2 content: selected team chip or search picker */}
+            {addedTeam ? (
+              <div className="flex items-center gap-3 bg-brand-dim border border-brand/30 rounded-xl px-3 py-2.5">
+                <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center">
+                  {addedTeam.logoUrl
+                    ? <img src={addedTeam.logoUrl} alt={addedTeam.name} className="w-8 h-8 object-contain" />
+                    : <div className="w-8 h-8 rounded bg-field-2 flex items-center justify-center text-copy-3 text-[10px] font-bold">{addedTeam.shortName?.slice(0, 2).toUpperCase() ?? '?'}</div>
+                  }
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-brand truncate">{addedTeam.name}</p>
+                  <p className="text-xs text-copy-3">{formatLeagueName(addedTeam.sportLeagueId)}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setAddTeamId(''); setFormSearch(''); }}
+                  className="text-copy-3 hover:text-copy transition-colors p-1 flex-shrink-0"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" />
+                  </svg>
+                </button>
               </div>
             ) : (
-              <div className="border border-line rounded-xl overflow-hidden max-h-80 overflow-y-auto divide-y divide-line/50">
-                {filteredAvailable.map(t => {
-                  const selected = addTeamId === t.id;
-                  return (
-                    <button
-                      key={t.id}
-                      type="button"
-                      onClick={() => setAddTeamId(selected ? '' : t.id)}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 transition-colors text-left ${
-                        selected ? 'bg-brand-dim' : 'hover:bg-field'
-                      }`}
-                    >
-                      <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center">
-                        {t.logoUrl
-                          ? <img src={t.logoUrl} alt={t.name} className="w-8 h-8 object-contain" />
-                          : <div className="w-8 h-8 rounded bg-field-2 flex items-center justify-center text-copy-3 text-[10px] font-bold">{t.shortName?.slice(0, 2).toUpperCase() ?? '?'}</div>
-                        }
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-sm font-medium truncate ${selected ? 'text-brand' : 'text-copy'}`}>{t.name}</p>
-                        <p className="text-xs text-copy-3">{formatLeagueName(t.sportLeagueId)}</p>
-                      </div>
-                      <div className="text-right flex-shrink-0">
-                        <p className="text-sm font-semibold text-copy">{t.points.toFixed(1)} pts</p>
-                        <p className="text-xs text-copy-3">{formatRecord(t.wins, t.draws, t.losses, t.sport)}</p>
-                      </div>
-                      {selected && (
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-brand flex-shrink-0">
-                          <polyline points="20 6 9 17 4 12" />
-                        </svg>
-                      )}
-                    </button>
-                  );
-                })}
+              <div className="space-y-2">
+                <div className="relative">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="absolute left-2.5 top-1/2 -translate-y-1/2 text-copy-3 pointer-events-none">
+                    <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" strokeLinecap="round" />
+                  </svg>
+                  <input
+                    type="text"
+                    value={formSearch}
+                    onChange={e => setFormSearch(e.target.value)}
+                    placeholder="Search available teams…"
+                    className="w-full bg-field border border-line-2 rounded-lg pl-7 pr-3 py-1.5 text-xs text-copy placeholder-copy-3 focus:outline-none focus:border-brand transition-colors"
+                  />
+                </div>
+                {formFilteredPool.length === 0 ? (
+                  <p className="text-copy-3 text-xs py-2 text-center">No available teams found.</p>
+                ) : (
+                  <div className="border border-line rounded-xl overflow-hidden max-h-64 overflow-y-auto divide-y divide-line/50">
+                    {formFilteredPool.map(t => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => setAddTeamId(t.id)}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 transition-colors text-left hover:bg-field"
+                      >
+                        <div className="w-7 h-7 flex-shrink-0 flex items-center justify-center">
+                          {t.logoUrl
+                            ? <img src={t.logoUrl} alt={t.name} className="w-7 h-7 object-contain" />
+                            : <div className="w-7 h-7 rounded bg-field-2 flex items-center justify-center text-copy-3 text-[10px] font-bold">{t.shortName?.slice(0, 2).toUpperCase() ?? '?'}</div>
+                          }
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-copy truncate">{t.name}</p>
+                          <p className="text-[10px] text-copy-3">{formatLeagueName(t.sportLeagueId)}</p>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <p className="text-xs font-semibold text-copy tabular-nums">{t.points.toFixed(1)}</p>
+                          <p className="text-[10px] text-copy-3">pts</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -2175,7 +2206,8 @@ function WaiversTab({
                   min={0}
                   max={myTeam?.faabRemaining ?? 0}
                   value={faabBid}
-                  onChange={e => setFaabBid(Math.max(0, Number(e.target.value)))}
+                  onFocus={e => e.target.select()}
+                  onChange={e => { const v = e.target.valueAsNumber; setFaabBid(isNaN(v) ? 0 : Math.max(0, v)); }}
                   className="w-full bg-field border border-line-2 rounded-xl px-4 py-2.5 text-sm text-copy focus:outline-none focus:border-brand transition-colors"
                   placeholder="0"
                 />
@@ -2192,13 +2224,13 @@ function WaiversTab({
           {(dropTeamId || addTeamId) && (
             <div className="bg-field rounded-xl px-4 py-2.5 text-xs flex items-center gap-2">
               <span className={dropTeamId ? 'text-danger font-medium' : 'text-copy-3'}>
-                {dropTeamId ? (teamMap.get(dropTeamId)?.name ?? dropTeamId) : 'Pick a team to drop'}
+                {dropTeamId ? (comprehensiveTeamMap.get(dropTeamId)?.name ?? dropTeamId) : 'Pick a team to drop'}
               </span>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-copy-3 flex-shrink-0">
                 <path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
               <span className={addTeamId ? 'text-brand font-medium' : 'text-copy-3'}>
-                {addTeamId ? (teamMap.get(addTeamId)?.name ?? addTeamId) : 'Pick a team to add'}
+                {addTeamId ? (comprehensiveTeamMap.get(addTeamId)?.name ?? addTeamId) : 'Pick a team to add'}
               </span>
             </div>
           )}
@@ -2227,7 +2259,135 @@ function WaiversTab({
         </div>
       )}
 
-      {/* Pending — commissioner only */}
+      {/* Team browser */}
+      <div className="bg-card border border-line rounded-2xl overflow-hidden">
+        {/* Filter toolbar */}
+        <div className="px-4 pt-4 pb-3 border-b border-line space-y-3">
+          {/* Sport pills */}
+          <div className="flex gap-1.5 flex-wrap">
+            {['all', ...selectedSports].map(s => (
+              <button
+                key={s}
+                onClick={() => setBrowseSport(s)}
+                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                  browseSport === s
+                    ? 'bg-brand text-white'
+                    : 'bg-field border border-line text-copy-3 hover:text-copy hover:border-line-2'
+                }`}
+              >
+                {s === 'all' ? 'All' : formatLeagueName(s)}
+              </button>
+            ))}
+          </div>
+
+          {/* Search + Sort + Availability */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="relative flex-1 min-w-[130px]">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="absolute left-2.5 top-1/2 -translate-y-1/2 text-copy-3 pointer-events-none">
+                <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" strokeLinecap="round" />
+              </svg>
+              <input
+                type="text"
+                value={browseSearch}
+                onChange={e => setBrowseSearch(e.target.value)}
+                placeholder="Search teams…"
+                className="w-full bg-field border border-line-2 rounded-lg pl-6 pr-3 py-1.5 text-xs text-copy placeholder-copy-3 focus:outline-none focus:border-brand transition-colors"
+              />
+            </div>
+            <select
+              value={browseSort}
+              onChange={e => setBrowseSort(e.target.value as 'points' | 'alpha')}
+              className="bg-field border border-line-2 text-xs text-copy rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-brand transition-colors"
+            >
+              <option value="points">Most Points</option>
+              <option value="alpha">A–Z</option>
+            </select>
+            <div className="flex rounded-lg border border-line overflow-hidden text-xs font-medium">
+              {(['available', 'all'] as const).map(v => (
+                <button
+                  key={v}
+                  onClick={() => setBrowseAvailability(v)}
+                  className={`px-3 py-1.5 transition-colors ${
+                    browseAvailability === v
+                      ? 'bg-brand text-white'
+                      : 'bg-field text-copy-3 hover:text-copy'
+                  }`}
+                >
+                  {v === 'available' ? 'Available' : 'All Teams'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <p className="text-[11px] text-copy-3">
+            {filteredTeams.length} {filteredTeams.length === 1 ? 'team' : 'teams'}
+          </p>
+        </div>
+
+        {/* Team list */}
+        <div className="divide-y divide-line/40 max-h-[520px] overflow-y-auto">
+          {filteredTeams.length === 0 ? (
+            <div className="text-center py-10">
+              <p className="text-copy-3 text-sm">No teams found.</p>
+            </div>
+          ) : filteredTeams.map(t => (
+            <div key={t.id} className="flex items-center gap-3 px-4 py-3 hover:bg-field/40 transition-colors">
+              {/* Logo */}
+              <div className="w-9 h-9 flex-shrink-0 flex items-center justify-center">
+                {t.logoUrl
+                  ? <img src={t.logoUrl} alt={t.name} className="w-9 h-9 object-contain" />
+                  : <div className="w-9 h-9 rounded-lg bg-field-2 border border-line flex items-center justify-center text-copy-3 text-xs font-bold">{t.shortName?.slice(0, 2).toUpperCase() ?? '??'}</div>
+                }
+              </div>
+
+              {/* Name + meta */}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-copy truncate">{t.name}</p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className="text-[11px] text-copy-3 bg-field border border-line px-1.5 py-0.5 rounded-full leading-none">
+                    {formatLeagueName(t.sportLeagueId)}
+                  </span>
+                  {(t.wins > 0 || t.losses > 0) && (
+                    <span className="text-[11px] text-copy-3">
+                      {formatRecord(t.wins, t.draws, t.losses, t.sport)}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Points + action */}
+              <div className="flex items-center gap-3 flex-shrink-0">
+                {t.points > 0 && (
+                  <div className="text-right">
+                    <p className="text-sm font-bold text-copy tabular-nums">{t.points.toFixed(1)}</p>
+                    <p className="text-[10px] text-copy-3 leading-none">pts</p>
+                  </div>
+                )}
+                {t.isAvailable ? (
+                  canSubmit ? (
+                    <button
+                      onClick={() => openAddForm(t.id)}
+                      className="text-xs bg-brand hover:bg-brand-2 text-white px-3 py-1.5 rounded-lg font-medium transition-colors"
+                    >
+                      Add
+                    </button>
+                  ) : (
+                    <span className="text-[11px] text-positive font-medium px-2 py-0.5 bg-positive-bg border border-positive/20 rounded-full">
+                      Free
+                    </span>
+                  )
+                ) : (
+                  <span className="text-[11px] text-copy-3 max-w-[88px] truncate text-right leading-snug">
+                    {t.ownerName ?? 'Owned'}
+                  </span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Pending claims — commissioner only */}
       {isCommissioner && pending.length > 0 && (
         <div>
           <p className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-2">
@@ -2239,7 +2399,7 @@ function WaiversTab({
         </div>
       )}
 
-      {/* History */}
+      {/* Claim history */}
       {history.length > 0 && (
         <div>
           <p className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-2">History</p>
@@ -2249,21 +2409,10 @@ function WaiversTab({
         </div>
       )}
 
-      {/* Empty state */}
+      {/* Empty state for claims */}
       {claims.length === 0 && !showForm && (
-        <div className="text-center py-16 border border-dashed border-line rounded-2xl">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-copy-3 mx-auto mb-3">
-            <path d="M8 7h12M8 12h12M8 17h12M4 7h.01M4 12h.01M4 17h.01" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+        <div className="text-center py-8 border border-dashed border-line rounded-2xl">
           <p className="text-copy-3 text-sm">No waiver claims yet.</p>
-          {canSubmit && (
-            <button
-              onClick={() => setShowForm(true)}
-              className="mt-3 text-brand text-sm hover:text-brand-2 transition-colors font-medium"
-            >
-              Submit the first claim →
-            </button>
-          )}
         </div>
       )}
     </div>
