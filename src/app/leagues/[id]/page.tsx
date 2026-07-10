@@ -122,7 +122,8 @@ type TxEvent =
   | { type: 'trade'; id: string; date: string; proposerFantasyTeamId: string; receiverFantasyTeamId: string; offeredSportTeamIds: string[]; requestedSportTeamIds: string[]; }
   | { type: 'waiver'; id: string; date: string; claimantUserId: string; claimantDisplayName: string; addTeamId: string; dropTeamId: string; };
 
-type Tab = 'standings' | 'roster' | 'waivers' | 'settings';
+type Tab = 'standings' | 'roster' | 'waivers' | 'home' | 'history' | 'rules' | 'activity' | 'commissioner';
+const VALID_TABS: Tab[] = ['standings', 'roster', 'waivers', 'home', 'history', 'rules', 'activity', 'commissioner'];
 
 const STATE_META: Record<string, { label: string; cls: string }> = {
   draft:     { label: 'Draft',     cls: 'bg-warn-bg text-warn border-warn/20' },
@@ -188,6 +189,12 @@ export default function LeaguePage() {
       .finally(() => setLoading(false));
   }, [id, router]);
 
+  // Read initial tab from URL search param (set by NavBar dropdown links)
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get('tab') as Tab | null;
+    if (t && VALID_TABS.includes(t)) setTab(t);
+  }, []);
+
   async function startAuction() {
     try {
       await api.post(`/leagues/${id}/auction/start`);
@@ -208,12 +215,16 @@ export default function LeaguePage() {
 
   const isCommissioner = league.commissionerId === user?.uid;
   const stateMeta = STATE_META[league.state] ?? STATE_META.completed;
-  const tabs: { key: Tab; label: string }[] = [
-    { key: 'standings', label: 'Standings' },
-    { key: 'roster', label: 'Roster' },
-    { key: 'waivers', label: 'Waivers' },
-    { key: 'settings', label: 'League' },
+
+  const leagueSubTabs: { key: Tab; label: string }[] = [
+    { key: 'home',        label: 'League Home' },
+    { key: 'history',     label: 'History' },
+    { key: 'rules',       label: 'Rules' },
+    { key: 'activity',    label: 'Recent Activity' },
+    ...(isCommissioner ? [{ key: 'commissioner' as Tab, label: 'Commissioner Settings' }] : []),
   ];
+  const isLeagueTab = leagueSubTabs.some(t => t.key === tab);
+  const activeLeagueLabel = leagueSubTabs.find(t => t.key === tab)?.label ?? 'League';
 
   return (
     <div>
@@ -253,19 +264,52 @@ export default function LeaguePage() {
 
       {/* Tab bar */}
       <div className="flex gap-0.5 mb-6 border-b border-line">
-        {tabs.map(t => (
+        {(['standings', 'roster', 'waivers'] as Tab[]).map(t => (
           <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`px-4 py-2.5 text-sm font-medium transition-colors -mb-px border-b-2 ${
-              tab === t.key
+            key={t}
+            onClick={() => setTab(t)}
+            className={`px-4 py-2.5 text-sm font-medium transition-colors -mb-px border-b-2 capitalize ${
+              tab === t
                 ? 'border-brand text-brand'
                 : 'border-transparent text-copy-3 hover:text-copy-2 hover:border-line-2'
             }`}
           >
-            {t.label}
+            {t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
         ))}
+
+        {/* League dropdown tab */}
+        <div className="relative group -mb-px">
+          <button
+            className={`px-4 py-2.5 text-sm font-medium transition-colors flex items-center gap-1 border-b-2 ${
+              isLeagueTab
+                ? 'border-brand text-brand'
+                : 'border-transparent text-copy-3 hover:text-copy-2 hover:border-line-2'
+            }`}
+          >
+            {activeLeagueLabel}
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+          <div className="absolute hidden group-hover:block left-0 top-full pt-1 z-50 min-w-[200px]">
+            <div className="bg-card border border-line rounded-xl shadow-xl py-1 overflow-hidden">
+              {leagueSubTabs.map(t => (
+                <button
+                  key={t.key}
+                  onClick={() => setTab(t.key)}
+                  className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
+                    tab === t.key
+                      ? 'bg-brand-dim text-brand font-medium'
+                      : 'text-copy-2 hover:bg-field hover:text-copy'
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
 
       {tab === 'standings' && <StandingsTab leagueId={id} userId={user?.uid} fantasyTeams={fantasyTeams} topZone={league.topZone} bottomZone={league.bottomZone} />}
@@ -289,8 +333,20 @@ export default function LeaguePage() {
           waiverType={league.waiverType ?? 'reserve-standings'}
         />
       )}
-      {tab === 'settings' && (
-        <SettingsTab league={league} setLeague={setLeague} isCommissioner={isCommissioner} leagueId={id} memberCount={members.length} previousLeagueId={league.previousLeagueId} userId={user?.uid} fantasyTeams={fantasyTeams} />
+      {tab === 'home' && (
+        <LeagueHomeTab league={league} isCommissioner={isCommissioner} leagueId={id} memberCount={members.length} userId={user?.uid} fantasyTeams={fantasyTeams} />
+      )}
+      {tab === 'history' && (
+        <HistoryTab leagueId={id} previousLeagueId={league.previousLeagueId} />
+      )}
+      {tab === 'rules' && <RulesTab league={league} />}
+      {tab === 'activity' && (
+        <RecentActivityTab leagueId={id} fantasyTeams={fantasyTeams} />
+      )}
+      {tab === 'commissioner' && isCommissioner && (
+        <div className="space-y-4">
+          <CommissionerTab league={league} setLeague={setLeague} leagueId={id} />
+        </div>
       )}
     </div>
   );
@@ -2216,25 +2272,17 @@ function WaiversTab({
 
 // ─── Settings Tab ─────────────────────────────────────────────────────────────
 
-function SettingsTab({
-  league, setLeague, isCommissioner, leagueId, memberCount, previousLeagueId, userId, fantasyTeams,
+function LeagueHomeTab({
+  league, isCommissioner, leagueId, memberCount, userId, fantasyTeams,
 }: {
   league: League;
-  setLeague: React.Dispatch<React.SetStateAction<League | null>>;
   isCommissioner: boolean;
   leagueId: string;
   memberCount: number;
-  previousLeagueId?: string;
   userId?: string;
   fantasyTeams: FantasyTeam[];
 }) {
   const msgEndRef = useRef<HTMLDivElement>(null);
-  const [rulesOpen, setRulesOpen] = useState(false);
-  const [commissionerOpen, setCommissionerOpen] = useState(false);
-
-  const [transactions, setTransactions] = useState<TxEvent[]>([]);
-  const [txLoading, setTxLoading] = useState(true);
-  const [allSportTeams, setAllSportTeams] = useState<SportTeam[]>([]);
 
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [newAnnouncement, setNewAnnouncement] = useState('');
@@ -2247,27 +2295,13 @@ function SettingsTab({
 
   useEffect(() => {
     Promise.all([
-      api.get<TxEvent[]>(`/leagues/${leagueId}/transactions`).catch(() => [] as TxEvent[]),
-      api.get<SportGroup[]>(`/leagues/${leagueId}/sport-teams`).catch(() => [] as SportGroup[]),
       api.get<Announcement[]>(`/leagues/${leagueId}/announcements`).catch(() => [] as Announcement[]),
       api.get<LeagueMessage[]>(`/leagues/${leagueId}/messages`).catch(() => [] as LeagueMessage[]),
-    ]).then(([txs, groups, anns, msgs]) => {
-      setTransactions(txs);
-      setAllSportTeams(groups.flatMap(g => g.teams));
+    ]).then(([anns, msgs]) => {
       setAnnouncements(anns);
       setMessages(msgs);
-    }).finally(() => setTxLoading(false));
+    });
   }, [leagueId]);
-
-  const sportTeamById = useMemo(
-    () => new Map(allSportTeams.map(t => [t.id, t])),
-    [allSportTeams],
-  );
-
-  const ftById = useMemo(
-    () => new Map(fantasyTeams.map(ft => [ft.id, ft])),
-    [fantasyTeams],
-  );
 
   async function handleAddAnnouncement(e: React.FormEvent) {
     e.preventDefault();
@@ -2448,21 +2482,150 @@ function SettingsTab({
         )}
       </div>
 
-      {/* ── Transaction History ────────────────────────────────────────────────── */}
+      {/* ── League Info ────────────────────────────────────────────────────────── */}
+      <div className="bg-card border border-line rounded-2xl p-5">
+        <h2 className="text-sm font-semibold text-copy mb-4">League Info</h2>
+        <div className="grid grid-cols-2 gap-3 text-sm mb-4">
+          {[
+            { label: 'League ID', value: <code className="text-xs font-mono text-copy-2">{league.id}</code> },
+            { label: 'Visibility', value: <span className="text-copy">{league.isPublic ? 'Public' : 'Private'}</span> },
+            { label: 'Start', value: <span className="text-copy">{league.startDate}</span> },
+            { label: 'End', value: <span className="text-copy">{league.endDate}</span> },
+            { label: 'Members', value: <span className="text-copy">{memberCount}{league.memberCap ? ` / ${league.memberCap}` : ''}</span> },
+          ].map(row => (
+            <div key={row.label}>
+              <p className="text-xs text-copy-3 mb-0.5">{row.label}</p>
+              {row.value}
+            </div>
+          ))}
+        </div>
+        <div>
+          <p className="text-xs text-copy-3 mb-2">Sports</p>
+          <div className="flex gap-1.5 flex-wrap">
+            {league.selectedSports.map(s => (
+              <span key={s} className="text-xs bg-field border border-line text-copy-2 px-2.5 py-1 rounded-lg">{formatLeagueName(s)}</span>
+            ))}
+          </div>
+        </div>
+      </div>
+
+    </div>
+  );
+}
+
+// ─── History Tab ──────────────────────────────────────────────────────────────
+
+function HistoryTab({ leagueId, previousLeagueId }: { leagueId: string; previousLeagueId?: string }) {
+  const [standings, setStandings] = useState<Standing[] | null>(null);
+  const [loading, setLoading] = useState(!!previousLeagueId);
+
+  useEffect(() => {
+    if (!previousLeagueId) return;
+    api.get<Standing[]>(`/leagues/${previousLeagueId}/standings`)
+      .then(s => setStandings(s))
+      .catch(() => setStandings([]))
+      .finally(() => setLoading(false));
+  }, [previousLeagueId]);
+
+  if (!previousLeagueId) {
+    return (
+      <div className="bg-card border border-line rounded-2xl p-10 text-center">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-copy-3 mx-auto mb-3">
+          <path d="M12 8v4l3 3" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M3.05 11a9 9 0 1 1 .5 4" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M3 16v-5h5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        <p className="text-copy-2 text-sm font-medium">No previous seasons on record.</p>
+        <p className="text-copy-3 text-xs mt-1">This is the first season of this league.</p>
+      </div>
+    );
+  }
+
+  if (loading) return <div className="flex justify-center py-12"><Spinner /></div>;
+
+  return (
+    <div className="space-y-4">
       <div className="bg-card border border-line rounded-2xl overflow-hidden">
         <div className="px-5 py-4 border-b border-line">
-          <p className="text-sm font-semibold text-copy">Transaction History</p>
-          <p className="text-xs text-copy-3 mt-0.5">Accepted trades and approved waiver pickups.</p>
+          <p className="text-sm font-semibold text-copy">Previous Season Final Standings</p>
+          <p className="text-xs text-copy-3 mt-0.5">League ID: {previousLeagueId}</p>
         </div>
-        {txLoading ? (
-          <div className="flex justify-center py-8"><Spinner size="sm" /></div>
-        ) : transactions.length === 0 ? (
+        {!standings || standings.length === 0 ? (
           <div className="text-center py-10">
-            <p className="text-copy-3 text-sm">No transactions yet.</p>
+            <p className="text-copy-3 text-sm">No standings data available for the previous season.</p>
           </div>
         ) : (
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-line bg-field/50">
+                <th className="text-left px-4 py-3 text-xs font-semibold text-copy-3 uppercase tracking-wider">Rank</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-copy-3 uppercase tracking-wider">Manager</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-copy-3 uppercase tracking-wider">Points</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-copy-3 uppercase tracking-wider hidden sm:table-cell">Bonus</th>
+              </tr>
+            </thead>
+            <tbody>
+              {standings.map(s => (
+                <tr key={s.userId} className="border-b border-line/50">
+                  <td className="px-4 py-3 text-sm font-bold text-copy-2">#{s.rank}</td>
+                  <td className="px-4 py-3 text-sm font-medium text-copy">{s.displayName}</td>
+                  <td className="px-4 py-3 text-sm text-right font-semibold text-copy">{s.totalPoints.toFixed(1)}</td>
+                  <td className="px-4 py-3 text-sm text-right text-copy-3 hidden sm:table-cell">{s.bonusPoints > 0 ? `+${s.bonusPoints}` : '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Recent Activity Tab ──────────────────────────────────────────────────────
+
+function RecentActivityTab({ leagueId, fantasyTeams }: { leagueId: string; fantasyTeams: FantasyTeam[] }) {
+  const [transactions, setTransactions] = useState<TxEvent[]>([]);
+  const [allSportTeams, setAllSportTeams] = useState<SportTeam[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showAll, setShowAll] = useState(false);
+
+  useEffect(() => {
+    Promise.all([
+      api.get<TxEvent[]>(`/leagues/${leagueId}/transactions`).catch(() => [] as TxEvent[]),
+      api.get<SportGroup[]>(`/leagues/${leagueId}/sport-teams`).catch(() => [] as SportGroup[]),
+    ]).then(([txs, groups]) => {
+      setTransactions(txs);
+      setAllSportTeams(groups.flatMap(g => g.teams));
+    }).finally(() => setLoading(false));
+  }, [leagueId]);
+
+  const sportTeamById = useMemo(() => new Map(allSportTeams.map(t => [t.id, t])), [allSportTeams]);
+  const ftById = useMemo(() => new Map(fantasyTeams.map(ft => [ft.id, ft])), [fantasyTeams]);
+
+  const PAGE = 10;
+  const visible = showAll ? transactions : transactions.slice(0, PAGE);
+
+  return (
+    <div className="bg-card border border-line rounded-2xl overflow-hidden">
+      <div className="px-5 py-4 border-b border-line flex items-center justify-between">
+        <div>
+          <p className="text-sm font-semibold text-copy">Transaction History</p>
+          <p className="text-xs text-copy-3 mt-0.5">All accepted trades and approved waiver pickups this season.</p>
+        </div>
+        {transactions.length > 0 && (
+          <span className="text-xs text-copy-3">{transactions.length} total</span>
+        )}
+      </div>
+      {loading ? (
+        <div className="flex justify-center py-10"><Spinner size="sm" /></div>
+      ) : transactions.length === 0 ? (
+        <div className="text-center py-12">
+          <p className="text-copy-3 text-sm">No transactions yet.</p>
+        </div>
+      ) : (
+        <>
           <div className="divide-y divide-line/30">
-            {transactions.map(tx => {
+            {visible.map(tx => {
               if (tx.type === 'trade') {
                 const proposerFt = ftById.get(tx.proposerFantasyTeamId);
                 const receiverFt = ftById.get(tx.receiverFantasyTeamId);
@@ -2514,100 +2677,18 @@ function SettingsTab({
               }
             })}
           </div>
-        )}
-      </div>
-
-      {/* ── League Info ────────────────────────────────────────────────────────── */}
-      <div className="bg-card border border-line rounded-2xl p-5">
-        <h2 className="text-sm font-semibold text-copy mb-4">League Info</h2>
-        <div className="grid grid-cols-2 gap-3 text-sm mb-4">
-          {[
-            { label: 'League ID', value: <code className="text-xs font-mono text-copy-2">{league.id}</code> },
-            { label: 'Visibility', value: <span className="text-copy">{league.isPublic ? 'Public' : 'Private'}</span> },
-            { label: 'Start', value: <span className="text-copy">{league.startDate}</span> },
-            { label: 'End', value: <span className="text-copy">{league.endDate}</span> },
-            { label: 'Members', value: <span className="text-copy">{memberCount}{league.memberCap ? ` / ${league.memberCap}` : ''}</span> },
-          ].map(row => (
-            <div key={row.label}>
-              <p className="text-xs text-copy-3 mb-0.5">{row.label}</p>
-              {row.value}
-            </div>
-          ))}
-        </div>
-        <div>
-          <p className="text-xs text-copy-3 mb-2">Sports</p>
-          <div className="flex gap-1.5 flex-wrap">
-            {league.selectedSports.map(s => (
-              <span key={s} className="text-xs bg-field border border-line text-copy-2 px-2.5 py-1 rounded-lg">{formatLeagueName(s)}</span>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* ── Previous Season ────────────────────────────────────────────────────── */}
-      <div className="bg-card border border-line rounded-2xl p-5">
-        <h2 className="text-sm font-semibold text-copy mb-4">Previous Season</h2>
-        <div className="text-center py-8 border border-dashed border-line rounded-xl">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-copy-3 mx-auto mb-3">
-            <path d="M12 8v4l3 3" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M3.05 11a9 9 0 1 1 .5 4" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M3 16v-5h5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          <p className="text-copy-2 text-sm font-medium">No previous seasons on record.</p>
-          <p className="text-copy-3 text-xs mt-1">
-            {previousLeagueId
-              ? 'Previous season data will appear here once available.'
-              : 'This is the first season of this league.'}
-          </p>
-        </div>
-      </div>
-
-      {/* ── Commissioner (collapsible, commissioner-only) ──────────────────────── */}
-      {isCommissioner && (
-        <div className="bg-card border border-line rounded-2xl overflow-hidden">
-          <button
-            onClick={() => setCommissionerOpen(v => !v)}
-            className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-field/50 transition-colors"
-          >
-            <p className="text-sm font-semibold text-copy">Commissioner Settings</p>
-            <svg
-              width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-              className={`text-copy-3 transition-transform duration-200 ${commissionerOpen ? 'rotate-180' : ''}`}
-            >
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
-          </button>
-          {commissionerOpen && (
-            <div className="border-t border-line p-4 space-y-4">
-              <CommissionerTab league={league} setLeague={setLeague} leagueId={leagueId} />
+          {transactions.length > PAGE && (
+            <div className="px-5 py-3 border-t border-line text-center">
+              <button
+                onClick={() => setShowAll(v => !v)}
+                className="text-sm text-brand hover:text-brand-2 font-medium transition-colors"
+              >
+                {showAll ? 'Show less' : `Show all ${transactions.length} transactions`}
+              </button>
             </div>
           )}
-        </div>
+        </>
       )}
-
-      {/* ── Rules & Scoring (collapsible) ──────────────────────────────────────── */}
-      <div className="bg-card border border-line rounded-2xl overflow-hidden">
-        <button
-          onClick={() => setRulesOpen(v => !v)}
-          className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-field/50 transition-colors"
-        >
-          <p className="text-sm font-semibold text-copy">Rules &amp; Scoring</p>
-          <svg
-            width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-            className={`text-copy-3 transition-transform duration-200 ${rulesOpen ? 'rotate-180' : ''}`}
-          >
-            <polyline points="6 9 12 15 18 9" />
-          </svg>
-        </button>
-        {rulesOpen && (
-          <div className="border-t border-line px-5 py-5">
-            <RulesTab league={league} />
-          </div>
-        )}
-      </div>
-
     </div>
   );
 }
