@@ -56,27 +56,22 @@ function formatDate(iso: string) {
 }
 
 async function fetchEspnArticles(espnPath: string, espnTeamId: string): Promise<TeamNews['articles']> {
-  const urls = [
-    `https://site.api.espn.com/apis/site/v2/sports/${espnPath}/news?teams=${espnTeamId}&limit=5`,
-    `https://site.api.espn.com/apis/site/v2/sports/${espnPath}/news?limit=5`,
-  ];
-  for (const url of urls) {
-    try {
-      const res = await fetch(url);
-      if (!res.ok) continue;
-      const data = await res.json();
-      const raw = (data.articles ?? data.feed ?? []) as any[];
-      if (!raw.length) continue;
-      const mapped = raw.slice(0, 5).map((a: any) => ({
-        title:     a.headline ?? a.title ?? '',
-        summary:   a.description ?? a.story ?? '',
-        published: a.published ?? a.lastModified ?? '',
-        url:       a.links?.web?.href ?? a.links?.mobile?.href ?? a.link ?? '',
-      })).filter((a: any) => a.title);
-      if (mapped.length) return mapped;
-    } catch { continue; }
+  try {
+    const res = await fetch(
+      `https://site.api.espn.com/apis/site/v2/sports/${espnPath}/news?teams=${espnTeamId}&limit=5`,
+    );
+    if (!res.ok) return [];
+    const data = await res.json();
+    const raw = (data.articles ?? data.feed ?? []) as any[];
+    return raw.slice(0, 5).map((a: any) => ({
+      title:     a.headline ?? a.title ?? '',
+      summary:   a.description ?? a.story ?? '',
+      published: a.published ?? a.lastModified ?? '',
+      url:       a.links?.web?.href ?? a.links?.mobile?.href ?? a.link ?? '',
+    })).filter((a: any) => a.title);
+  } catch {
+    return [];
   }
-  return [];
 }
 
 async function fetchTeamNews(teamId: string, sportLeagueId: string | undefined): Promise<TeamNews> {
