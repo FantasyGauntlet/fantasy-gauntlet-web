@@ -58,12 +58,19 @@ function formatDate(iso: string) {
 async function fetchEspnArticles(espnPath: string, espnTeamId: string): Promise<TeamNews['articles']> {
   try {
     const res = await fetch(
-      `https://site.api.espn.com/apis/site/v2/sports/${espnPath}/teams/${espnTeamId}/news?limit=5`,
+      `https://site.api.espn.com/apis/site/v2/sports/${espnPath}/news?teams=${espnTeamId}&limit=10`,
     );
     if (!res.ok) return [];
     const data = await res.json();
     const raw = (data.articles ?? data.feed ?? []) as any[];
-    return raw.slice(0, 5).map((a: any) => ({
+    const teamIdNum = Number(espnTeamId);
+    // Filter to articles whose categories explicitly reference this team
+    const teamArticles = raw.filter((a: any) =>
+      (a.categories ?? []).some(
+        (c: any) => c.type === 'team' && (c.id === teamIdNum || c.teamId === teamIdNum),
+      ),
+    );
+    return teamArticles.slice(0, 5).map((a: any) => ({
       title:     a.headline ?? a.title ?? '',
       summary:   a.description ?? a.story ?? '',
       published: a.published ?? a.lastModified ?? '',
