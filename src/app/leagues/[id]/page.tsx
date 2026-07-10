@@ -2022,6 +2022,8 @@ function WaiversTab({
 
   if (loading) return <div className="flex justify-center py-12"><Spinner /></div>;
 
+  const { openProfile } = useTeamProfile();
+
   const claimCardProps = {
     isCommissioner, teamMap: comprehensiveTeamMap, reviewing, denyingId, denyReason,
     onApprove: approve,
@@ -2331,7 +2333,11 @@ function WaiversTab({
               <p className="text-copy-3 text-sm">No teams found.</p>
             </div>
           ) : filteredTeams.map(t => (
-            <div key={t.id} className="flex items-center gap-3 px-4 py-3 hover:bg-field/40 transition-colors">
+            <div
+              key={t.id}
+              className="flex items-center gap-3 px-4 py-3 hover:bg-field/40 transition-colors cursor-pointer"
+              onClick={() => openProfile({ teamId: t.id, name: t.name, logoUrl: t.logoUrl, sportLeagueId: t.sportLeagueId, wins: t.wins, draws: t.draws, losses: t.losses, points: t.points })}
+            >
               {/* Logo */}
               <div className="w-9 h-9 flex-shrink-0 flex items-center justify-center">
                 {t.logoUrl
@@ -2366,7 +2372,7 @@ function WaiversTab({
                 {t.isAvailable ? (
                   canSubmit ? (
                     <button
-                      onClick={() => openAddForm(t.id)}
+                      onClick={e => { e.stopPropagation(); openAddForm(t.id); }}
                       className="text-xs bg-brand hover:bg-brand-2 text-white px-3 py-1.5 rounded-lg font-medium transition-colors"
                     >
                       Add
