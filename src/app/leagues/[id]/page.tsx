@@ -2624,11 +2624,11 @@ function CommissionerTab({
   const router = useRouter();
 
   const [auctionForm, setAuctionForm] = useState({
-    startingBudget:   league.auctionConfig?.startingBudget   ?? 100,
+    startingBudget:   league.auctionConfig?.startingBudget   ?? 1000,
     minOpeningBid:    league.auctionConfig?.minOpeningBid    ?? 1,
     minBidIncrement:  league.auctionConfig?.minBidIncrement  ?? 1,
     nominationMode:   league.auctionConfig?.nominationMode   ?? 'manual',
-    countdownSeconds: league.auctionConfig?.countdownSeconds ?? 30,
+    countdownSeconds: league.auctionConfig?.countdownSeconds ?? 15,
     maxWildcard:      league.auctionConfig?.maxWildcard      ?? 0,
   });
   const [saving, setSaving] = useState(false);
@@ -2934,19 +2934,22 @@ function CommissionerTab({
                     <div>
                       <label className="block text-xs font-medium text-copy-2 mb-1.5">Starting Budget ($)</label>
                       <input type="number" min={1} required value={auctionForm.startingBudget}
-                        onChange={e => setAuctionForm(f => ({ ...f, startingBudget: Number(e.target.value) }))}
+                        onFocus={e => e.target.select()}
+                        onChange={e => { const v = e.target.valueAsNumber; if (!isNaN(v)) setAuctionForm(f => ({ ...f, startingBudget: v })); }}
                         className={inputCls} />
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-copy-2 mb-1.5">Min Opening Bid ($)</label>
                       <input type="number" min={1} required value={auctionForm.minOpeningBid}
-                        onChange={e => setAuctionForm(f => ({ ...f, minOpeningBid: Number(e.target.value) }))}
+                        onFocus={e => e.target.select()}
+                        onChange={e => { const v = e.target.valueAsNumber; if (!isNaN(v)) setAuctionForm(f => ({ ...f, minOpeningBid: v })); }}
                         className={inputCls} />
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-copy-2 mb-1.5">Min Bid Increment ($)</label>
                       <input type="number" min={1} required value={auctionForm.minBidIncrement}
-                        onChange={e => setAuctionForm(f => ({ ...f, minBidIncrement: Number(e.target.value) }))}
+                        onFocus={e => e.target.select()}
+                        onChange={e => { const v = e.target.valueAsNumber; if (!isNaN(v)) setAuctionForm(f => ({ ...f, minBidIncrement: v })); }}
                         className={inputCls} />
                     </div>
                   </>
@@ -2954,13 +2957,15 @@ function CommissionerTab({
                 <div>
                   <label className="block text-xs font-medium text-copy-2 mb-1.5">Pick Clock (sec)</label>
                   <input type="number" min={5} max={300} required value={auctionForm.countdownSeconds}
-                    onChange={e => setAuctionForm(f => ({ ...f, countdownSeconds: Number(e.target.value) }))}
+                    onFocus={e => e.target.select()}
+                    onChange={e => { const v = e.target.valueAsNumber; if (!isNaN(v)) setAuctionForm(f => ({ ...f, countdownSeconds: v })); }}
                     className={inputCls} />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-copy-2 mb-1.5">Wildcard Slots</label>
                   <input type="number" min={0} max={20} value={auctionForm.maxWildcard}
-                    onChange={e => setAuctionForm(f => ({ ...f, maxWildcard: Number(e.target.value) }))}
+                    onFocus={e => e.target.select()}
+                    onChange={e => { const v = e.target.valueAsNumber; if (!isNaN(v)) setAuctionForm(f => ({ ...f, maxWildcard: v })); }}
                     className={inputCls} />
                   <p className="text-[10px] text-copy-3 mt-1">Extra team slots beyond per-sport limits. 0 = none.</p>
                 </div>

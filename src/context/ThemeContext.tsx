@@ -17,8 +17,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const saved = localStorage.getItem('fg-theme') as Theme | null;
-    const preferred = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
-    const initial = saved ?? preferred;
+    const initial = saved ?? 'dark';
     apply(initial);
     setTheme(initial);
     setMounted(true);
