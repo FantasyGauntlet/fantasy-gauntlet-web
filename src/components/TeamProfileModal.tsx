@@ -75,7 +75,7 @@ const STANDINGS_VIEW_OPTIONS: Record<string, StandingsViewOption[]> = {
 };
 
 // How many wildcard spots per conference (for the WC race section)
-const WILDCARD_SPOTS: Record<string, number> = { nhl: 2, mlb: 3 };
+const WILDCARD_SPOTS: Record<string, number> = { nfl: 3, nhl: 2, mlb: 3 };
 
 const SPORT_LABELS: Record<string, string> = {
   nfl: 'NFL', nba: 'NBA', mlb: 'MLB', nhl: 'NHL',
