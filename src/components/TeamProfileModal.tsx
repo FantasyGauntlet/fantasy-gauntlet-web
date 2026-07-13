@@ -130,6 +130,11 @@ function parseEspnTree(root: any, isSoccer: boolean): ParsedTeamRow[] {
   const seen = new Set<string>();
 
   function walk(node: any, ancestors: { name: string; abbr: string }[]) {
+    // Recurse into children FIRST so deeper (division-level) entries win over
+    // duplicate entries that ESPN also includes at the conference level.
+    for (const child of node.children ?? []) {
+      walk(child, [...ancestors, { name: child.name ?? '', abbr: child.abbreviation ?? '' }]);
+    }
     for (const e of node.standings?.entries ?? []) {
       const team = e.team ?? {};
       const teamId = String(team.id ?? '');
@@ -154,9 +159,6 @@ function parseEspnTree(root: any, isSoccer: boolean): ParsedTeamRow[] {
         divName:  ancestors[1]?.name ?? ancestors[0]?.name ?? '',
         divAbbr:  ancestors[1]?.abbr ?? ancestors[0]?.abbr ?? '',
       });
-    }
-    for (const child of node.children ?? []) {
-      walk(child, [...ancestors, { name: child.name ?? '', abbr: child.abbreviation ?? '' }]);
     }
   }
 
