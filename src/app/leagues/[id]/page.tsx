@@ -331,6 +331,7 @@ export default function LeaguePage() {
           fantasyTeams={fantasyTeams}
           selectedSports={league.selectedSports}
           waiverType={league.waiverType ?? 'reserve-standings'}
+          faabStartingBudget={league.faabStartingBudget ?? 1000}
         />
       )}
       {tab === 'home' && (
@@ -1844,7 +1845,7 @@ function ClaimCard({
 }
 
 function WaiversTab({
-  leagueId, isCommissioner, userId, fantasyTeams, selectedSports, waiverType,
+  leagueId, isCommissioner, userId, fantasyTeams, selectedSports, waiverType, faabStartingBudget,
 }: {
   leagueId: string;
   isCommissioner: boolean;
@@ -1852,6 +1853,7 @@ function WaiversTab({
   fantasyTeams: FantasyTeam[];
   selectedSports: string[];
   waiverType: 'reserve-standings' | 'faab';
+  faabStartingBudget: number;
 }) {
   const [claims, setClaims] = useState<WaiverClaim[]>([]);
   const [pool, setPool] = useState<TeamWithRecord[]>([]);
@@ -2071,6 +2073,43 @@ function WaiversTab({
       {submitSuccess && (
         <div className="bg-positive-bg border border-positive/20 rounded-xl px-4 py-3">
           <p className="text-positive text-sm">{submitSuccess}</p>
+        </div>
+      )}
+
+      {/* FAAB budget leaderboard */}
+      {waiverType === 'faab' && (
+        <div className="bg-card border border-line rounded-2xl overflow-hidden">
+          <div className="px-4 py-3 border-b border-line">
+            <p className="text-xs font-semibold text-copy-3 uppercase tracking-wider">FAAB Budgets</p>
+          </div>
+          <div className="divide-y divide-line/40">
+            {[...fantasyTeams]
+              .filter(ft => !ft.isPlaceholder)
+              .sort((a, b) => (b.faabRemaining ?? 0) - (a.faabRemaining ?? 0))
+              .map(ft => {
+                const remaining = ft.faabRemaining ?? 0;
+                const pct = faabStartingBudget > 0 ? Math.min(100, (remaining / faabStartingBudget) * 100) : 0;
+                const isMe = ft.userId === userId || (ft.coOwnerIds ?? []).includes(userId ?? '');
+                return (
+                  <div key={ft.id} className={`flex items-center gap-3 px-4 py-2.5 ${isMe ? 'bg-brand-dim/30' : ''}`}>
+                    <p className={`text-xs font-medium truncate flex-1 min-w-0 ${isMe ? 'text-brand' : 'text-copy'}`}>
+                      {ft.displayName}{isMe && <span className="text-copy-3 font-normal ml-1">(you)</span>}
+                    </p>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <div className="w-20 h-1.5 rounded-full bg-field-2 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${pct > 50 ? 'bg-positive' : pct > 20 ? 'bg-warn' : 'bg-danger'}`}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                      <p className={`text-xs font-semibold tabular-nums w-14 text-right ${isMe ? 'text-brand' : 'text-copy'}`}>
+                        ${remaining}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
         </div>
       )}
 
