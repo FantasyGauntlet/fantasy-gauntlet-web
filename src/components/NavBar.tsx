@@ -178,15 +178,15 @@ export default function NavBar() {
               <>
                 <div className="hidden sm:block w-px h-5 bg-line" />
                 <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-full bg-brand-dim border border-brand/30 flex items-center justify-center flex-shrink-0">
-                    <span className="text-xs font-semibold text-brand">{initials}</span>
-                  </div>
-                  <span className="hidden md:block text-xs text-copy-3 max-w-[140px] truncate">{user.email}</span>
                   <button
                     onClick={() => setShowProfile(true)}
-                    className="text-xs text-copy-3 hover:text-copy px-2.5 py-1.5 rounded-md hover:bg-field transition-colors"
+                    className="flex items-center gap-2 px-2 py-1 rounded-md hover:bg-field transition-colors group"
+                    title="Edit profile"
                   >
-                    Edit profile
+                    <div className="w-7 h-7 rounded-full bg-brand-dim border border-brand/30 flex items-center justify-center flex-shrink-0">
+                      <span className="text-xs font-semibold text-brand">{initials}</span>
+                    </div>
+                    <span className="hidden md:block text-xs text-copy-3 group-hover:text-copy max-w-[140px] truncate transition-colors">{user?.email}</span>
                   </button>
                   <button
                     onClick={signOut}
