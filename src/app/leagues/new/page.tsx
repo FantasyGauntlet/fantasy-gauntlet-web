@@ -16,6 +16,12 @@ const SPORT_ICONS: Record<string, string> = {
   soccer: '⚽',
 };
 
+// ESPN has no proper league logos for NCAA sports — use local SVG assets instead.
+const SPORT_LOGO_OVERRIDES: Record<string, string> = {
+  'ncaa-football':   '/ncaa-football.svg',
+  'ncaa-basketball': '/ncaa-basketball.svg',
+};
+
 export default function NewLeaguePage() {
   const router = useRouter();
   const [sportLeagues, setSportLeagues] = useState<SportLeague[]>([]);
@@ -200,8 +206,8 @@ export default function NewLeaguePage() {
                         </svg>
                       )}
                     </div>
-                    {sl.logoUrl
-                      ? <img src={sl.logoUrl} alt={sl.name} className="w-6 h-6 object-contain flex-shrink-0" />
+                    {(SPORT_LOGO_OVERRIDES[sl.id] ?? sl.logoUrl)
+                      ? <img src={SPORT_LOGO_OVERRIDES[sl.id] ?? sl.logoUrl!} alt={sl.name} className="w-6 h-6 object-contain flex-shrink-0" />
                       : <span className="text-base leading-none flex-shrink-0">{icon}</span>
                     }
                     <span className="font-medium truncate">{sl.name}</span>
