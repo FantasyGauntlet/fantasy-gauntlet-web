@@ -5,10 +5,12 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  updateProfile,
   GoogleAuthProvider,
   signInWithPopup,
 } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
+import { api } from '@/lib/api';
 
 export default function LoginPage() {
   return (
@@ -27,6 +29,7 @@ function LoginContent() {
   const searchParams = useSearchParams();
   const redirect = searchParams.get('redirect') ?? '/dashboard';
   const [mode, setMode] = useState<'login' | 'signup'>('login');
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -34,13 +37,16 @@ function LoginContent() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (mode === 'signup' && !name.trim()) { setError('Please enter your full name.'); return; }
     setError('');
     setLoading(true);
     try {
       if (mode === 'login') {
         await signInWithEmailAndPassword(auth, email, password);
       } else {
-        await createUserWithEmailAndPassword(auth, email, password);
+        const result = await createUserWithEmailAndPassword(auth, email, password);
+        await updateProfile(result.user, { displayName: name.trim() });
+        await api.patch('/users/me', { displayName: name.trim() });
       }
       router.replace(redirect);
     } catch (err: unknown) {
@@ -169,6 +175,20 @@ function LoginContent() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            {mode === 'signup' && (
+              <div>
+                <label className="block text-xs font-medium text-copy-2 mb-1.5">Full name</label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  required
+                  className={inputCls}
+                  placeholder="Indie Zimmermann"
+                  autoComplete="name"
+                />
+              </div>
+            )}
             <div>
               <label className="block text-xs font-medium text-copy-2 mb-1.5">Email address</label>
               <input
