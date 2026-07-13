@@ -38,7 +38,7 @@ interface League {
   faabStartingBudget?: number;
 }
 
-interface Member { id: string; userId: string; role: 'commissioner' | 'member'; joinedAt: string; }
+interface Member { id: string; userId: string; role: 'commissioner' | 'member'; joinedAt: string; displayName?: string; }
 
 interface LeagueInvite {
   id: string; leagueId: string; toEmail: string;
@@ -313,7 +313,7 @@ export default function LeaguePage() {
         </div>
       </div>
 
-      {tab === 'standings' && <StandingsTab leagueId={id} userId={user?.uid} fantasyTeams={fantasyTeams} topZone={league.topZone} bottomZone={league.bottomZone} />}
+      {tab === 'standings' && <StandingsTab leagueId={id} userId={user?.uid} fantasyTeams={fantasyTeams} topZone={league.topZone} bottomZone={league.bottomZone} ownerNameByUserId={Object.fromEntries(members.filter(m => m.displayName).map(m => [m.userId, m.displayName!]))} />}
       {tab === 'roster' && (
         <RosterTab
           leagueId={id}
@@ -322,6 +322,7 @@ export default function LeaguePage() {
           setFantasyTeams={setFantasyTeams}
           isCommissioner={isCommissioner}
           userId={user?.uid}
+          ownerNameByUserId={Object.fromEntries(members.filter(m => m.displayName).map(m => [m.userId, m.displayName!]))}
         />
       )}
       {tab === 'waivers' && (
@@ -356,7 +357,7 @@ export default function LeaguePage() {
 
 // ─── Standings Tab ────────────────────────────────────────────────────────────
 
-function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone }: { leagueId: string; userId?: string; fantasyTeams: FantasyTeam[]; topZone?: number | null; bottomZone?: number | null; }) {
+function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone, ownerNameByUserId }: { leagueId: string; userId?: string; fantasyTeams: FantasyTeam[]; topZone?: number | null; bottomZone?: number | null; ownerNameByUserId: Record<string, string>; }) {
   const [standings, setStandings] = useState<Standing[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -427,6 +428,9 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone }: {
                       <div>
                         <span className="text-sm font-medium text-copy">{s.displayName}</span>
                         {isMe && <span className="ml-2 text-xs text-brand font-medium">you</span>}
+                        {ownerNameByUserId[s.userId] && (
+                          <p className="text-xs text-copy-3/70 mt-0.5">{ownerNameByUserId[s.userId]}</p>
+                        )}
                       </div>
                     </div>
                   </td>
@@ -488,7 +492,6 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone }: {
                                       {isWildCard && <span className="text-xs bg-warn-bg text-warn border border-warn/20 px-1.5 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">Wild Card</span>}
                                     </div>
                                     <p className="text-xs text-copy-3 mt-0.5">{formatLeagueName(t.sportLeagueId)}</p>
-                                    <p className="text-xs text-copy-3/70">{s.displayName}</p>
                                   </div>
                                 </div>
                                 <div className="text-right flex-shrink-0">
@@ -521,7 +524,7 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone }: {
 // ─── Roster Tab ───────────────────────────────────────────────────────────────
 
 function RosterTab({
-  leagueId, leagueState, fantasyTeams, setFantasyTeams, isCommissioner, userId,
+  leagueId, leagueState, fantasyTeams, setFantasyTeams, isCommissioner, userId, ownerNameByUserId,
 }: {
   leagueId: string;
   leagueState: string;
@@ -529,6 +532,7 @@ function RosterTab({
   setFantasyTeams: React.Dispatch<React.SetStateAction<FantasyTeam[]>>;
   isCommissioner: boolean;
   userId?: string;
+  ownerNameByUserId: Record<string, string>;
 }) {
   const [sportGroups, setSportGroups] = useState<SportGroup[]>([]);
   const [loadingTeams, setLoadingTeams] = useState(true);
@@ -1082,6 +1086,9 @@ function RosterTab({
                   {viewingIsPrimaryOwner ? 'Your team' : 'Your team (co-owner)'}
                 </p>
               )}
+              {!viewingIsMe && viewingTeam && ownerNameByUserId[viewingTeam.userId] && (
+                <p className="text-xs text-copy-3/70 mt-0.5">{ownerNameByUserId[viewingTeam.userId]}</p>
+              )}
               {!loadingTeams && (
                 <p className="text-xs text-copy-3 mt-0.5">{viewingOwnedTeams.length} team{viewingOwnedTeams.length !== 1 ? 's' : ''}</p>
               )}
@@ -1172,7 +1179,6 @@ function RosterTab({
                         )}
                       </div>
                       <p className="text-xs text-copy-3 mt-0.5">{formatLeagueName(t.sportLeagueId)}</p>
-                      {viewingTeam && <p className="text-xs text-copy-3/70">{viewingTeam.displayName}</p>}
                     </div>
                   </div>
                   {stats && (
