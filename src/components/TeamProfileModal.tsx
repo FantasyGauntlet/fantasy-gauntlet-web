@@ -223,6 +223,50 @@ function buildGroups(rows: ParsedTeamRow[], view: StandingsViewKey, sport: strin
   return result;
 }
 
+// ESPN's standings endpoint only nests teams at the conference level, not division.
+// The groups endpoint has the full hierarchy — use it to enrich rows with division info.
+async function fetchDivisionMap(espnPath: string): Promise<Map<string, { confName: string; divName: string }>> {
+  const map = new Map<string, { confName: string; divName: string }>();
+  try {
+    const res = await fetch(`https://site.api.espn.com/apis/v2/sports/${espnPath}/groups`);
+    if (!res.ok) return map;
+    const data = await res.json();
+
+    // Approach 1: groups endpoint may mirror the standings tree structure
+    const treeRows = parseEspnTree(data, false);
+    for (const r of treeRows) {
+      if (r.teamId && r.divName && r.divName !== r.confName) {
+        map.set(r.teamId, { confName: r.confName, divName: r.divName });
+      }
+    }
+    if (map.size > 0) return map;
+
+    // Approach 2: flat items list with team refs
+    const items: any[] = data.items ?? [];
+    // First pass: collect parent (conf) names by id
+    const parentNames = new Map<string, string>();
+    for (const g of items) {
+      if (g.parent == null && g.id) parentNames.set(String(g.id), g.name ?? '');
+    }
+    for (const group of items) {
+      const divName = group.name ?? group.shortName ?? '';
+      if (!divName) continue;
+      const confName = group.parent?.name ?? group.parent?.shortName
+        ?? parentNames.get(String(group.parent?.id ?? '')) ?? '';
+      const teamItems: any[] = group.teams?.items ?? group.teams ?? [];
+      for (const t of teamItems) {
+        let teamId = String(t.id ?? '');
+        if (!teamId && typeof t.$ref === 'string') {
+          const m = t.$ref.match(/\/teams\/(\d+)/);
+          if (m) teamId = m[1];
+        }
+        if (teamId) map.set(teamId, { confName, divName });
+      }
+    }
+  } catch {}
+  return map;
+}
+
 async function fetchStandingsRows(sportLeagueId: string): Promise<ParsedTeamRow[]> {
   const espnPath = ESPN_PATH[sportLeagueId];
   if (!espnPath) return [];
@@ -233,7 +277,20 @@ async function fetchStandingsRows(sportLeagueId: string): Promise<ParsedTeamRow[
     const res = await fetch(`https://site.api.espn.com/apis/v2/sports/${espnPath}/standings${query ? `?${query}` : ''}`);
     if (!res.ok) return [];
     const data = await res.json();
-    return parseEspnTree(data, isSoccer);
+    let rows = parseEspnTree(data, isSoccer);
+
+    // If division info wasn't in the standings tree, fetch it from the groups endpoint
+    if (!isSoccer && rows.length > 0 && !rows.some(r => r.divName !== r.confName)) {
+      const divMap = await fetchDivisionMap(espnPath);
+      if (divMap.size > 0) {
+        rows = rows.map(r => {
+          const info = divMap.get(r.teamId);
+          return info ? { ...r, confName: info.confName || r.confName, divName: info.divName } : r;
+        });
+      }
+    }
+
+    return rows;
   } catch { return []; }
 }
 
