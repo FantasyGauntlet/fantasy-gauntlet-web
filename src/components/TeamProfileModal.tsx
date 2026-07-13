@@ -31,10 +31,51 @@ interface StandingEntry {
   losses: number;
   draws: number;
   gamesPlayed: number;
-  points: number | null;   // league points (soccer)
-  pct: number | null;      // win pct (American sports)
-  pointDiff: number | null; // goal/point differential
+  points: number | null;
+  pct: number | null;
+  pointDiff: number | null;
 }
+
+interface ParsedTeamRow extends StandingEntry {
+  confName: string;
+  confAbbr: string;
+  divName: string;
+  divAbbr: string;
+}
+
+interface StandingGroup {
+  name: string;
+  entries: ParsedTeamRow[];
+  isWildcard?: boolean;
+}
+
+interface PollEntry {
+  rank: number;
+  teamId: string;
+  teamName: string;
+  logoUrl: string | null;
+  record: string;
+  points: number;
+  firstPlaceVotes: number;
+}
+
+type StandingsViewKey = 'division' | 'conference' | 'league' | 'poll';
+interface StandingsViewOption { key: StandingsViewKey; label: string; }
+
+const STANDINGS_VIEW_OPTIONS: Record<string, StandingsViewOption[]> = {
+  nfl:               [{ key: 'division', label: 'Division' }, { key: 'conference', label: 'Conference' }, { key: 'league', label: 'League' }],
+  nba:               [{ key: 'conference', label: 'Conference' }, { key: 'league', label: 'League' }],
+  nhl:               [{ key: 'division', label: 'Division' }, { key: 'conference', label: 'Conference' }, { key: 'league', label: 'League' }],
+  mlb:               [{ key: 'division', label: 'Division' }, { key: 'conference', label: 'Conference' }, { key: 'league', label: 'League' }],
+  'ncaa-football':   [{ key: 'poll', label: 'AP Poll' }],
+  'ncaa-basketball': [{ key: 'poll', label: 'AP Poll' }],
+  'premier-league':  [{ key: 'league', label: 'Table' }],
+  ucl:               [{ key: 'league', label: 'Table' }],
+  'world-cup':       [{ key: 'league', label: 'Table' }],
+};
+
+// How many wildcard spots per conference (for the WC race section)
+const WILDCARD_SPOTS: Record<string, number> = { nhl: 2, mlb: 3 };
 
 const SPORT_LABELS: Record<string, string> = {
   nfl: 'NFL', nba: 'NBA', mlb: 'MLB', nhl: 'NHL',
@@ -55,7 +96,6 @@ const ESPN_PATH: Record<string, string> = {
   mlb:              'baseball/mlb',
 };
 
-// Extra ESPN query params for standings (e.g. group=80 for NCAAF FBS)
 const ESPN_STANDINGS_PARAMS: Record<string, Record<string, string>> = {
   'ncaa-football': { group: '80' },
 };
@@ -73,6 +113,148 @@ function formatDate(iso: string) {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return '';
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+function getStat(stats: any[], name: string): number {
+  return stats.find((s: any) => s.name === name || s.abbreviation === name)?.value ?? 0;
+}
+
+function sortFn(a: StandingEntry, b: StandingEntry, isSoccer: boolean) {
+  if (isSoccer) return (b.points ?? 0) - (a.points ?? 0) || (b.pointDiff ?? 0) - (a.pointDiff ?? 0);
+  return (b.pct ?? 0) - (a.pct ?? 0) || b.wins - a.wins;
+}
+
+// Walk the ESPN standings tree, tagging each entry with conf/div ancestry
+function parseEspnTree(root: any, isSoccer: boolean): ParsedTeamRow[] {
+  const rows: ParsedTeamRow[] = [];
+  const seen = new Set<string>();
+
+  function walk(node: any, ancestors: { name: string; abbr: string }[]) {
+    for (const e of node.standings?.entries ?? []) {
+      const team = e.team ?? {};
+      const teamId = String(team.id ?? '');
+      if (!teamId || seen.has(teamId)) continue;
+      seen.add(teamId);
+      const stats: any[] = e.stats ?? [];
+      const wins = getStat(stats, 'wins');
+      const losses = getStat(stats, 'losses');
+      const draws = isSoccer ? getStat(stats, 'ties') : 0;
+      const gp = getStat(stats, 'gamesPlayed') || (wins + losses + draws);
+      const pts = isSoccer ? (getStat(stats, 'points') || null) : null;
+      const pct = !isSoccer ? (getStat(stats, 'winPercent') || (gp > 0 ? wins / gp : 0)) : null;
+      const diff = getStat(stats, 'pointDifferential') || getStat(stats, 'differential') || null;
+      rows.push({
+        teamId,
+        teamName: team.displayName ?? team.shortDisplayName ?? team.name ?? teamId,
+        logoUrl: team.logos?.[0]?.href ?? null,
+        wins, losses, draws, gamesPlayed: gp,
+        points: pts, pct, pointDiff: diff || null,
+        confName: ancestors[0]?.name ?? '',
+        confAbbr: ancestors[0]?.abbr ?? '',
+        divName:  ancestors[1]?.name ?? ancestors[0]?.name ?? '',
+        divAbbr:  ancestors[1]?.abbr ?? ancestors[0]?.abbr ?? '',
+      });
+    }
+    for (const child of node.children ?? []) {
+      walk(child, [...ancestors, { name: child.name ?? '', abbr: child.abbreviation ?? '' }]);
+    }
+  }
+
+  walk(root, []);
+  return rows;
+}
+
+function groupRowsBy(rows: ParsedTeamRow[], field: 'confName' | 'divName'): { name: string; rows: ParsedTeamRow[] }[] {
+  const map = new Map<string, ParsedTeamRow[]>();
+  for (const row of rows) {
+    const key = row[field];
+    if (!map.has(key)) map.set(key, []);
+    map.get(key)!.push(row);
+  }
+  return [...map.entries()].map(([name, rows]) => ({ name, rows }));
+}
+
+function buildGroups(rows: ParsedTeamRow[], view: StandingsViewKey, sport: string, isSoccer: boolean): StandingGroup[] {
+  const hasDivisions = rows.some(r => r.divName && r.divName !== r.confName);
+  const hasConfs = rows.some(r => r.confName);
+
+  if (view === 'league' || !hasConfs) {
+    return [{ name: '', entries: [...rows].sort((a, b) => sortFn(a, b, isSoccer)) }];
+  }
+
+  if (view === 'conference' || (!hasDivisions && view === 'division')) {
+    return groupRowsBy(rows, 'confName').map(({ name, rows: cr }) => ({
+      name,
+      entries: [...cr].sort((a, b) => sortFn(a, b, isSoccer)),
+    }));
+  }
+
+  // Division view — with optional wildcard race sections
+  const wildcardSpots = WILDCARD_SPOTS[sport] ?? 0;
+  const result: StandingGroup[] = [];
+
+  for (const { name: confName, rows: confRows } of groupRowsBy(rows, 'confName')) {
+    // Division sub-groups (use ESPN's original ordering)
+    for (const { name: divName, rows: divRows } of groupRowsBy(confRows, 'divName')) {
+      result.push({ name: divName, entries: divRows });
+    }
+
+    // Wildcard race section
+    if (wildcardSpots > 0) {
+      // Division leaders = 1st place (by record) in each division
+      const divLeaderIds = new Set<string>();
+      for (const { rows: divRows } of groupRowsBy(confRows, 'divName')) {
+        const sorted = [...divRows].sort((a, b) => sortFn(a, b, false));
+        if (sorted[0]) divLeaderIds.add(sorted[0].teamId);
+      }
+      const wcRace = confRows
+        .filter(t => !divLeaderIds.has(t.teamId))
+        .sort((a, b) => sortFn(a, b, false));
+      result.push({
+        name: confName ? `${confName} Wild Card` : 'Wild Card Race',
+        entries: wcRace,
+        isWildcard: true,
+      });
+    }
+  }
+
+  return result;
+}
+
+async function fetchStandingsRows(sportLeagueId: string): Promise<ParsedTeamRow[]> {
+  const espnPath = ESPN_PATH[sportLeagueId];
+  if (!espnPath) return [];
+  const extra = ESPN_STANDINGS_PARAMS[sportLeagueId] ?? {};
+  const query = new URLSearchParams(extra).toString();
+  const isSoccer = SOCCER_LEAGUES.has(sportLeagueId);
+  try {
+    const res = await fetch(`https://site.api.espn.com/apis/v2/sports/${espnPath}/standings${query ? `?${query}` : ''}`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return parseEspnTree(data, isSoccer);
+  } catch { return []; }
+}
+
+async function fetchApPoll(sportLeagueId: string): Promise<PollEntry[]> {
+  const espnPath = ESPN_PATH[sportLeagueId];
+  if (!espnPath) return [];
+  try {
+    const res = await fetch(`https://site.api.espn.com/apis/v2/sports/${espnPath}/rankings`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    const polls: any[] = data.rankings ?? [];
+    const apPoll = polls.find((p: any) => /\bap\b/i.test(p.name ?? '')) ?? polls[0];
+    if (!apPoll) return [];
+    return (apPoll.ranks ?? []).slice(0, 25).map((r: any) => ({
+      rank: r.current ?? 0,
+      teamId: String(r.team?.id ?? ''),
+      teamName: r.team?.displayName ?? r.team?.name ?? '',
+      logoUrl: r.team?.logos?.[0]?.href ?? null,
+      record: r.recordSummary ?? '',
+      points: r.points ?? 0,
+      firstPlaceVotes: r.firstPlaceVotes ?? 0,
+    }));
+  } catch { return []; }
 }
 
 async function fetchEspnArticles(espnPath: string, espnTeamId: string): Promise<TeamNews['articles']> {
@@ -95,9 +277,7 @@ async function fetchEspnArticles(espnPath: string, espnTeamId: string): Promise<
       published: a.published ?? a.lastModified ?? '',
       url:       a.links?.web?.href ?? a.links?.mobile?.href ?? a.link ?? '',
     })).filter((a: any) => a.title);
-  } catch {
-    return [];
-  }
+  } catch { return []; }
 }
 
 async function fetchTeamNews(teamId: string, sportLeagueId: string | undefined): Promise<TeamNews> {
@@ -110,91 +290,40 @@ async function fetchTeamNews(teamId: string, sportLeagueId: string | undefined):
   return { articles };
 }
 
-function extractStandingEntries(node: any): any[] {
-  const entries: any[] = [];
-  if (node?.standings?.entries) entries.push(...node.standings.entries);
-  if (Array.isArray(node?.children)) {
-    for (const child of node.children) entries.push(...extractStandingEntries(child));
-  }
-  return entries;
-}
-
-function getStat(stats: any[], name: string): number {
-  return stats.find((s: any) => s.name === name || s.abbreviation === name)?.value ?? 0;
-}
-
-async function fetchLeagueStandings(sportLeagueId: string): Promise<StandingEntry[]> {
-  const espnPath = ESPN_PATH[sportLeagueId];
-  if (!espnPath) return [];
-  const extraParams = ESPN_STANDINGS_PARAMS[sportLeagueId] ?? {};
-  const query = new URLSearchParams({ ...extraParams }).toString();
-  try {
-    const res = await fetch(
-      `https://site.api.espn.com/apis/v2/sports/${espnPath}/standings${query ? `?${query}` : ''}`,
-    );
-    if (!res.ok) return [];
-    const data = await res.json();
-    const rawEntries = extractStandingEntries(data);
-    const isSoccer = SOCCER_LEAGUES.has(sportLeagueId);
-
-    const seen = new Set<string>();
-    const entries: StandingEntry[] = [];
-    for (const e of rawEntries) {
-      const team = e.team ?? {};
-      const teamId = String(team.id ?? '');
-      if (!teamId || seen.has(teamId)) continue;
-      seen.add(teamId);
-      const stats: any[] = e.stats ?? [];
-      const logoUrl = team.logos?.[0]?.href ?? null;
-      const wins = getStat(stats, 'wins');
-      const losses = getStat(stats, 'losses');
-      const draws = isSoccer ? getStat(stats, 'ties') : 0;
-      const gp = getStat(stats, 'gamesPlayed') || (wins + losses + draws);
-      const pts = isSoccer ? (getStat(stats, 'points') || null) : null;
-      const pct = !isSoccer ? (getStat(stats, 'winPercent') || (gp > 0 ? wins / gp : 0)) : null;
-      const diff = getStat(stats, 'pointDifferential') || getStat(stats, 'differential') || null;
-      entries.push({
-        teamId,
-        teamName: team.displayName ?? team.shortDisplayName ?? team.name ?? teamId,
-        logoUrl,
-        wins, losses, draws, gamesPlayed: gp,
-        points: pts, pct, pointDiff: diff || null,
-      });
-    }
-    // Sort: soccer by points desc, others by win pct desc, then wins desc
-    entries.sort((a, b) => {
-      if (isSoccer) return (b.points ?? 0) - (a.points ?? 0);
-      return (b.pct ?? 0) - (a.pct ?? 0) || b.wins - a.wins;
-    });
-    return entries;
-  } catch {
-    return [];
-  }
-}
+// ─── Component ───────────────────────────────────────────────────────────────
 
 export function TeamProfileModal() {
   const { profile, closeProfile } = useTeamProfile();
   const [activeTab, setActiveTab] = useState<'overview' | 'standings'>('overview');
+
   const [form, setForm] = useState<FormResult[] | null>(null);
   const [auctionStats, setAuctionStats] = useState<AuctionStats | null>(null);
   const [news, setNews] = useState<TeamNews | null>(null);
-  const [standings, setStandings] = useState<StandingEntry[] | null>(null);
   const [loadingForm, setLoadingForm] = useState(false);
   const [loadingStats, setLoadingStats] = useState(false);
   const [loadingNews, setLoadingNews] = useState(false);
+
+  const [parsedRows, setParsedRows] = useState<ParsedTeamRow[] | null>(null);
+  const [pollData, setPollData] = useState<PollEntry[] | null>(null);
   const [loadingStandings, setLoadingStandings] = useState(false);
+  const [standingsView, setStandingsView] = useState<StandingsViewKey>('league');
+
   const panelRef = useRef<HTMLDivElement>(null);
 
-  // Reset + fetch whenever a new profile is opened
+  // Reset + fetch overview data whenever a new profile opens
   useEffect(() => {
     if (!profile) {
       setForm(null); setAuctionStats(null); setNews(null);
-      setStandings(null); setActiveTab('overview');
+      setParsedRows(null); setPollData(null); setActiveTab('overview');
       return;
     }
 
     setForm(null); setAuctionStats(null); setNews(null);
-    setStandings(null); setActiveTab('overview');
+    setParsedRows(null); setPollData(null); setActiveTab('overview');
+
+    // Reset standings view to the default for this sport
+    const viewOpts = STANDINGS_VIEW_OPTIONS[profile.sportLeagueId ?? ''] ?? [];
+    setStandingsView(viewOpts[0]?.key ?? 'league');
 
     setLoadingForm(true);
     api.get<FormResult[]>(`/sports/teams/${profile.teamId}/form`)
@@ -210,21 +339,26 @@ export function TeamProfileModal() {
       .then(setNews).catch(() => setNews(null)).finally(() => setLoadingNews(false));
   }, [profile?.teamId]);
 
-  // Lazy-load standings when the standings tab is first opened
+  // Lazy-load standings when the tab first opens
   useEffect(() => {
-    if (activeTab !== 'standings' || !profile?.sportLeagueId || standings !== null) return;
+    if (activeTab !== 'standings' || !profile?.sportLeagueId) return;
+    if (parsedRows !== null || pollData !== null) return;
+    const sport = profile.sportLeagueId;
+    const isPoll = STANDINGS_VIEW_OPTIONS[sport]?.[0]?.key === 'poll';
+
     setLoadingStandings(true);
-    fetchLeagueStandings(profile.sportLeagueId)
-      .then(setStandings).catch(() => setStandings([]))
-      .finally(() => setLoadingStandings(false));
+    if (isPoll) {
+      fetchApPoll(sport)
+        .then(setPollData).catch(() => setPollData([]))
+        .finally(() => setLoadingStandings(false));
+    } else {
+      fetchStandingsRows(sport)
+        .then(setParsedRows).catch(() => setParsedRows([]))
+        .finally(() => setLoadingStandings(false));
+    }
   }, [activeTab, profile?.sportLeagueId]);
 
-  // Close on backdrop click
-  function handleBackdrop(e: React.MouseEvent) {
-    if (!panelRef.current?.contains(e.target as Node)) closeProfile();
-  }
-
-  // Close on Escape
+  // Keyboard close
   useEffect(() => {
     if (!profile) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeProfile(); };
@@ -232,10 +366,21 @@ export function TeamProfileModal() {
     return () => window.removeEventListener('keydown', onKey);
   }, [profile, closeProfile]);
 
+  function handleBackdrop(e: React.MouseEvent) {
+    if (!panelRef.current?.contains(e.target as Node)) closeProfile();
+  }
+
   const isOpen = !!profile;
   const isSoccer = SOCCER_LEAGUES.has(profile?.sportLeagueId ?? '');
-  // Extract ESPN team ID from the stored teamId (format: "{sportLeagueId}_{espnId}")
-  const espnTeamId = profile?.teamId.split('_').pop();
+  const espnTeamId = profile?.teamId.split('_').pop() ?? '';
+  const sport = profile?.sportLeagueId ?? '';
+  const viewOptions = STANDINGS_VIEW_OPTIONS[sport] ?? [{ key: 'league' as const, label: 'Table' }];
+  const wildcardSpots = WILDCARD_SPOTS[sport] ?? 0;
+
+  // Build the groups for the current view
+  const standingGroups: StandingGroup[] = parsedRows
+    ? buildGroups(parsedRows, standingsView, sport, isSoccer)
+    : [];
 
   return (
     <>
@@ -289,16 +434,14 @@ export function TeamProfileModal() {
               </div>
             </div>
 
-            {/* Tab bar */}
+            {/* Overview / Standings tab bar */}
             <div className="flex border-b border-line flex-shrink-0">
               {(['overview', 'standings'] as const).map(tab => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
                   className={`flex-1 py-2.5 text-xs font-semibold transition-colors border-b-2 -mb-px ${
-                    activeTab === tab
-                      ? 'text-brand border-brand'
-                      : 'text-copy-3 border-transparent hover:text-copy'
+                    activeTab === tab ? 'text-brand border-brand' : 'text-copy-3 border-transparent hover:text-copy'
                   }`}
                 >
                   {tab === 'overview' ? 'Overview' : 'League Standings'}
@@ -309,14 +452,12 @@ export function TeamProfileModal() {
             {/* ── Overview tab ── */}
             {activeTab === 'overview' && (
               <div className="flex-1">
-                {/* Form — last 5 results */}
+                {/* Form */}
                 <div className="px-5 py-4 border-b border-line">
                   <p className="text-xs font-semibold text-copy-3 uppercase tracking-wider mb-3">Last 5 Results</p>
                   {loadingForm ? (
                     <div className="flex gap-2">
-                      {[...Array(5)].map((_, i) => (
-                        <div key={i} className="w-8 h-8 rounded-lg bg-field-2 animate-pulse" />
-                      ))}
+                      {[...Array(5)].map((_, i) => <div key={i} className="w-8 h-8 rounded-lg bg-field-2 animate-pulse" />)}
                     </div>
                   ) : form && form.length > 0 ? (
                     <div className="space-y-1.5">
@@ -326,9 +467,7 @@ export function TeamProfileModal() {
                             <span className={`w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${RESULT_COLORS[r.result]}`}>
                               {r.result}
                             </span>
-                            <span className="text-copy-3 truncate">
-                              {r.wasHome ? 'vs' : '@'} {r.opponent.shortName || r.opponent.name}
-                            </span>
+                            <span className="text-copy-3 truncate">{r.wasHome ? 'vs' : '@'} {r.opponent.shortName || r.opponent.name}</span>
                           </div>
                           <span className="text-copy font-medium ml-2 flex-shrink-0">
                             {r.myScore}–{r.theirScore}
@@ -342,24 +481,20 @@ export function TeamProfileModal() {
                   ) : null}
                 </div>
 
-                {/* League context */}
+                {/* League context stats */}
                 {(profile.wins != null || profile.draftPrice != null) && (
                   <div className="px-5 py-4 border-b border-line">
                     <div className="grid grid-cols-2 gap-3">
                       {profile.wins != null && (
                         <div className="bg-field rounded-xl px-3 py-2.5">
                           <p className="text-[10px] text-copy-3 mb-1">Record</p>
-                          <p className="text-sm font-bold text-copy">
-                            {profile.wins}W–{profile.draws ?? 0}D–{profile.losses ?? 0}L
-                          </p>
+                          <p className="text-sm font-bold text-copy">{profile.wins}W–{profile.draws ?? 0}D–{profile.losses ?? 0}L</p>
                         </div>
                       )}
                       {profile.points != null && (
                         <div className="bg-field rounded-xl px-3 py-2.5">
                           <p className="text-[10px] text-copy-3 mb-1">Points</p>
-                          <p className="text-sm font-bold text-copy">
-                            {((profile.points ?? 0) + (profile.bonusPoints ?? 0)).toFixed(1)}
-                          </p>
+                          <p className="text-sm font-bold text-copy">{((profile.points ?? 0) + (profile.bonusPoints ?? 0)).toFixed(1)}</p>
                         </div>
                       )}
                       {profile.draftPrice != null && (
@@ -380,8 +515,6 @@ export function TeamProfileModal() {
                         </div>
                       )}
                     </div>
-
-                    {/* Bonus breakdown */}
                     {profile.bonusBreakdown && profile.bonusBreakdown.length > 0 && (
                       <div className="mt-3 border-t border-line/50 pt-3 space-y-1.5">
                         <p className="text-[10px] font-semibold text-copy-3 uppercase tracking-wider mb-2">Bonus Points</p>
@@ -397,16 +530,14 @@ export function TeamProfileModal() {
                         ))}
                         <div className="flex items-center justify-between text-xs pt-1.5 border-t border-line/50">
                           <span className="text-copy-3">Total</span>
-                          <span className="text-copy font-semibold">
-                            {((profile.points ?? 0) + (profile.bonusPoints ?? 0)).toFixed(1)}
-                          </span>
+                          <span className="text-copy font-semibold">{((profile.points ?? 0) + (profile.bonusPoints ?? 0)).toFixed(1)}</span>
                         </div>
                       </div>
                     )}
                   </div>
                 )}
 
-                {/* Global auction stats (shown when no league context passed) */}
+                {/* Global auction stats */}
                 {profile.draftPrice == null && (
                   <div className="px-5 py-4 border-b border-line">
                     <p className="text-xs font-semibold text-copy-3 uppercase tracking-wider mb-3">Auction History</p>
@@ -419,36 +550,28 @@ export function TeamProfileModal() {
                       <div className="grid grid-cols-2 gap-3">
                         <div className="bg-field rounded-xl px-3 py-2.5">
                           <p className="text-[10px] text-copy-3 mb-1">Avg. draft price</p>
-                          <p className="text-sm font-bold text-copy">
-                            {auctionStats.avgPrice != null ? `$${auctionStats.avgPrice}` : '—'}
-                          </p>
+                          <p className="text-sm font-bold text-copy">{auctionStats.avgPrice != null ? `$${auctionStats.avgPrice}` : '—'}</p>
                         </div>
                         <div className="bg-field rounded-xl px-3 py-2.5">
                           <p className="text-[10px] text-copy-3 mb-1">Draft Price</p>
-                          <p className="text-sm font-bold text-brand">
-                            {auctionStats.leaguePrice != null ? `$${auctionStats.leaguePrice}` : '—'}
-                          </p>
+                          <p className="text-sm font-bold text-brand">{auctionStats.leaguePrice != null ? `$${auctionStats.leaguePrice}` : '—'}</p>
                         </div>
                       </div>
                     ) : null}
                   </div>
                 )}
 
-                {/* Standalone auction stats row when league context IS provided */}
                 {profile.draftPrice != null && auctionStats && !loadingStats && auctionStats.leaguesDrafted > 0 && (
                   <div className="px-5 py-3 border-b border-line">
                     <p className="text-xs text-copy-3">
-                      Drafted in{' '}
-                      <span className="text-copy font-medium">{auctionStats.leaguesDrafted}</span>{' '}
+                      Drafted in <span className="text-copy font-medium">{auctionStats.leaguesDrafted}</span>{' '}
                       {auctionStats.leaguesDrafted === 1 ? 'league' : 'leagues'} total
-                      {auctionStats.avgPrice != null && (
-                        <> · avg <span className="text-copy font-medium">${auctionStats.avgPrice}</span></>
-                      )}
+                      {auctionStats.avgPrice != null && <> · avg <span className="text-copy font-medium">${auctionStats.avgPrice}</span></>}
                     </p>
                   </div>
                 )}
 
-                {/* News articles via ESPN */}
+                {/* News */}
                 {(loadingNews || (news?.articles && news.articles.length > 0)) && (
                   <div className="px-5 py-4">
                     <p className="text-xs font-semibold text-copy-3 uppercase tracking-wider mb-3">Latest News</p>
@@ -467,20 +590,14 @@ export function TeamProfileModal() {
                         {news.articles.map((a, i) => (
                           <div key={i} className="border-b border-line/40 pb-3 last:border-0 last:pb-0">
                             {a.url ? (
-                              <a
-                                href={a.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-xs font-semibold text-copy hover:text-brand transition-colors leading-snug block mb-1"
-                              >
+                              <a href={a.url} target="_blank" rel="noopener noreferrer"
+                                className="text-xs font-semibold text-copy hover:text-brand transition-colors leading-snug block mb-1">
                                 {a.title}
                               </a>
                             ) : (
                               <p className="text-xs font-semibold text-copy leading-snug mb-1">{a.title}</p>
                             )}
-                            {a.summary && (
-                              <p className="text-xs text-copy-3 leading-relaxed line-clamp-2">{a.summary}</p>
-                            )}
+                            {a.summary && <p className="text-xs text-copy-3 leading-relaxed line-clamp-2">{a.summary}</p>}
                             {a.published && (
                               <p className="text-[10px] text-copy-3/60 mt-1">
                                 {new Date(a.published).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
@@ -497,7 +614,26 @@ export function TeamProfileModal() {
 
             {/* ── League Standings tab ── */}
             {activeTab === 'standings' && (
-              <div className="flex-1">
+              <div className="flex-1 flex flex-col">
+                {/* View selector — only shown when multiple views exist */}
+                {viewOptions.length > 1 && (
+                  <div className="flex gap-1 px-4 py-2.5 border-b border-line flex-shrink-0">
+                    {viewOptions.map(opt => (
+                      <button
+                        key={opt.key}
+                        onClick={() => setStandingsView(opt.key)}
+                        className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
+                          standingsView === opt.key
+                            ? 'bg-brand text-white'
+                            : 'bg-field text-copy-3 hover:text-copy'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
                 {loadingStandings ? (
                   <div className="px-5 py-6 space-y-3">
                     {[...Array(8)].map((_, i) => (
@@ -509,60 +645,132 @@ export function TeamProfileModal() {
                       </div>
                     ))}
                   </div>
-                ) : standings && standings.length > 0 ? (
+
+                ) : standingsView === 'poll' && pollData !== null ? (
+                  /* ── AP Poll ── */
                   <div>
-                    {/* Column headers */}
                     <div className="flex items-center gap-2 px-4 py-2 border-b border-line bg-field/30">
-                      <span className="w-5 text-[10px] text-copy-3 text-right flex-shrink-0">#</span>
-                      <span className="flex-1 text-[10px] text-copy-3 ml-9">Team</span>
-                      <span className="w-14 text-[10px] text-copy-3 text-right flex-shrink-0">W-L{isSoccer ? '-D' : ''}</span>
-                      {isSoccer
-                        ? <span className="w-8 text-[10px] text-copy-3 text-right flex-shrink-0">Pts</span>
-                        : <span className="w-8 text-[10px] text-copy-3 text-right flex-shrink-0">PCT</span>
-                      }
+                      <span className="w-6 text-[10px] text-copy-3 text-center flex-shrink-0">Rk</span>
+                      <span className="flex-1 text-[10px] text-copy-3 ml-8">Team</span>
+                      <span className="w-12 text-[10px] text-copy-3 text-right flex-shrink-0">Record</span>
+                      <span className="w-10 text-[10px] text-copy-3 text-right flex-shrink-0">Pts</span>
                     </div>
                     <div className="divide-y divide-line/30">
-                      {standings.map((s, idx) => {
-                        const isThis = s.teamId === espnTeamId;
+                      {pollData.length === 0 ? (
+                        <p className="px-5 py-8 text-center text-sm text-copy-3">Poll not available right now.</p>
+                      ) : pollData.map(p => {
+                        const isThis = p.teamId === espnTeamId;
                         return (
-                          <div
-                            key={s.teamId}
-                            className={`flex items-center gap-2 px-4 py-2 ${isThis ? 'bg-brand-dim/30' : ''}`}
-                          >
-                            <span className={`w-5 text-[10px] text-right flex-shrink-0 ${isThis ? 'text-brand font-bold' : 'text-copy-3'}`}>
-                              {idx + 1}
+                          <div key={p.rank} className={`flex items-center gap-2 px-4 py-2 ${isThis ? 'bg-brand-dim/30' : ''}`}>
+                            <span className={`w-6 text-xs font-bold text-center flex-shrink-0 ${isThis ? 'text-brand' : 'text-copy-3'}`}>
+                              {p.rank}
                             </span>
-                            {s.logoUrl ? (
-                              <img src={s.logoUrl} alt={s.teamName} className="w-6 h-6 object-contain flex-shrink-0" />
+                            {p.logoUrl ? (
+                              <img src={p.logoUrl} alt={p.teamName} className="w-6 h-6 object-contain flex-shrink-0" />
                             ) : (
                               <div className="w-6 h-6 rounded-full bg-field-2 flex-shrink-0" />
                             )}
                             <span className={`flex-1 text-xs truncate ${isThis ? 'text-brand font-semibold' : 'text-copy'}`}>
-                              {s.teamName}
+                              {p.teamName}
                             </span>
-                            <span className={`w-14 text-xs text-right flex-shrink-0 tabular-nums ${isThis ? 'text-brand font-semibold' : 'text-copy-2'}`}>
-                              {s.wins}-{s.losses}{isSoccer ? `-${s.draws}` : ''}
+                            <span className="w-12 text-[10px] text-right text-copy-3 flex-shrink-0 tabular-nums">{p.record}</span>
+                            <span className={`w-10 text-xs font-semibold text-right flex-shrink-0 tabular-nums ${isThis ? 'text-brand' : 'text-copy-2'}`}>
+                              {p.points.toLocaleString()}
                             </span>
-                            {isSoccer ? (
-                              <span className={`w-8 text-xs font-semibold text-right flex-shrink-0 tabular-nums ${isThis ? 'text-brand' : 'text-copy'}`}>
-                                {s.points ?? '—'}
-                              </span>
-                            ) : (
-                              <span className={`w-8 text-xs text-right flex-shrink-0 tabular-nums ${isThis ? 'text-brand font-semibold' : 'text-copy-2'}`}>
-                                {s.pct != null ? s.pct.toFixed(3).replace(/^0/, '') : '—'}
-                              </span>
-                            )}
                           </div>
                         );
                       })}
                     </div>
                   </div>
-                ) : (
+
+                ) : standingGroups.length > 0 ? (
+                  /* ── Grouped / flat standings ── */
+                  <div>
+                    {/* Column headers */}
+                    <div className="flex items-center gap-2 px-4 py-2 border-b border-line bg-field/30">
+                      <span className="w-5 text-[10px] text-copy-3 text-right flex-shrink-0">#</span>
+                      <span className="flex-1 text-[10px] text-copy-3 ml-9">Team</span>
+                      <span className="w-14 text-[10px] text-copy-3 text-right flex-shrink-0">
+                        {isSoccer ? 'W-L-D' : 'W-L'}
+                      </span>
+                      {isSoccer
+                        ? <span className="w-8 text-[10px] text-copy-3 text-right flex-shrink-0">Pts</span>
+                        : <span className="w-8 text-[10px] text-copy-3 text-right flex-shrink-0">PCT</span>
+                      }
+                    </div>
+
+                    {standingGroups.map((group, gi) => (
+                      <div key={gi}>
+                        {/* Group header (shown when the group has a name) */}
+                        {group.name && (
+                          <div className={`px-4 py-1.5 flex items-center gap-2 ${
+                            group.isWildcard
+                              ? 'bg-warn-bg/40 border-y border-warn/20'
+                              : 'bg-field/50 border-y border-line/40'
+                          }`}>
+                            {group.isWildcard && (
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-warn flex-shrink-0">
+                                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                              </svg>
+                            )}
+                            <span className={`text-[10px] font-bold uppercase tracking-wider ${group.isWildcard ? 'text-warn' : 'text-copy-3'}`}>
+                              {group.name}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Rows */}
+                        <div className="divide-y divide-line/30">
+                          {group.entries.map((s, idx) => {
+                            const isThis = s.teamId === espnTeamId;
+                            const isWcSpot = group.isWildcard && idx < wildcardSpots;
+                            return (
+                              <div
+                                key={s.teamId}
+                                className={`flex items-center gap-2 px-4 py-2 ${
+                                  isThis ? 'bg-brand-dim/30' : isWcSpot ? 'bg-positive-bg/10' : ''
+                                }`}
+                              >
+                                <span className={`w-5 text-[10px] text-right flex-shrink-0 ${isThis ? 'text-brand font-bold' : 'text-copy-3'}`}>
+                                  {group.isWildcard
+                                    ? (isWcSpot ? <span className="text-positive font-bold">✓</span> : '–')
+                                    : idx + 1
+                                  }
+                                </span>
+                                {s.logoUrl ? (
+                                  <img src={s.logoUrl} alt={s.teamName} className="w-6 h-6 object-contain flex-shrink-0" />
+                                ) : (
+                                  <div className="w-6 h-6 rounded-full bg-field-2 flex-shrink-0" />
+                                )}
+                                <span className={`flex-1 text-xs truncate ${isThis ? 'text-brand font-semibold' : 'text-copy'}`}>
+                                  {s.teamName}
+                                </span>
+                                <span className={`w-14 text-xs text-right flex-shrink-0 tabular-nums ${isThis ? 'text-brand font-semibold' : 'text-copy-2'}`}>
+                                  {s.wins}-{s.losses}{isSoccer ? `-${s.draws}` : ''}
+                                </span>
+                                {isSoccer ? (
+                                  <span className={`w-8 text-xs font-semibold text-right flex-shrink-0 tabular-nums ${isThis ? 'text-brand' : 'text-copy'}`}>
+                                    {s.points ?? '—'}
+                                  </span>
+                                ) : (
+                                  <span className={`w-8 text-xs text-right flex-shrink-0 tabular-nums ${isThis ? 'text-brand font-semibold' : 'text-copy-2'}`}>
+                                    {s.pct != null ? s.pct.toFixed(3).replace(/^0/, '') : '—'}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                ) : parsedRows !== null || pollData !== null ? (
                   <div className="px-5 py-10 text-center">
                     <p className="text-copy-3 text-sm">No standings available.</p>
                     <p className="text-xs text-copy-3/60 mt-1">Check back during the active season.</p>
                   </div>
-                )}
+                ) : null}
               </div>
             )}
           </div>
