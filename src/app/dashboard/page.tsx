@@ -1,7 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { updateProfile } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
 
@@ -76,15 +78,46 @@ export default function DashboardPage() {
   const [leagues, setLeagues] = useState<League[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [editingName, setEditingName] = useState(false);
+  const [nameInput, setNameInput] = useState('');
+  const [nameSaving, setNameSaving] = useState(false);
+  const [nameError, setNameError] = useState('');
+  const nameInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     api.get<League[]>('/leagues/mine')
       .then(setLeagues)
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
+    api.get<{ displayName: string }>('/users/me')
+      .then(u => setDisplayName(u.displayName))
+      .catch(() => setDisplayName(user?.displayName ?? user?.email?.split('@')[0] ?? ''));
   }, []);
 
-  const firstName = user?.displayName?.split(' ')[0] ?? user?.email?.split('@')[0] ?? 'there';
+  useEffect(() => {
+    if (editingName) nameInputRef.current?.focus();
+  }, [editingName]);
+
+  async function saveName(e: React.FormEvent) {
+    e.preventDefault();
+    const name = nameInput.trim();
+    if (!name) return;
+    setNameSaving(true);
+    setNameError('');
+    try {
+      await api.patch('/users/me', { displayName: name });
+      if (auth?.currentUser) await updateProfile(auth.currentUser, { displayName: name });
+      setDisplayName(name);
+      setEditingName(false);
+    } catch (err: unknown) {
+      setNameError(err instanceof Error ? err.message : 'Failed to save');
+    } finally {
+      setNameSaving(false);
+    }
+  }
+
+  const firstName = displayName.split(' ')[0] || user?.email?.split('@')[0] || 'there';
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
@@ -97,7 +130,47 @@ export default function DashboardPage() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-copy-3 text-sm mb-0.5">{greeting}</p>
-          <h1 className="text-2xl font-bold text-copy">{firstName}</h1>
+          {editingName ? (
+            <form onSubmit={saveName} className="flex items-center gap-2 mt-1">
+              <input
+                ref={nameInputRef}
+                value={nameInput}
+                onChange={e => setNameInput(e.target.value)}
+                className="bg-field border border-brand rounded-xl px-3 py-1.5 text-copy text-lg font-bold focus:outline-none focus:ring-1 focus:ring-brand w-48"
+                placeholder="Your full name"
+              />
+              <button
+                type="submit"
+                disabled={nameSaving || !nameInput.trim()}
+                className="text-xs bg-brand hover:bg-brand-2 disabled:opacity-50 text-white font-semibold px-3 py-1.5 rounded-xl transition-colors"
+              >
+                {nameSaving ? '...' : 'Save'}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setEditingName(false); setNameError(''); }}
+                className="text-xs text-copy-3 hover:text-copy px-2 py-1.5 rounded-xl transition-colors"
+              >
+                Cancel
+              </button>
+              {nameError && <p className="text-danger text-xs">{nameError}</p>}
+            </form>
+          ) : (
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold text-copy">{firstName}</h1>
+              <button
+                type="button"
+                onClick={() => { setNameInput(displayName); setEditingName(true); setNameError(''); }}
+                className="text-copy-3 hover:text-copy transition-colors mt-0.5"
+                title="Edit your name"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+                  <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+                </svg>
+              </button>
+            </div>
+          )}
         </div>
         <Link
           href="/leagues/new"
