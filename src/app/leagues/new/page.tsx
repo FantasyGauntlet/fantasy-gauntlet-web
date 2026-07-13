@@ -26,6 +26,7 @@ export default function NewLeaguePage() {
     isPublic: false,
     waiverType: 'reserve-standings' as 'reserve-standings' | 'faab',
     faabStartingBudget: 1000,
+    rosterSize: 10,
   });
   const [retroMode, setRetroMode] = useState(false);
   const [retroYear, setRetroYear] = useState(new Date().getFullYear() - 1);
@@ -41,17 +42,24 @@ export default function NewLeaguePage() {
   }, []);
 
   function toggleSport(id: string) {
-    setForm(f => ({
-      ...f,
-      selectedSports: f.selectedSports.includes(id)
+    setForm(f => {
+      const next = f.selectedSports.includes(id)
         ? f.selectedSports.filter(s => s !== id)
-        : [...f.selectedSports, id],
-    }));
+        : [...f.selectedSports, id];
+      return {
+        ...f,
+        selectedSports: next,
+        rosterSize: Math.max(f.rosterSize, next.length),
+      };
+    });
   }
+
+  const wildcards = Math.max(0, form.rosterSize - form.selectedSports.length);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (form.selectedSports.length === 0) { setError('Select at least one sport.'); return; }
+    if (form.selectedSports.length > form.rosterSize) { setError('Roster size must be at least equal to the number of selected sports.'); return; }
     setError('');
     setLoading(true);
     try {
@@ -61,6 +69,7 @@ export default function NewLeaguePage() {
         memberCap: form.memberCap ? Number(form.memberCap) : null,
         isPublic: form.isPublic,
         waiverType: form.waiverType,
+        maxWildcard: wildcards,
         ...(form.waiverType === 'faab' ? { faabStartingBudget: form.faabStartingBudget } : {}),
         ...(retroMode ? { referenceDate: `${retroYear}-08-01` } : {}),
       });
@@ -147,12 +156,10 @@ export default function NewLeaguePage() {
               {sportLeagues.length > 0 && (
                 <button
                   type="button"
-                  onClick={() => setForm(f => ({
-                    ...f,
-                    selectedSports: f.selectedSports.length === sportLeagues.length
-                      ? []
-                      : sportLeagues.map(sl => sl.id),
-                  }))}
+                  onClick={() => setForm(f => {
+                    const next = f.selectedSports.length === sportLeagues.length ? [] : sportLeagues.map(sl => sl.id);
+                    return { ...f, selectedSports: next, rosterSize: Math.max(f.rosterSize, next.length) };
+                  })}
                   className="text-xs text-copy-3 hover:text-copy-2 underline transition-colors"
                 >
                   {form.selectedSports.length === sportLeagues.length ? 'Deselect all' : 'Select all'}
@@ -246,6 +253,32 @@ export default function NewLeaguePage() {
               />
             </div>
           )}
+        </div>
+
+        {/* Roster size & wildcards */}
+        <div className="bg-card border border-line rounded-2xl p-5 space-y-3">
+          <div>
+            <p className="text-sm font-semibold text-copy mb-0.5">Roster Size</p>
+            <p className="text-xs text-copy-3">Total sport teams per manager. Wildcards fill slots beyond your sport count.</p>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="flex-1">
+              <label className={labelCls}>Total roster slots</label>
+              <input
+                type="number"
+                min={form.selectedSports.length || 1}
+                max={30}
+                value={form.rosterSize}
+                onChange={e => setForm(f => ({ ...f, rosterSize: Math.max(f.selectedSports.length || 1, Number(e.target.value) || 10) }))}
+                className={inputCls}
+              />
+            </div>
+            <div className="flex-1 bg-field border border-line rounded-xl px-4 py-3 text-center">
+              <p className="text-2xl font-bold text-copy">{wildcards}</p>
+              <p className="text-xs text-copy-3 mt-0.5">Wildcard slots</p>
+              <p className="text-xs text-copy-3/70">({form.rosterSize} − {form.selectedSports.length} sports)</p>
+            </div>
+          </div>
         </div>
 
         {/* Retroactive league (temporary feature) */}

@@ -32,6 +32,7 @@ interface League {
   previousLeagueId?: string;
   topZone?: number | null;
   bottomZone?: number | null;
+  maxWildcard?: number;
   waiverSettings?: { processingDay: string; processingHour: number } | null;
   waiverType?: 'reserve-standings' | 'faab';
   faabStartingBudget?: number;
@@ -487,6 +488,7 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone }: {
                                       {isWildCard && <span className="text-xs bg-warn-bg text-warn border border-warn/20 px-1.5 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">Wild Card</span>}
                                     </div>
                                     <p className="text-xs text-copy-3 mt-0.5">{formatLeagueName(t.sportLeagueId)}</p>
+                                    <p className="text-xs text-copy-3/70">{s.displayName}</p>
                                   </div>
                                 </div>
                                 <div className="text-right flex-shrink-0">
@@ -818,8 +820,11 @@ function RosterTab({
     if (!coOwnerEmail.trim()) return;
     setCoOwnerSaving(true); setCoOwnerMsg(null);
     try {
+      const endpoint = viewingIsPrimaryOwner
+        ? `/leagues/${leagueId}/teams/my/co-owners`
+        : `/leagues/${leagueId}/teams/${viewingId}/co-owners`;
       const updated = await api.post<{ uid: string; email: string }[]>(
-        `/leagues/${leagueId}/teams/my/co-owners`,
+        endpoint,
         { email: coOwnerEmail.trim() },
       );
       setCoOwners(updated);
@@ -1167,6 +1172,7 @@ function RosterTab({
                         )}
                       </div>
                       <p className="text-xs text-copy-3 mt-0.5">{formatLeagueName(t.sportLeagueId)}</p>
+                      {viewingTeam && <p className="text-xs text-copy-3/70">{viewingTeam.displayName}</p>}
                     </div>
                   </div>
                   {stats && (
@@ -1333,7 +1339,7 @@ function RosterTab({
           {coOwners.length === 0 && (
             <p className="text-xs text-copy-3 mb-4">No co-owners.</p>
           )}
-          {viewingIsPrimaryOwner && (
+          {(viewingIsPrimaryOwner || (isCommissioner && viewingTeam && !viewingIsMe)) && (
             <form onSubmit={handleAddCoOwner} className="flex gap-2">
               <input
                 type="email"
@@ -2088,24 +2094,15 @@ function WaiversTab({
               .sort((a, b) => (b.faabRemaining ?? 0) - (a.faabRemaining ?? 0))
               .map(ft => {
                 const remaining = ft.faabRemaining ?? 0;
-                const pct = faabStartingBudget > 0 ? Math.min(100, (remaining / faabStartingBudget) * 100) : 0;
                 const isMe = ft.userId === userId || (ft.coOwnerIds ?? []).includes(userId ?? '');
                 return (
                   <div key={ft.id} className={`flex items-center gap-3 px-4 py-2.5 ${isMe ? 'bg-brand-dim/30' : ''}`}>
                     <p className={`text-xs font-medium truncate flex-1 min-w-0 ${isMe ? 'text-brand' : 'text-copy'}`}>
                       {ft.displayName}{isMe && <span className="text-copy-3 font-normal ml-1">(you)</span>}
                     </p>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <div className="w-20 h-1.5 rounded-full bg-field-2 overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all ${pct > 50 ? 'bg-positive' : pct > 20 ? 'bg-warn' : 'bg-danger'}`}
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                      <p className={`text-xs font-semibold tabular-nums w-14 text-right ${isMe ? 'text-brand' : 'text-copy'}`}>
-                        ${remaining}
-                      </p>
-                    </div>
+                    <p className={`text-xs font-semibold tabular-nums flex-shrink-0 ${isMe ? 'text-brand' : 'text-copy'}`}>
+                      ${remaining}
+                    </p>
                   </div>
                 );
               })}
@@ -2482,10 +2479,35 @@ function LeagueHomeTab({
   const [newAnnouncement, setNewAnnouncement] = useState('');
   const [announcementSaving, setAnnouncementSaving] = useState(false);
   const [showAnnounceForm, setShowAnnounceForm] = useState(false);
+  const [showAnnImageInput, setShowAnnImageInput] = useState(false);
+  const [annImageUrl, setAnnImageUrl] = useState('');
 
   const [messages, setMessages] = useState<LeagueMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [messageSending, setMessageSending] = useState(false);
+  const [showMsgImageInput, setShowMsgImageInput] = useState(false);
+  const [msgImageUrl, setMsgImageUrl] = useState('');
+
+  function renderContent(content: string) {
+    const imagePattern = /https?:\/\/\S+\.(?:gif|jpg|jpeg|png|webp)(?:[?#]\S*)?|https?:\/\/(?:media\.tenor\.com|media(?:\d+)?\.giphy\.com|i\.imgur\.com)\S*/gi;
+    const parts: { type: 'text' | 'image'; value: string }[] = [];
+    let last = 0;
+    let m: RegExpExecArray | null;
+    while ((m = imagePattern.exec(content)) !== null) {
+      if (m.index > last) parts.push({ type: 'text', value: content.slice(last, m.index) });
+      parts.push({ type: 'image', value: m[0] });
+      last = m.index + m[0].length;
+    }
+    if (last < content.length) parts.push({ type: 'text', value: content.slice(last) });
+    return parts;
+  }
+
+  function buildMessageContent(text: string, imageUrl: string) {
+    const t = text.trim();
+    const u = imageUrl.trim();
+    if (t && u) return `${t}\n${u}`;
+    return t || u;
+  }
 
   useEffect(() => {
     Promise.all([
@@ -2499,12 +2521,15 @@ function LeagueHomeTab({
 
   async function handleAddAnnouncement(e: React.FormEvent) {
     e.preventDefault();
-    if (!newAnnouncement.trim()) return;
+    const content = buildMessageContent(newAnnouncement, annImageUrl);
+    if (!content) return;
     setAnnouncementSaving(true);
     try {
-      const ann = await api.post<Announcement>(`/leagues/${leagueId}/announcements`, { content: newAnnouncement.trim() });
+      const ann = await api.post<Announcement>(`/leagues/${leagueId}/announcements`, { content });
       setAnnouncements(prev => [ann, ...prev]);
       setNewAnnouncement('');
+      setAnnImageUrl('');
+      setShowAnnImageInput(false);
       setShowAnnounceForm(false);
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : 'Failed to post');
@@ -2524,12 +2549,15 @@ function LeagueHomeTab({
 
   async function handleSendMessage(e: React.FormEvent) {
     e.preventDefault();
-    if (!newMessage.trim()) return;
+    const content = buildMessageContent(newMessage, msgImageUrl);
+    if (!content) return;
     setMessageSending(true);
     try {
-      const msg = await api.post<LeagueMessage>(`/leagues/${leagueId}/messages`, { content: newMessage.trim() });
+      const msg = await api.post<LeagueMessage>(`/leagues/${leagueId}/messages`, { content });
       setMessages(prev => [...prev, msg]);
       setNewMessage('');
+      setMsgImageUrl('');
+      setShowMsgImageInput(false);
       setTimeout(() => msgEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : 'Failed to send');
@@ -2570,7 +2598,13 @@ function LeagueHomeTab({
                     {isOwn && <span className="text-xs text-brand">you</span>}
                     <span className="text-xs text-copy-3">{timeAgo(msg.createdAt)}</span>
                   </div>
-                  <p className="text-sm text-copy-2 break-words">{msg.content}</p>
+                  <div className="text-sm text-copy-2 break-words space-y-1">
+                    {renderContent(msg.content).map((part, i) =>
+                      part.type === 'image'
+                        ? <img key={i} src={part.value} alt="" className="max-w-xs max-h-48 rounded-lg object-contain" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                        : part.value ? <span key={i} className="whitespace-pre-wrap">{part.value}</span> : null
+                    )}
+                  </div>
                 </div>
                 {(isOwn || isCommissioner) && (
                   <button
@@ -2588,6 +2622,18 @@ function LeagueHomeTab({
           <div ref={msgEndRef} />
         </div>
         <div className="px-5 py-3 border-t border-line">
+          {showMsgImageInput && (
+            <div className="flex gap-2 mb-2">
+              <input
+                type="url"
+                value={msgImageUrl}
+                onChange={e => setMsgImageUrl(e.target.value)}
+                placeholder="Paste image or GIF URL..."
+                className="flex-1 bg-field border border-line-2 rounded-xl px-3 py-1.5 text-copy text-xs placeholder-copy-3 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors"
+              />
+              <button type="button" onClick={() => { setShowMsgImageInput(false); setMsgImageUrl(''); }} className="text-copy-3 hover:text-danger text-xs px-2">✕</button>
+            </div>
+          )}
           <form onSubmit={handleSendMessage} className="flex gap-2">
             <input
               value={newMessage}
@@ -2597,8 +2643,16 @@ function LeagueHomeTab({
               className="flex-1 bg-field border border-line-2 rounded-xl px-4 py-2 text-copy text-sm placeholder-copy-3 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors"
             />
             <button
+              type="button"
+              onClick={() => setShowMsgImageInput(v => !v)}
+              title="Attach image or GIF"
+              className={`flex-shrink-0 border text-sm px-3 py-2 rounded-xl transition-colors ${showMsgImageInput ? 'bg-brand-dim border-brand text-brand' : 'bg-field border-line-2 text-copy-3 hover:text-copy hover:border-line'}`}
+            >
+              🖼
+            </button>
+            <button
               type="submit"
-              disabled={!newMessage.trim() || messageSending}
+              disabled={(!newMessage.trim() && !msgImageUrl.trim()) || messageSending}
               className="bg-brand hover:bg-brand-2 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors whitespace-nowrap"
             >
               {messageSending ? '...' : 'Send'}
@@ -2633,10 +2687,30 @@ function LeagueHomeTab({
               maxLength={1000}
               className="w-full bg-card border border-line-2 rounded-xl px-4 py-2.5 text-copy text-sm placeholder-copy-3 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors resize-none"
             />
-            <div className="flex justify-end">
+            {showAnnImageInput && (
+              <div className="flex gap-2">
+                <input
+                  type="url"
+                  value={annImageUrl}
+                  onChange={e => setAnnImageUrl(e.target.value)}
+                  placeholder="Paste image or GIF URL..."
+                  className="flex-1 bg-card border border-line-2 rounded-xl px-3 py-1.5 text-copy text-xs placeholder-copy-3 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors"
+                />
+                <button type="button" onClick={() => { setShowAnnImageInput(false); setAnnImageUrl(''); }} className="text-copy-3 hover:text-danger text-xs px-2">✕</button>
+              </div>
+            )}
+            <div className="flex items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={() => setShowAnnImageInput(v => !v)}
+                title="Attach image or GIF"
+                className={`border text-xs px-3 py-1.5 rounded-xl transition-colors ${showAnnImageInput ? 'bg-brand-dim border-brand text-brand' : 'bg-field border-line text-copy-3 hover:text-copy hover:border-line-2'}`}
+              >
+                🖼 Image
+              </button>
               <button
                 type="submit"
-                disabled={!newAnnouncement.trim() || announcementSaving}
+                disabled={(!newAnnouncement.trim() && !annImageUrl.trim()) || announcementSaving}
                 className="bg-brand hover:bg-brand-2 disabled:opacity-50 text-white text-xs font-semibold px-4 py-2 rounded-xl transition-colors"
               >
                 {announcementSaving ? 'Posting...' : 'Post Announcement'}
@@ -2658,7 +2732,13 @@ function LeagueHomeTab({
                     <span className="text-xs font-semibold text-copy-2">{ann.authorDisplayName}</span>
                     <span className="text-xs text-copy-3">{timeAgo(ann.createdAt)}</span>
                   </div>
-                  <p className="text-sm text-copy leading-relaxed break-words">{ann.content}</p>
+                  <div className="text-sm text-copy leading-relaxed break-words space-y-1">
+                    {renderContent(ann.content).map((part, i) =>
+                      part.type === 'image'
+                        ? <img key={i} src={part.value} alt="" className="max-w-xs max-h-48 rounded-lg object-contain" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                        : part.value ? <span key={i} className="whitespace-pre-wrap">{part.value}</span> : null
+                    )}
+                  </div>
                 </div>
                 {isCommissioner && (
                   <button
@@ -2904,7 +2984,7 @@ function CommissionerTab({
     minBidIncrement:  league.auctionConfig?.minBidIncrement  ?? 1,
     nominationMode:   league.auctionConfig?.nominationMode   ?? 'manual',
     countdownSeconds: league.auctionConfig?.countdownSeconds ?? 15,
-    maxWildcard:      league.auctionConfig?.maxWildcard      ?? 0,
+    maxWildcard:      league.auctionConfig?.maxWildcard      ?? league.maxWildcard ?? 0,
   });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -3045,7 +3125,7 @@ function CommissionerTab({
       )}
 
       {/* State controls */}
-      {(league.state === 'draft' || league.state === 'completed') && (
+      {(league.state === 'draft' || league.state === 'completed' || league.state === 'active') && (
         <div className="bg-card border border-line rounded-2xl p-5">
           <h2 className="text-sm font-semibold text-copy mb-4">Commissioner Controls</h2>
           {league.state === 'draft' && (
@@ -3068,18 +3148,18 @@ function CommissionerTab({
               </button>
             </div>
           )}
-          {league.state === 'completed' && (
+          {(league.state === 'completed' || league.state === 'active') && (
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-xs font-medium text-copy">Renew this league</p>
-                <p className="text-xs text-copy-3 mt-0.5">Start a new season. Members carry over; a new draft league is created.</p>
+                <p className="text-xs font-medium text-copy">Start New Season</p>
+                <p className="text-xs text-copy-3 mt-0.5">Creates a brand-new draft league for the next season. This league stays intact and continues running.</p>
               </div>
               <button
                 onClick={handleRenew}
                 disabled={renewing}
                 className="flex-shrink-0 bg-brand hover:bg-brand-2 disabled:opacity-50 text-white text-xs font-semibold px-3 py-2 rounded-xl transition-colors whitespace-nowrap"
               >
-                {renewing ? 'Creating...' : 'Renew League'}
+                {renewing ? 'Creating...' : 'New Season'}
               </button>
             </div>
           )}
