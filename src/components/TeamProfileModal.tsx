@@ -100,6 +100,117 @@ const ESPN_STANDINGS_PARAMS: Record<string, Record<string, string>> = {
   'ncaa-football': { group: '80' },
 };
 
+// Static division lookup for sports where ESPN's standings API returns only
+// conference-level groupings (no division children) during the offseason.
+// Keyed by team.displayName as returned by ESPN.
+const SPORT_DIVISIONS: Record<string, Record<string, [string, string]>> = {
+  nfl: {
+    'Buffalo Bills':         ['AFC East',  'AFC'],
+    'Miami Dolphins':        ['AFC East',  'AFC'],
+    'New England Patriots':  ['AFC East',  'AFC'],
+    'New York Jets':         ['AFC East',  'AFC'],
+    'Baltimore Ravens':      ['AFC North', 'AFC'],
+    'Cincinnati Bengals':    ['AFC North', 'AFC'],
+    'Cleveland Browns':      ['AFC North', 'AFC'],
+    'Pittsburgh Steelers':   ['AFC North', 'AFC'],
+    'Houston Texans':        ['AFC South', 'AFC'],
+    'Indianapolis Colts':    ['AFC South', 'AFC'],
+    'Jacksonville Jaguars':  ['AFC South', 'AFC'],
+    'Tennessee Titans':      ['AFC South', 'AFC'],
+    'Denver Broncos':        ['AFC West',  'AFC'],
+    'Kansas City Chiefs':    ['AFC West',  'AFC'],
+    'Las Vegas Raiders':     ['AFC West',  'AFC'],
+    'Los Angeles Chargers':  ['AFC West',  'AFC'],
+    'Dallas Cowboys':        ['NFC East',  'NFC'],
+    'New York Giants':       ['NFC East',  'NFC'],
+    'Philadelphia Eagles':   ['NFC East',  'NFC'],
+    'Washington Commanders': ['NFC East',  'NFC'],
+    'Chicago Bears':         ['NFC North', 'NFC'],
+    'Detroit Lions':         ['NFC North', 'NFC'],
+    'Green Bay Packers':     ['NFC North', 'NFC'],
+    'Minnesota Vikings':     ['NFC North', 'NFC'],
+    'Atlanta Falcons':       ['NFC South', 'NFC'],
+    'Carolina Panthers':     ['NFC South', 'NFC'],
+    'New Orleans Saints':    ['NFC South', 'NFC'],
+    'Tampa Bay Buccaneers':  ['NFC South', 'NFC'],
+    'Arizona Cardinals':     ['NFC West',  'NFC'],
+    'Los Angeles Rams':      ['NFC West',  'NFC'],
+    'Seattle Seahawks':      ['NFC West',  'NFC'],
+    'San Francisco 49ers':   ['NFC West',  'NFC'],
+  },
+  nhl: {
+    'Boston Bruins':         ['Atlantic',     'Eastern'],
+    'Buffalo Sabres':        ['Atlantic',     'Eastern'],
+    'Detroit Red Wings':     ['Atlantic',     'Eastern'],
+    'Florida Panthers':      ['Atlantic',     'Eastern'],
+    'Montréal Canadiens':    ['Atlantic',     'Eastern'],
+    'Montreal Canadiens':    ['Atlantic',     'Eastern'],
+    'Ottawa Senators':       ['Atlantic',     'Eastern'],
+    'Tampa Bay Lightning':   ['Atlantic',     'Eastern'],
+    'Toronto Maple Leafs':   ['Atlantic',     'Eastern'],
+    'Carolina Hurricanes':   ['Metropolitan', 'Eastern'],
+    'Columbus Blue Jackets': ['Metropolitan', 'Eastern'],
+    'New Jersey Devils':     ['Metropolitan', 'Eastern'],
+    'New York Islanders':    ['Metropolitan', 'Eastern'],
+    'New York Rangers':      ['Metropolitan', 'Eastern'],
+    'Philadelphia Flyers':   ['Metropolitan', 'Eastern'],
+    'Pittsburgh Penguins':   ['Metropolitan', 'Eastern'],
+    'Washington Capitals':   ['Metropolitan', 'Eastern'],
+    'Chicago Blackhawks':    ['Central',      'Western'],
+    'Colorado Avalanche':    ['Central',      'Western'],
+    'Dallas Stars':          ['Central',      'Western'],
+    'Minnesota Wild':        ['Central',      'Western'],
+    'Nashville Predators':   ['Central',      'Western'],
+    'St. Louis Blues':       ['Central',      'Western'],
+    'St Louis Blues':        ['Central',      'Western'],
+    'Utah Hockey Club':      ['Central',      'Western'],
+    'Winnipeg Jets':         ['Central',      'Western'],
+    'Anaheim Ducks':         ['Pacific',      'Western'],
+    'Calgary Flames':        ['Pacific',      'Western'],
+    'Edmonton Oilers':       ['Pacific',      'Western'],
+    'Los Angeles Kings':     ['Pacific',      'Western'],
+    'San Jose Sharks':       ['Pacific',      'Western'],
+    'Seattle Kraken':        ['Pacific',      'Western'],
+    'Vancouver Canucks':     ['Pacific',      'Western'],
+    'Vegas Golden Knights':  ['Pacific',      'Western'],
+  },
+  mlb: {
+    'Baltimore Orioles':     ['AL East',    'American League'],
+    'Boston Red Sox':        ['AL East',    'American League'],
+    'New York Yankees':      ['AL East',    'American League'],
+    'Tampa Bay Rays':        ['AL East',    'American League'],
+    'Toronto Blue Jays':     ['AL East',    'American League'],
+    'Chicago White Sox':     ['AL Central', 'American League'],
+    'Cleveland Guardians':   ['AL Central', 'American League'],
+    'Detroit Tigers':        ['AL Central', 'American League'],
+    'Kansas City Royals':    ['AL Central', 'American League'],
+    'Minnesota Twins':       ['AL Central', 'American League'],
+    'Houston Astros':        ['AL West',    'American League'],
+    'Los Angeles Angels':    ['AL West',    'American League'],
+    'Oakland Athletics':     ['AL West',    'American League'],
+    'Sacramento Athletics':  ['AL West',    'American League'],
+    'Athletics':             ['AL West',    'American League'],
+    'Seattle Mariners':      ['AL West',    'American League'],
+    'Texas Rangers':         ['AL West',    'American League'],
+    'Atlanta Braves':        ['NL East',    'National League'],
+    'Miami Marlins':         ['NL East',    'National League'],
+    'New York Mets':         ['NL East',    'National League'],
+    'Philadelphia Phillies': ['NL East',    'National League'],
+    'Washington Nationals':  ['NL East',    'National League'],
+    'Chicago Cubs':          ['NL Central', 'National League'],
+    'Cincinnati Reds':       ['NL Central', 'National League'],
+    'Milwaukee Brewers':     ['NL Central', 'National League'],
+    'Pittsburgh Pirates':    ['NL Central', 'National League'],
+    'St. Louis Cardinals':   ['NL Central', 'National League'],
+    'St Louis Cardinals':    ['NL Central', 'National League'],
+    'Arizona Diamondbacks':  ['NL West',    'National League'],
+    'Colorado Rockies':      ['NL West',    'National League'],
+    'Los Angeles Dodgers':   ['NL West',    'National League'],
+    'San Diego Padres':      ['NL West',    'National League'],
+    'San Francisco Giants':  ['NL West',    'National League'],
+  },
+};
+
 const SOCCER_LEAGUES = new Set(['premier-league', 'ucl', 'world-cup']);
 
 const RESULT_COLORS = {
@@ -223,50 +334,6 @@ function buildGroups(rows: ParsedTeamRow[], view: StandingsViewKey, sport: strin
   return result;
 }
 
-// ESPN's standings endpoint only nests teams at the conference level, not division.
-// The groups endpoint has the full hierarchy — use it to enrich rows with division info.
-async function fetchDivisionMap(espnPath: string): Promise<Map<string, { confName: string; divName: string }>> {
-  const map = new Map<string, { confName: string; divName: string }>();
-  try {
-    const res = await fetch(`https://site.api.espn.com/apis/v2/sports/${espnPath}/groups`);
-    if (!res.ok) return map;
-    const data = await res.json();
-
-    // Approach 1: groups endpoint may mirror the standings tree structure
-    const treeRows = parseEspnTree(data, false);
-    for (const r of treeRows) {
-      if (r.teamId && r.divName && r.divName !== r.confName) {
-        map.set(r.teamId, { confName: r.confName, divName: r.divName });
-      }
-    }
-    if (map.size > 0) return map;
-
-    // Approach 2: flat items list with team refs
-    const items: any[] = data.items ?? [];
-    // First pass: collect parent (conf) names by id
-    const parentNames = new Map<string, string>();
-    for (const g of items) {
-      if (g.parent == null && g.id) parentNames.set(String(g.id), g.name ?? '');
-    }
-    for (const group of items) {
-      const divName = group.name ?? group.shortName ?? '';
-      if (!divName) continue;
-      const confName = group.parent?.name ?? group.parent?.shortName
-        ?? parentNames.get(String(group.parent?.id ?? '')) ?? '';
-      const teamItems: any[] = group.teams?.items ?? group.teams ?? [];
-      for (const t of teamItems) {
-        let teamId = String(t.id ?? '');
-        if (!teamId && typeof t.$ref === 'string') {
-          const m = t.$ref.match(/\/teams\/(\d+)/);
-          if (m) teamId = m[1];
-        }
-        if (teamId) map.set(teamId, { confName, divName });
-      }
-    }
-  } catch {}
-  return map;
-}
-
 async function fetchStandingsRows(sportLeagueId: string): Promise<ParsedTeamRow[]> {
   const espnPath = ESPN_PATH[sportLeagueId];
   if (!espnPath) return [];
@@ -279,13 +346,14 @@ async function fetchStandingsRows(sportLeagueId: string): Promise<ParsedTeamRow[
     const data = await res.json();
     let rows = parseEspnTree(data, isSoccer);
 
-    // If division info wasn't in the standings tree, fetch it from the groups endpoint
+    // ESPN's standings API only returns conference-level groupings during the offseason;
+    // fill in division info from the static lookup table when the tree has no divisions.
     if (!isSoccer && rows.length > 0 && !rows.some(r => r.divName !== r.confName)) {
-      const divMap = await fetchDivisionMap(espnPath);
-      if (divMap.size > 0) {
+      const divLookup = SPORT_DIVISIONS[sportLeagueId];
+      if (divLookup) {
         rows = rows.map(r => {
-          const info = divMap.get(r.teamId);
-          return info ? { ...r, confName: info.confName || r.confName, divName: info.divName } : r;
+          const d = divLookup[r.teamName];
+          return d ? { ...r, divName: d[0], confName: d[1] } : r;
         });
       }
     }
