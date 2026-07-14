@@ -95,7 +95,6 @@ export default function NavBar() {
 
   const staticLinks = [
     { href: '/dashboard', label: 'Dashboard' },
-    { href: '/leagues',   label: 'Leagues' },
   ];
 
   return (
