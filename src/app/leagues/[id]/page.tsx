@@ -2968,7 +2968,7 @@ function RecentActivityTab({ leagueId, fantasyTeams }: { leagueId: string; fanta
                 );
               } else {
                 const addTeamName = sportTeamById.get(tx.addTeamId)?.name ?? tx.addTeamId;
-                const dropTeamName = sportTeamById.get(tx.dropTeamId)?.name ?? tx.dropTeamId;
+                const dropTeamName = tx.dropTeamId ? (sportTeamById.get(tx.dropTeamId)?.name ?? tx.dropTeamId) : null;
                 return (
                   <div key={tx.id} className="px-5 py-3.5 flex items-start gap-3">
                     <div className="w-6 h-6 rounded-full bg-warn-bg border border-warn/30 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -2982,8 +2982,12 @@ function RecentActivityTab({ leagueId, fantasyTeams }: { leagueId: string; fanta
                         <span className="font-semibold">{tx.claimantDisplayName}</span>
                         <span className="text-copy-3"> added </span>
                         <span className="text-positive font-medium">{addTeamName}</span>
-                        <span className="text-copy-3"> and dropped </span>
-                        <span className="text-danger font-medium">{dropTeamName}</span>
+                        {dropTeamName && (
+                          <>
+                            <span className="text-copy-3"> and dropped </span>
+                            <span className="text-danger font-medium">{dropTeamName}</span>
+                          </>
+                        )}
                       </p>
                     </div>
                   </div>
