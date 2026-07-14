@@ -14,6 +14,8 @@ interface InvitePreview {
   leagueName: string;
   toEmail: string;
   status: string;
+  coOwnerTeamId?: string;
+  teamDisplayName?: string;
 }
 
 function Spinner() {
@@ -43,7 +45,7 @@ export default function InvitePage() {
     setAction({ status: 'loading', message: 'Accepting...' });
     try {
       await api.post(`/leagues/invites/${code}/accept`);
-      setAction({ status: 'success', message: 'You joined the league!' });
+      setAction({ status: 'success', message: preview?.coOwnerTeamId ? "You're now a co-owner!" : 'You joined the league!' });
       setTimeout(() => router.push(`/leagues/${preview?.leagueId}`), 1500);
     } catch (err: unknown) {
       setAction({ status: 'error', message: err instanceof Error ? err.message : 'Failed to accept invite' });
@@ -116,7 +118,13 @@ export default function InvitePage() {
                 </svg>
               </div>
               <h1 className="text-xl font-bold text-copy mb-1">You're Invited!</h1>
-              <p className="text-copy-2 text-sm mb-1">Join <strong className="text-copy">{preview.leagueName}</strong></p>
+              {preview.coOwnerTeamId ? (
+                <p className="text-copy-2 text-sm mb-1">
+                  Co-manage <strong className="text-copy">{preview.teamDisplayName}</strong> in <strong className="text-copy">{preview.leagueName}</strong>
+                </p>
+              ) : (
+                <p className="text-copy-2 text-sm mb-1">Join <strong className="text-copy">{preview.leagueName}</strong></p>
+              )}
               <p className="text-copy-3 text-xs mb-8">{preview.toEmail}</p>
 
               {authLoading ? (

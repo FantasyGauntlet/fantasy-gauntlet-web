@@ -832,9 +832,8 @@ function RosterTab({
         endpoint,
         { email: coOwnerEmail.trim() },
       );
-      setCoOwners(updated);
       setCoOwnerEmail('');
-      setCoOwnerMsg({ type: 'success', text: 'Co-owner added.' });
+      setCoOwnerMsg({ type: 'success', text: `Invite sent to ${coOwnerEmail.trim()}.` });
       setTimeout(() => setCoOwnerMsg(null), 3000);
     } catch (err: unknown) {
       setCoOwnerMsg({ type: 'error', text: err instanceof Error ? err.message : 'Failed to add co-owner' });
