@@ -25,7 +25,7 @@ interface SportTeam { id: string; name: string; shortName: string; sportLeagueId
 interface SportGroup { sport: string; teams: SportTeam[]; }
 
 interface CurrentLot {
-  teamId: string; teamName: string; logoUrl: string | null; sportLeagueId: string;
+  teamId: string; teamName: string | null; logoUrl: string | null; sportLeagueId: string;
   currentBid: number; currentBidderId: string | null; totalSeconds: number;
 }
 
@@ -60,12 +60,12 @@ function Dot({ color }: { color: 'green' | 'red' | 'yellow' }) {
   return <div className={`w-2 h-2 rounded-full ${cls} animate-pulse`} />;
 }
 
-function TeamLogo({ logoUrl, name, size = 10 }: { logoUrl: string | null; name: string; size?: number }) {
+function TeamLogo({ logoUrl, name, size = 10 }: { logoUrl: string | null; name: string | null; size?: number }) {
   const [err, setErr] = useState(false);
   if (logoUrl && !err) {
     return (
       <img
-        src={logoUrl} alt={name}
+        src={logoUrl} alt={name ?? ''}
         className={`w-${size} h-${size} object-contain`}
         onError={() => setErr(true)}
       />
@@ -73,7 +73,7 @@ function TeamLogo({ logoUrl, name, size = 10 }: { logoUrl: string | null; name: 
   }
   return (
     <div className={`w-${size} h-${size} rounded-lg bg-field-2 border border-line flex items-center justify-center text-copy-3 text-xs font-bold`}>
-      {name.slice(0, 2).toUpperCase()}
+      {name ? name.slice(0, 2).toUpperCase() : '??'}
     </div>
   );
 }
@@ -315,14 +315,16 @@ export default function AuctionPage() {
         }
 
         // Reconstruct current lot if in-progress (auction mode only)
-        if (session.currentLot && session.currentLot.teamId !== '' && session.status === 'active') {
+        if (session.currentLot && session.status === 'active') {
           const { teamId, currentBid, currentBidderId, timerRemaining } = session.currentLot;
-          const info = teamInfo(teamId);
+          // In random-hidden mode teamId may be null (concealed by the server)
+          const isHiddenLot = !teamId || session.nominationMode === 'random-hidden';
+          const info = (!isHiddenLot && teamId) ? teamInfo(teamId) : undefined;
           setCurrentLot({
-            teamId,
-            teamName: info?.name ?? teamId,
-            logoUrl: info?.logoUrl ?? null,
-            sportLeagueId: info?.sportLeagueId ?? '',
+            teamId: teamId ?? '',
+            teamName: isHiddenLot ? '???' : (info?.name ?? teamId ?? ''),
+            logoUrl: isHiddenLot ? null : (info?.logoUrl ?? null),
+            sportLeagueId: isHiddenLot ? '' : (info?.sportLeagueId ?? ''),
             currentBid,
             currentBidderId,
             totalSeconds: session.countdownSeconds ?? 30,
@@ -453,13 +455,15 @@ export default function AuctionPage() {
           clearTimeout(lotFlashTimerRef.current);
           lotFlashTimerRef.current = null;
         }
-        const info = teamInfo(data.teamId);
+        // data.teamId is null in random-hidden mode — identity is concealed until lot closes
+        const isHidden = data.teamId === null;
+        const info = !isHidden ? teamInfo(data.teamId) : undefined;
         const lotTimer = data.timerSeconds ?? 30;
         setCurrentLot({
-          teamId: data.teamId,
-          teamName: data.teamName ?? info?.name ?? data.teamId,
-          logoUrl: info?.logoUrl ?? null,
-          sportLeagueId: data.sportLeagueId ?? info?.sportLeagueId ?? '',
+          teamId: data.teamId ?? '',
+          teamName: isHidden ? '???' : (data.teamName ?? info?.name ?? data.teamId ?? ''),
+          logoUrl: isHidden ? null : (info?.logoUrl ?? null),
+          sportLeagueId: isHidden ? '' : (data.sportLeagueId ?? info?.sportLeagueId ?? ''),
           currentBid: data.openingBid ?? minOpeningBid,
           currentBidderId: null,
           totalSeconds: lotTimer,
@@ -526,6 +530,14 @@ export default function AuctionPage() {
           passed: false,
         };
         setSoldLots(prev => [sold, ...prev]);
+        // Reveal the real team identity on the lot card (was hidden in random-hidden mode)
+        setCurrentLot(prev => prev ? {
+          ...prev,
+          teamId: data.teamId,
+          teamName: info?.name ?? data.teamId,
+          logoUrl: info?.logoUrl ?? null,
+          sportLeagueId: info?.sportLeagueId ?? prev.sportLeagueId,
+        } : null);
         // Deduct from the winner's budget
         setFantasyTeams(prev => {
           const updated = prev.map(ft =>
@@ -554,6 +566,14 @@ export default function AuctionPage() {
           winnerId: null, winnerName: null, winningBid: 0, passed: true,
         };
         setSoldLots(prev => [passed, ...prev]);
+        // Reveal the real team identity on the lot card (was hidden in random-hidden mode)
+        setCurrentLot(prev => prev ? {
+          ...prev,
+          teamId: data.teamId,
+          teamName: info?.name ?? data.teamId,
+          logoUrl: info?.logoUrl ?? null,
+          sportLeagueId: info?.sportLeagueId ?? prev.sportLeagueId,
+        } : null);
         timerSyncRef.current = null;
         lotFlashTimerRef.current = setTimeout(() => {
           lotFlashTimerRef.current = null;
@@ -970,9 +990,9 @@ export default function AuctionPage() {
                   <TeamLogo logoUrl={currentLot.logoUrl} name={currentLot.teamName} size={14} />
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium text-copy-3 uppercase tracking-wide mb-0.5">
-                      {fln(currentLot.sportLeagueId)}
+                      {currentLot.sportLeagueId ? fln(currentLot.sportLeagueId) : '???'}
                     </p>
-                    <h2 className="text-xl font-bold text-copy leading-tight truncate">{currentLot.teamName}</h2>
+                    <h2 className="text-xl font-bold text-copy leading-tight truncate">{currentLot.teamName ?? '???'}</h2>
                     {lotFlash && (
                       <span className={`inline-block mt-1 text-xs font-bold px-2 py-0.5 rounded-full ${
                         lotFlash === 'sold' ? 'bg-positive/20 text-positive' : 'bg-line text-copy-3'
