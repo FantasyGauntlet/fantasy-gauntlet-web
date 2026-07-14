@@ -31,7 +31,7 @@ export default function NewLeaguePage() {
     memberCap: '',
     isPublic: false,
     waiverType: 'reserve-standings' as 'reserve-standings' | 'faab',
-    faabStartingBudget: 1000,
+    faabStartingBudget: 100,
     rosterSize: 10,
   });
   const [retroMode, setRetroMode] = useState(false);
@@ -254,7 +254,7 @@ export default function NewLeaguePage() {
                 type="number"
                 min={1}
                 value={form.faabStartingBudget}
-                onChange={e => setForm(f => ({ ...f, faabStartingBudget: Number(e.target.value) || 1000 }))}
+                onChange={e => setForm(f => ({ ...f, faabStartingBudget: Number(e.target.value) || 100 }))}
                 className={inputCls}
               />
             </div>

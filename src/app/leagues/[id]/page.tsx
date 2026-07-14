@@ -200,10 +200,27 @@ export default function LeaguePage() {
     try {
       await api.post(`/leagues/${id}/auction/start`);
       setLeague(l => l ? { ...l, state: 'auction' } : l);
+      router.push(`/leagues/${id}/auction`);
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : 'Failed to start auction');
     }
   }
+
+  // Poll for auction start so everyone on the league page gets auto-redirected
+  // when the commissioner fires the draft — no manual refresh needed.
+  useEffect(() => {
+    if (league?.state !== 'draft') return;
+    const poll = setInterval(async () => {
+      try {
+        const fresh = await api.get<League>(`/leagues/${id}`);
+        if (fresh.state === 'auction') {
+          setLeague(fresh);
+          router.push(`/leagues/${id}/auction`);
+        }
+      } catch {}
+    }, 3000);
+    return () => clearInterval(poll);
+  }, [league?.state, id, router]);
 
   if (loading) {
     return (
@@ -256,7 +273,7 @@ export default function LeaguePage() {
                 title={!league.auctionConfig ? 'Set auction config in Settings first' : undefined}
                 className="bg-brand hover:bg-brand-2 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold px-4 py-2 rounded-xl text-sm transition-colors"
               >
-                Start Auction
+                Start Draft
               </button>
             )}
           </div>
@@ -333,7 +350,7 @@ export default function LeaguePage() {
           fantasyTeams={fantasyTeams}
           selectedSports={league.selectedSports}
           waiverType={league.waiverType ?? 'reserve-standings'}
-          faabStartingBudget={league.faabStartingBudget ?? 1000}
+          faabStartingBudget={league.faabStartingBudget ?? 100}
           rosterSize={league.selectedSports.length + (league.maxWildcard ?? 0)}
         />
       )}
@@ -3025,7 +3042,7 @@ function CommissionerTab({
     startingBudget:   league.auctionConfig?.startingBudget   ?? 1000,
     minOpeningBid:    league.auctionConfig?.minOpeningBid    ?? 1,
     minBidIncrement:  league.auctionConfig?.minBidIncrement  ?? 1,
-    nominationMode:   league.auctionConfig?.nominationMode   ?? 'manual',
+    nominationMode:   league.auctionConfig?.nominationMode   ?? 'random-hidden',
     countdownSeconds: league.auctionConfig?.countdownSeconds ?? 15,
     maxWildcard:      league.auctionConfig?.maxWildcard      ?? league.maxWildcard ?? 0,
   });
