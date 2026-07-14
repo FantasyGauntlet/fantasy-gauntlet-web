@@ -75,13 +75,9 @@ function LoginContent() {
     <div className="min-h-screen bg-base flex">
       {/* Left panel — hero */}
       <div className="hidden lg:flex flex-col justify-between w-1/2 bg-card border-r border-line p-12">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-brand flex items-center justify-center">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-            </svg>
-          </div>
-          <span className="font-bold text-copy">Fantasy Gauntlet</span>
+        <div className="flex items-center gap-3">
+          <img src="/logo.png" alt="Fantasy Gauntlet" className="w-10 h-10 rounded-xl object-contain" />
+          <span className="text-xl font-extrabold text-copy tracking-tight">Fantasy Gauntlet</span>
         </div>
 
         <div>
@@ -101,7 +97,7 @@ function LoginContent() {
 
         <div className="grid grid-cols-3 gap-4">
           {[
-            { label: 'Sports', value: '9+' },
+            { label: 'Professional leagues', value: '8' },
             { label: 'Scoring modes', value: 'Live' },
             { label: 'Auction draft', value: 'Built-in' },
           ].map(stat => (
@@ -117,13 +113,9 @@ function LoginContent() {
       <div className="flex-1 flex items-center justify-center p-6">
         <div className="w-full max-w-sm">
           {/* Mobile brand */}
-          <div className="lg:hidden flex items-center gap-2 mb-8">
-            <div className="w-8 h-8 rounded-lg bg-brand flex items-center justify-center">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-              </svg>
-            </div>
-            <span className="font-bold text-copy">Fantasy Gauntlet</span>
+          <div className="lg:hidden flex items-center gap-3 mb-8">
+            <img src="/logo.png" alt="Fantasy Gauntlet" className="w-9 h-9 rounded-xl object-contain" />
+            <span className="text-lg font-extrabold text-copy tracking-tight">Fantasy Gauntlet</span>
           </div>
 
           <h2 className="text-2xl font-bold text-copy mb-1">
