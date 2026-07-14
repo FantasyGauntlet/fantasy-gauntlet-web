@@ -450,7 +450,7 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone, own
                     })()}
                   </td>
                   <td className="px-4 py-3.5 text-right hidden sm:table-cell">
-                    <span className="text-sm text-positive">{s.bonusPoints > 0 ? `${Math.round(s.bonusPoints)}` : '—'}</span>
+                    <span className="text-sm text-positive">{s.bonusPoints > 0 ? `+${Math.round(s.bonusPoints)}` : '—'}</span>
                   </td>
                 </tr>
                 {isExpanded && s.teamBreakdown.length > 0 && (() => {
@@ -2883,7 +2883,7 @@ function HistoryTab({ leagueId, previousLeagueId }: { leagueId: string; previous
                   <td className="px-4 py-3 text-sm font-bold text-copy-2">#{s.rank}</td>
                   <td className="px-4 py-3 text-sm font-medium text-copy">{s.displayName}</td>
                   <td className="px-4 py-3 text-sm text-right font-semibold text-copy">{s.totalPoints.toFixed(1)}</td>
-                  <td className="px-4 py-3 text-sm text-right text-copy-3 hidden sm:table-cell">{s.bonusPoints > 0 ? `${Math.round(s.bonusPoints)}` : '—'}</td>
+                  <td className="px-4 py-3 text-sm text-right text-copy-3 hidden sm:table-cell">{s.bonusPoints > 0 ? `+${Math.round(s.bonusPoints)}` : '—'}</td>
                 </tr>
               ))}
             </tbody>
