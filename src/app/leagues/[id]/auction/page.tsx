@@ -150,6 +150,7 @@ export default function AuctionPage() {
   const [soldLots, setSoldLots] = useState<SoldLot[]>([]);
   const [upcomingQueue, setUpcomingQueue] = useState<string[]>([]);
   const [hiddenQueueSize, setHiddenQueueSize] = useState<number>(0);
+  const [draftPool, setDraftPool] = useState<Set<string>>(new Set());
   const [nominationMode, setNominationMode] = useState('random');
   const [minBidIncrement, setMinBidIncrement] = useState(1);
   const [minOpeningBid, setMinOpeningBid] = useState(1);
@@ -282,6 +283,7 @@ export default function AuctionPage() {
         if (session.minBidIncrement) setMinBidIncrement(session.minBidIncrement);
         if (session.minOpeningBid) setMinOpeningBid(session.minOpeningBid);
         if (session.nominationMode) setNominationMode(session.nominationMode);
+        if (session.draftPool) setDraftPool(new Set(session.draftPool as string[]));
 
         // Remaining queue: only revealed for non-hidden modes
         const remaining: string[] = session.nominationMode !== 'random-hidden'
@@ -373,6 +375,7 @@ export default function AuctionPage() {
         setStatus('waiting');
         if (data.nominationMode) setNominationMode(data.nominationMode);
         if (data.queue) setUpcomingQueue(data.queue);
+        if (data.draftPool) setDraftPool(new Set(data.draftPool as string[]));
         if (data.nominationOrder) setNominationOrderState(data.nominationOrder);
         toast('info', 'The auction has started!');
       });
@@ -753,9 +756,13 @@ export default function AuctionPage() {
   const isSnake = nominationMode === 'snake-random' || nominationMode === 'snake-defined';
 
   const soldOrPassedIds = new Set(soldLots.map(l => l.teamId));
-  const allAuctionTeams = [...teamMapRef.current.values()];
-  // For non-hidden modes, derive available teams from the actual queue (preset-filtered by backend)
-  // rather than all sport teams. For hidden mode, fall back to allAuctionTeams for display only.
+  // Filter to only teams in the draft pool when one is known (preset-curated by backend).
+  // Falls back to all sport teams if the pool hasn't arrived yet (e.g. on first render).
+  const allAuctionTeams = draftPool.size > 0
+    ? [...teamMapRef.current.values()].filter(t => draftPool.has(t.id))
+    : [...teamMapRef.current.values()];
+  // For non-hidden modes derive available teams from the remaining queue order.
+  // For hidden mode use the pool (order concealed) since the queue isn't sent.
   const availableTeams = nominationMode !== 'random-hidden'
     ? upcomingQueue
         .map(tid => teamMapRef.current.get(tid))
