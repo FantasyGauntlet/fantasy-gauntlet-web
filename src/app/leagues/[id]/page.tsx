@@ -84,7 +84,7 @@ interface WaiverClaim {
   leagueId: string;
   claimantUserId: string;
   claimantDisplayName: string;
-  dropTeamId: string;
+  dropTeamId: string | null;
   addTeamId: string;
   status: 'pending' | 'approved' | 'denied';
   claimantRank: number;
@@ -121,7 +121,7 @@ interface LeagueMessage {
 
 type TxEvent =
   | { type: 'trade'; id: string; date: string; proposerFantasyTeamId: string; receiverFantasyTeamId: string; offeredSportTeamIds: string[]; requestedSportTeamIds: string[]; }
-  | { type: 'waiver'; id: string; date: string; claimantUserId: string; claimantDisplayName: string; addTeamId: string; dropTeamId: string; };
+  | { type: 'waiver'; id: string; date: string; claimantUserId: string; claimantDisplayName: string; addTeamId: string; dropTeamId: string | null; };
 
 type Tab = 'standings' | 'roster' | 'waivers' | 'home' | 'history' | 'rules' | 'activity' | 'commissioner';
 const VALID_TABS: Tab[] = ['standings', 'roster', 'waivers', 'home', 'history', 'rules', 'activity', 'commissioner'];
@@ -1712,7 +1712,7 @@ function ClaimCard({
   onCancelDeny: () => void;
 }) {
   const { openProfile } = useTeamProfile();
-  const dropTeam = teamMap.get(claim.dropTeamId);
+  const dropTeam = claim.dropTeamId ? teamMap.get(claim.dropTeamId) ?? null : null;
   const addTeam  = teamMap.get(claim.addTeamId);
   const isReviewing = reviewing === claim.id;
   const isDenying   = denyingId === claim.id;
@@ -1736,24 +1736,31 @@ function ClaimCard({
 
           {/* Team transfer */}
           <div className="flex items-center gap-2">
-            <div
-              className={`flex-1 bg-danger-bg/40 border border-danger/15 rounded-xl px-3 py-2.5 ${dropTeam ? 'cursor-pointer hover:border-danger/40 transition-colors' : ''}`}
-              onClick={() => dropTeam && openProfile({ teamId: claim.dropTeamId, name: dropTeam.name, logoUrl: dropTeam.logoUrl, sportLeagueId: dropTeam.sportLeagueId, wins: dropTeam.wins, draws: dropTeam.draws, losses: dropTeam.losses, points: dropTeam.points })}
-            >
-              <p className="text-xs text-copy-3 mb-1">Drop</p>
-              <div className="flex items-center gap-2">
-                {dropTeam?.logoUrl && <img src={dropTeam.logoUrl} alt={dropTeam.name} className="w-6 h-6 object-contain flex-shrink-0" />}
-                <p className="font-semibold text-copy text-xs leading-snug">{dropTeam?.name ?? claim.dropTeamId}</p>
+            {claim.dropTeamId ? (
+              <div
+                className={`flex-1 bg-danger-bg/40 border border-danger/15 rounded-xl px-3 py-2.5 ${dropTeam ? 'cursor-pointer hover:border-danger/40 transition-colors' : ''}`}
+                onClick={() => dropTeam && openProfile({ teamId: claim.dropTeamId!, name: dropTeam.name, logoUrl: dropTeam.logoUrl, sportLeagueId: dropTeam.sportLeagueId, wins: dropTeam.wins, draws: dropTeam.draws, losses: dropTeam.losses, points: dropTeam.points })}
+              >
+                <p className="text-xs text-copy-3 mb-1">Drop</p>
+                <div className="flex items-center gap-2">
+                  {dropTeam?.logoUrl && <img src={dropTeam.logoUrl} alt={dropTeam.name} className="w-6 h-6 object-contain flex-shrink-0" />}
+                  <p className="font-semibold text-copy text-xs leading-snug">{dropTeam?.name ?? claim.dropTeamId}</p>
+                </div>
+                {dropTeam && (
+                  <>
+                    <p className="text-xs text-copy-3 mt-0.5">{formatLeagueName(dropTeam.sportLeagueId)}</p>
+                    <p className="text-xs text-copy-2 mt-0.5">
+                      {formatRecord(dropTeam.wins, dropTeam.draws, dropTeam.losses, dropTeam.sport)} · {dropTeam.points.toFixed(1)} pts
+                    </p>
+                  </>
+                )}
               </div>
-              {dropTeam && (
-                <>
-                  <p className="text-xs text-copy-3 mt-0.5">{formatLeagueName(dropTeam.sportLeagueId)}</p>
-                  <p className="text-xs text-copy-2 mt-0.5">
-                    {formatRecord(dropTeam.wins, dropTeam.draws, dropTeam.losses, dropTeam.sport)} · {dropTeam.points.toFixed(1)} pts
-                  </p>
-                </>
-              )}
-            </div>
+            ) : (
+              <div className="flex-1 bg-field border border-line/60 rounded-xl px-3 py-2.5">
+                <p className="text-xs text-copy-3 mb-1">Drop</p>
+                <p className="text-xs text-copy-3 italic">None — add only</p>
+              </div>
+            )}
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-copy-3 flex-shrink-0">
               <path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
@@ -2447,6 +2454,20 @@ function WaiversTab({
           ))}
         </div>
       </div>
+
+      {/* My pending claims — visible to the claimant */}
+      {!isCommissioner && userId && pending.filter(c => c.claimantUserId === userId).length > 0 && (
+        <div>
+          <p className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-2">
+            Your Pending Claims · {pending.filter(c => c.claimantUserId === userId).length}
+          </p>
+          <div className="space-y-2">
+            {pending.filter(c => c.claimantUserId === userId).map(c => (
+              <ClaimCard key={c.id} claim={c} {...claimCardProps} />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Pending claims — commissioner only */}
       {isCommissioner && pending.length > 0 && (
