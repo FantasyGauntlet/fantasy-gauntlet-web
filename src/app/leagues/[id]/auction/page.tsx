@@ -319,14 +319,12 @@ export default function AuctionPage() {
         // Reconstruct current lot if in-progress (auction mode only)
         if (session.currentLot && session.status === 'active') {
           const { teamId, currentBid, currentBidderId, timerRemaining } = session.currentLot;
-          // In random-hidden mode teamId may be null (concealed by the server)
-          const isHiddenLot = !teamId || session.nominationMode === 'random-hidden';
-          const info = (!isHiddenLot && teamId) ? teamInfo(teamId) : undefined;
+          const info = teamId ? teamInfo(teamId) : undefined;
           setCurrentLot({
             teamId: teamId ?? '',
-            teamName: isHiddenLot ? '???' : (info?.name ?? teamId ?? ''),
-            logoUrl: isHiddenLot ? null : (info?.logoUrl ?? null),
-            sportLeagueId: isHiddenLot ? '' : (info?.sportLeagueId ?? ''),
+            teamName: info?.name ?? teamId ?? '',
+            logoUrl: info?.logoUrl ?? null,
+            sportLeagueId: info?.sportLeagueId ?? '',
             currentBid,
             currentBidderId,
             totalSeconds: session.countdownSeconds ?? 30,
@@ -458,15 +456,13 @@ export default function AuctionPage() {
           clearTimeout(lotFlashTimerRef.current);
           lotFlashTimerRef.current = null;
         }
-        // data.teamId is null in random-hidden mode — identity is concealed until lot closes
-        const isHidden = data.teamId === null;
-        const info = !isHidden ? teamInfo(data.teamId) : undefined;
+        const info = teamInfo(data.teamId);
         const lotTimer = data.timerSeconds ?? 30;
         setCurrentLot({
           teamId: data.teamId ?? '',
-          teamName: isHidden ? '???' : (data.teamName ?? info?.name ?? data.teamId ?? ''),
-          logoUrl: isHidden ? null : (info?.logoUrl ?? null),
-          sportLeagueId: isHidden ? '' : (data.sportLeagueId ?? info?.sportLeagueId ?? ''),
+          teamName: data.teamName ?? info?.name ?? data.teamId ?? '',
+          logoUrl: info?.logoUrl ?? null,
+          sportLeagueId: data.sportLeagueId ?? info?.sportLeagueId ?? '',
           currentBid: data.openingBid ?? minOpeningBid,
           currentBidderId: null,
           totalSeconds: lotTimer,
