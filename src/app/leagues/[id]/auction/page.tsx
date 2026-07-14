@@ -169,6 +169,7 @@ export default function AuctionPage() {
   const [nominatorUserId, setNominatorUserId] = useState<string | null>(null);
   const [nominationOrderState, setNominationOrderState] = useState<string[]>([]);
   const [auctionErrorMsg, setAuctionErrorMsg] = useState('');
+  const [startingAuction, setStartingAuction] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const [bidFlash, setBidFlash] = useState(false);
   const [pendingBidAmt, setPendingBidAmt] = useState<number | null>(null);
@@ -698,11 +699,15 @@ export default function AuctionPage() {
   }
 
   async function handleStartAuction() {
+    if (startingAuction) return;
+    setStartingAuction(true);
     try {
       await api.post(`/leagues/${id}/auction/start`);
       toast('info', 'Auction started!');
     } catch (e: unknown) {
       toast('error', e instanceof Error ? e.message : 'Failed to start auction');
+    } finally {
+      setStartingAuction(false);
     }
   }
 
@@ -1088,11 +1093,11 @@ export default function AuctionPage() {
                   {status === 'waiting' && connected && league?.state === 'draft' && (
                     <button
                       onClick={handleStartAuction}
-                      disabled={!league.auctionConfig}
+                      disabled={!league.auctionConfig || startingAuction}
                       title={!league.auctionConfig ? 'Configure auction settings first' : undefined}
                       className="bg-brand hover:bg-brand-2 disabled:opacity-40 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors"
                     >
-                      {isSnake ? 'Start Draft' : 'Start Auction'}
+                      {startingAuction ? 'Starting…' : isSnake ? 'Start Draft' : 'Start Auction'}
                     </button>
                   )}
 
