@@ -334,6 +334,7 @@ export default function LeaguePage() {
           selectedSports={league.selectedSports}
           waiverType={league.waiverType ?? 'reserve-standings'}
           faabStartingBudget={league.faabStartingBudget ?? 1000}
+          rosterSize={league.selectedSports.length + (league.maxWildcard ?? 0)}
         />
       )}
       {tab === 'home' && (
@@ -1857,7 +1858,7 @@ function ClaimCard({
 }
 
 function WaiversTab({
-  leagueId, isCommissioner, userId, fantasyTeams, selectedSports, waiverType, faabStartingBudget,
+  leagueId, isCommissioner, userId, fantasyTeams, selectedSports, waiverType, faabStartingBudget, rosterSize,
 }: {
   leagueId: string;
   isCommissioner: boolean;
@@ -1866,6 +1867,7 @@ function WaiversTab({
   selectedSports: string[];
   waiverType: 'reserve-standings' | 'faab';
   faabStartingBudget: number;
+  rosterSize: number;
 }) {
   const [claims, setClaims] = useState<WaiverClaim[]>([]);
   const [pool, setPool] = useState<TeamWithRecord[]>([]);
@@ -1963,6 +1965,8 @@ function WaiversTab({
     [myTeam, comprehensiveTeamMap],
   );
 
+  const isUnderRosterSize = myRosterTeams.length < rosterSize;
+
   const formFilteredPool = useMemo(() => {
     if (!formSearch.trim()) return pool;
     const q = formSearch.trim().toLowerCase();
@@ -1986,10 +1990,12 @@ function WaiversTab({
   }
 
   async function submitClaim() {
-    if (!dropTeamId || !addTeamId) return;
+    if (!addTeamId) return;
+    if (!isUnderRosterSize && !dropTeamId) return;
     setSubmitting(true); setSubmitError('');
     try {
-      const body: Record<string, unknown> = { dropTeamId, addTeamId };
+      const body: Record<string, unknown> = { addTeamId };
+      if (dropTeamId) body.dropTeamId = dropTeamId;
       if (waiverType === 'faab') body.faabBid = faabBid;
       const claim = await api.post<WaiverClaim>(`/leagues/${leagueId}/waivers`, body);
       setClaims(c => [claim, ...c]);
@@ -2132,6 +2138,9 @@ function WaiversTab({
           <div>
             <p className="text-xs font-semibold text-copy-3 uppercase tracking-wider mb-2">
               1. Drop from your roster
+              {isUnderRosterSize && (
+                <span className="ml-1.5 normal-case font-normal text-copy-3">(optional — you have room)</span>
+              )}
             </p>
             {myRosterTeams.length === 0 ? (
               <p className="text-copy-3 text-xs py-2">You have no teams to drop.</p>
@@ -2267,9 +2276,13 @@ function WaiversTab({
           {/* Summary pill */}
           {(dropTeamId || addTeamId) && (
             <div className="bg-field rounded-xl px-4 py-2.5 text-xs flex items-center gap-2">
-              <span className={dropTeamId ? 'text-danger font-medium' : 'text-copy-3'}>
-                {dropTeamId ? (comprehensiveTeamMap.get(dropTeamId)?.name ?? dropTeamId) : 'Pick a team to drop'}
-              </span>
+              {isUnderRosterSize && !dropTeamId ? (
+                <span className="text-copy-3 italic">No drop needed</span>
+              ) : (
+                <span className={dropTeamId ? 'text-danger font-medium' : 'text-copy-3'}>
+                  {dropTeamId ? (comprehensiveTeamMap.get(dropTeamId)?.name ?? dropTeamId) : 'Pick a team to drop'}
+                </span>
+              )}
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-copy-3 flex-shrink-0">
                 <path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
@@ -2294,7 +2307,7 @@ function WaiversTab({
             </button>
             <button
               onClick={submitClaim}
-              disabled={!dropTeamId || !addTeamId || submitting}
+              disabled={submitting || !addTeamId || (!isUnderRosterSize && !dropTeamId)}
               className="flex-1 bg-brand hover:bg-brand-2 disabled:opacity-40 text-white text-sm font-semibold py-2.5 rounded-xl transition-colors"
             >
               {submitting ? 'Submitting...' : 'Submit Claim'}
