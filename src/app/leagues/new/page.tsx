@@ -16,10 +16,10 @@ const SPORT_ICONS: Record<string, string> = {
   soccer: '⚽',
 };
 
-// ESPN has no proper league logos for NCAA sports — use local SVG assets instead.
+// ESPN has no proper league logos for NCAA sports — use local image assets instead.
 const SPORT_LOGO_OVERRIDES: Record<string, string> = {
-  'ncaa-football':   '/ncaa-football.svg',
-  'ncaa-basketball': '/ncaa-basketball.svg',
+  'ncaa-football':   '/ncaa-football.jpg',
+  'ncaa-basketball': '/ncaa-basketball.png',
 };
 
 export default function NewLeaguePage() {
