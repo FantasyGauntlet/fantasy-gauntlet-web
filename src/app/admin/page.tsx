@@ -30,7 +30,9 @@ const SYNCS = [
   { key: 'records',      label: 'Sync Records',             endpoint: '/admin/ingestion/records' },
 ];
 
-type Tab = 'sync' | 'bonus' | 'scoring' | 'preset' | 'deadlines' | 'leagues' | 'elimination';
+type Tab = 'sync' | 'bonus' | 'scoring' | 'preset' | 'deadlines' | 'leagues' | 'elimination' | 'users';
+
+interface AdminUser { id: string; email: string; displayName: string; roles: string[]; isPremium: boolean; createdAt: string; }
 
 function Spinner({ size = 'sm' }: { size?: 'sm' | 'md' }) {
   const s = size === 'sm' ? 'w-4 h-4 border-[1.5px]' : 'w-6 h-6 border-2';
@@ -42,6 +44,20 @@ const inputCls = 'w-full bg-field border border-line-2 rounded-xl px-4 py-2.5 te
 export default function AdminPage() {
   const { user } = useAuth();
   const [tab, setTab] = useState<Tab>('sync');
+
+  // ── Users ─────────────────────────────────────────────────────────────────
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [userSearch, setUserSearch] = useState('');
+
+  async function loadUsers() {
+    setUsersLoading(true);
+    try { setUsers(await api.get<AdminUser[]>('/admin/users')); }
+    catch { setUsers([]); }
+    setUsersLoading(false);
+  }
+
+  useEffect(() => { if (tab === 'users') loadUsers(); }, [tab]);
 
   // ── Data Sync ──────────────────────────────────────────────────────────────
   const [results, setResults] = useState<Record<string, SyncResult>>({});
@@ -437,6 +453,7 @@ export default function AdminPage() {
     { key: 'deadlines',   label: 'Deadlines' },
     { key: 'leagues',     label: 'Leagues' },
     { key: 'elimination', label: 'Elimination' },
+    { key: 'users',       label: 'Users' },
   ];
 
   return (
@@ -1234,6 +1251,77 @@ export default function AdminPage() {
                 )}
               </div>
             )}
+          </div>
+        )}
+        {tab === 'users' && (
+          <div className="space-y-4">
+            {/* Stats */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-card border border-line rounded-2xl p-5">
+                <p className="text-xs text-copy-3 uppercase tracking-wider mb-1">Total Accounts</p>
+                <p className="text-3xl font-bold text-copy">{usersLoading ? '—' : users.length}</p>
+              </div>
+              <div className="bg-card border border-line rounded-2xl p-5">
+                <p className="text-xs text-copy-3 uppercase tracking-wider mb-1">Premium</p>
+                <p className="text-3xl font-bold text-copy">{usersLoading ? '—' : users.filter(u => u.isPremium).length}</p>
+              </div>
+            </div>
+
+            {/* User list */}
+            <div className="bg-card border border-line rounded-2xl p-5">
+              <div className="flex items-center justify-between mb-4 gap-3">
+                <h2 className="text-sm font-semibold text-copy whitespace-nowrap">All Users</h2>
+                <input
+                  type="text"
+                  placeholder="Search by name or email…"
+                  value={userSearch}
+                  onChange={e => setUserSearch(e.target.value)}
+                  className={inputCls}
+                  style={{ maxWidth: 260 }}
+                />
+                <button onClick={loadUsers} disabled={usersLoading} className="flex-shrink-0 bg-field hover:bg-field-2 border border-line text-copy-2 text-xs font-medium px-3 py-2 rounded-lg transition-colors disabled:opacity-50">
+                  {usersLoading ? <Spinner /> : 'Refresh'}
+                </button>
+              </div>
+
+              {usersLoading ? (
+                <div className="flex items-center gap-2 text-copy-3 text-sm py-4"><Spinner /> Loading…</div>
+              ) : users.length === 0 ? (
+                <p className="text-copy-3 text-sm py-4">No users found.</p>
+              ) : (() => {
+                const q = userSearch.toLowerCase();
+                const filtered = q ? users.filter(u => u.displayName?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q)) : users;
+                return (
+                  <div className="space-y-1.5">
+                    <p className="text-xs text-copy-3 mb-3">{filtered.length} of {users.length} accounts</p>
+                    {filtered.map(u => (
+                      <div key={u.id} className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl bg-field border border-line">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-8 h-8 rounded-full bg-brand/10 border border-brand/20 flex items-center justify-center flex-shrink-0">
+                            <span className="text-xs font-semibold text-brand">{(u.displayName || u.email || '?')[0].toUpperCase()}</span>
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-copy truncate">{u.displayName || '(no name)'}</p>
+                            <p className="text-xs text-copy-3 truncate">{u.email}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          {u.isPremium && (
+                            <span className="text-xs bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-full">Premium</span>
+                          )}
+                          {u.roles.includes('admin') && (
+                            <span className="text-xs bg-danger-bg text-danger border border-danger/20 px-1.5 py-0.5 rounded-full">Admin</span>
+                          )}
+                          <span className="text-xs text-copy-3 whitespace-nowrap">
+                            {u.createdAt ? new Date(u.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
           </div>
         )}
       </main>
