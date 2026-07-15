@@ -17,6 +17,7 @@ interface League {
   auctionConfig: {
     startingBudget: number; minOpeningBid: number; minBidIncrement: number;
     nominationMode: string; countdownSeconds: number; maxWildcard?: number;
+    scheduledStartAt?: string | null;
   } | null;
 }
 
@@ -169,6 +170,8 @@ export default function AuctionPage() {
   const [nominatorUserId, setNominatorUserId] = useState<string | null>(null);
   const [nominationOrderState, setNominationOrderState] = useState<string[]>([]);
   const [auctionErrorMsg, setAuctionErrorMsg] = useState('');
+  const [scheduledStartAt, setScheduledStartAt] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
   const [startingAuction, setStartingAuction] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const [bidFlash, setBidFlash] = useState(false);
@@ -244,6 +247,7 @@ export default function AuctionPage() {
       api.get<SportGroup[]>(`/leagues/${id}/sport-teams`),
     ]).then(([l, fts, groups]) => {
       setLeague(l);
+      setScheduledStartAt(l.auctionConfig?.scheduledStartAt ?? null);
       setFantasyTeams(fts);
       fantasyTeamsRef.current = fts;
       setNominationMode(l.auctionConfig?.nominationMode ?? 'random');
@@ -274,6 +278,7 @@ export default function AuctionPage() {
       socket.on('connect', () => setConnected(true));
       socket.on('disconnect', () => setConnected(false));
       socket.on('connect_error', () => { setConnected(false); setStatus('error'); });
+      socket.on('auction_scheduled', (data: any) => setScheduledStartAt(data?.scheduledStartAt ?? null));
 
       socket.on('auction_state', (data: any) => {
         const session = data?.session;
@@ -653,6 +658,13 @@ export default function AuctionPage() {
     return () => { socket?.disconnect(); socketRef.current = null; };
   }, [dataLoaded, user, id]);
 
+  // ── Clock tick (drives room-open gate and scheduled-start countdown) ───────
+  useEffect(() => {
+    if (!scheduledStartAt) return;
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [scheduledStartAt]);
+
   // ── Actions ───────────────────────────────────────────────────────────────
 
   function placeBid(amount: number) {
@@ -803,6 +815,23 @@ export default function AuctionPage() {
   // Set of IDs that should appear greyscale (sold/passed)
   const greyedIds = teamViewMode !== 'available' ? soldOrPassedIds : new Set<string>();
 
+  // Scheduled-start gating
+  const scheduledMs = scheduledStartAt ? new Date(scheduledStartAt).getTime() : null;
+  const roomOpenMs = scheduledMs ? scheduledMs - 60 * 60 * 1000 : null;
+  const roomIsOpen = !roomOpenMs || now >= roomOpenMs || league?.state === 'auction';
+  const msUntilStart = scheduledMs ? Math.max(0, scheduledMs - now) : null;
+  const msUntilOpen = roomOpenMs ? Math.max(0, roomOpenMs - now) : null;
+
+  function fmtCountdown(ms: number) {
+    const s = Math.floor(ms / 1000);
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    if (h > 0) return `${h}h ${String(m).padStart(2,'0')}m`;
+    if (m > 0) return `${m}m ${String(sec).padStart(2,'0')}s`;
+    return `${sec}s`;
+  }
+
   return (
     <div className="max-w-6xl mx-auto">
       <ToastStack toasts={toasts} />
@@ -827,15 +856,48 @@ export default function AuctionPage() {
         </div>
       </div>
 
+      {/* Room not yet open */}
+      {!roomIsOpen && (
+        <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
+          <div className="text-4xl font-bold text-copy tabular-nums">{msUntilOpen !== null ? fmtCountdown(msUntilOpen) : '—'}</div>
+          <p className="text-copy-2 font-medium">until the room opens</p>
+          <p className="text-xs text-copy-3">
+            Room opens at{' '}
+            <span className="text-copy font-medium">
+              {roomOpenMs ? new Date(roomOpenMs).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '—'}
+            </span>
+          </p>
+          <p className="text-xs text-copy-3 mt-2">
+            Draft starts at{' '}
+            <span className="text-copy font-medium">
+              {scheduledMs ? new Date(scheduledMs).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '—'}
+            </span>
+          </p>
+        </div>
+      )}
+
+      {/* Scheduled-start countdown banner (room open, waiting for auto-start) */}
+      {roomIsOpen && scheduledMs && msUntilStart !== null && msUntilStart > 0 && league?.state === 'draft' && (
+        <div className="bg-field border border-line rounded-2xl px-4 py-3 flex items-center justify-between mb-4">
+          <div>
+            <p className="text-sm font-semibold text-copy">Draft starts in <span className="text-brand tabular-nums">{fmtCountdown(msUntilStart)}</span></p>
+            <p className="text-xs text-copy-3 mt-0.5">
+              Scheduled for {new Date(scheduledMs).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
+            </p>
+          </div>
+          <div className="w-8 h-8 border-2 border-brand border-t-transparent rounded-full animate-spin flex-shrink-0" />
+        </div>
+      )}
+
       {/* Connecting / Error */}
-      {status === 'connecting' && (
+      {roomIsOpen && status === 'connecting' && (
         <div className="flex flex-col items-center justify-center py-24 gap-4 text-copy-2">
           <div className="w-10 h-10 border-2 border-brand border-t-transparent rounded-full animate-spin" />
           <p>Joining draft room…</p>
         </div>
       )}
 
-      {status === 'error' && (
+      {roomIsOpen && status === 'error' && (
         <div className="text-center py-24">
           <p className="text-danger text-lg font-semibold mb-2">Connection failed</p>
           <p className="text-copy-3 text-sm mb-6">Could not connect to the auction server.</p>
@@ -846,7 +908,7 @@ export default function AuctionPage() {
       )}
 
       {/* Active auction UI */}
-      {(status === 'waiting' || status === 'active' || status === 'closed') && (
+      {roomIsOpen && (status === 'waiting' || status === 'active' || status === 'closed') && (
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_272px] gap-4">
 
           {/* ── Left column ──────────────────────────────────────── */}

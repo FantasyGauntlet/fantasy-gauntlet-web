@@ -28,6 +28,7 @@ interface League {
     nominationMode: string;
     countdownSeconds: number;
     maxWildcard?: number;
+    scheduledStartAt?: string | null;
   } | null;
   previousLeagueId?: string;
   topZone?: number | null;
@@ -258,25 +259,38 @@ export default function LeaguePage() {
               </span>
             </div>
           </div>
-          <div className="flex gap-2 flex-wrap">
-            {league.state === 'auction' && (
-              <Link
-                href={`/leagues/${id}/auction`}
-                className="bg-info text-white font-semibold px-4 py-2 rounded-xl text-sm transition-colors hover:opacity-90"
-              >
-                Enter Draft Room
-              </Link>
+          <div className="flex flex-col items-end gap-2">
+            {league.state === 'draft' && league.auctionConfig?.scheduledStartAt && (
+              <div className="text-right">
+                <p className="text-xs text-copy-3">Draft scheduled for</p>
+                <p className="text-sm font-semibold text-copy">
+                  {new Date(league.auctionConfig.scheduledStartAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
+                </p>
+                {new Date(league.auctionConfig.scheduledStartAt).getTime() - Date.now() <= 60 * 60 * 1000 && (
+                  <Link href={`/leagues/${id}/auction`} className="text-xs text-brand underline">Room is open — join now</Link>
+                )}
+              </div>
             )}
-            {isCommissioner && league.state === 'draft' && (
-              <button
-                onClick={startAuction}
-                disabled={!league.auctionConfig}
-                title={!league.auctionConfig ? 'Set auction config in Settings first' : undefined}
-                className="bg-brand hover:bg-brand-2 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold px-4 py-2 rounded-xl text-sm transition-colors"
-              >
-                Start Draft
-              </button>
-            )}
+            <div className="flex gap-2 flex-wrap">
+              {league.state === 'auction' && (
+                <Link
+                  href={`/leagues/${id}/auction`}
+                  className="bg-info text-white font-semibold px-4 py-2 rounded-xl text-sm transition-colors hover:opacity-90"
+                >
+                  Enter Draft Room
+                </Link>
+              )}
+              {isCommissioner && league.state === 'draft' && (
+                <button
+                  onClick={startAuction}
+                  disabled={!league.auctionConfig}
+                  title={!league.auctionConfig ? 'Set auction config in Settings first' : undefined}
+                  className="bg-brand hover:bg-brand-2 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold px-4 py-2 rounded-xl text-sm transition-colors"
+                >
+                  Start Draft
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -3059,6 +3073,13 @@ function CommissionerTab({
   });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [scheduleInput, setScheduleInput] = useState(() => {
+    const s = league.auctionConfig?.scheduledStartAt;
+    if (!s) return '';
+    const d = new Date(s);
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}T${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  });
+  const [savingSchedule, setSavingSchedule] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteInput, setDeleteInput] = useState('');
   const [deleting, setDeleting] = useState(false);
@@ -3088,6 +3109,20 @@ function CommissionerTab({
       alert(err instanceof Error ? err.message : 'Failed to save');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function saveSchedule(clear = false) {
+    setSavingSchedule(true);
+    try {
+      const scheduledStartAt = clear ? null : (scheduleInput ? new Date(scheduleInput).toISOString() : null);
+      await api.patch(`/leagues/${leagueId}/auction/schedule`, { scheduledStartAt });
+      if (league) setLeague({ ...league, auctionConfig: league.auctionConfig ? { ...league.auctionConfig, scheduledStartAt } : league.auctionConfig });
+      if (clear) setScheduleInput('');
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Failed to save schedule');
+    } finally {
+      setSavingSchedule(false);
     }
   }
 
@@ -3415,6 +3450,44 @@ function CommissionerTab({
             {saving ? 'Saving...' : saved ? '✓ Saved' : 'Save Auction Settings'}
           </button>
         </form>
+      </div>
+
+      {/* Schedule */}
+      <div className="bg-card border border-line rounded-2xl p-5">
+        <h2 className="text-sm font-semibold text-copy mb-1">Schedule Draft</h2>
+        <p className="text-xs text-copy-3 mb-4">Set a date and time for the draft to auto-start. The room opens to members 1 hour beforehand.</p>
+        <div className="flex items-end gap-3 flex-wrap">
+          <div className="flex-1 min-w-[200px]">
+            <label className="block text-xs font-medium text-copy-2 mb-1.5">Date &amp; Time (local)</label>
+            <input
+              type="datetime-local"
+              value={scheduleInput}
+              onChange={e => setScheduleInput(e.target.value)}
+              className="w-full bg-field border border-line-2 rounded-xl px-3 py-2 text-sm text-copy focus:outline-none focus:border-brand transition-colors"
+            />
+          </div>
+          <button
+            onClick={() => saveSchedule(false)}
+            disabled={savingSchedule || !scheduleInput}
+            className="bg-brand hover:bg-brand-2 disabled:opacity-50 text-white font-semibold px-4 py-2.5 rounded-xl transition-colors text-sm whitespace-nowrap"
+          >
+            {savingSchedule ? 'Saving…' : 'Set Schedule'}
+          </button>
+          {league.auctionConfig?.scheduledStartAt && (
+            <button
+              onClick={() => saveSchedule(true)}
+              disabled={savingSchedule}
+              className="bg-field hover:bg-field-2 border border-line text-copy-2 font-medium px-4 py-2.5 rounded-xl transition-colors text-sm whitespace-nowrap"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+        {league.auctionConfig?.scheduledStartAt && (
+          <p className="text-xs text-copy-3 mt-3">
+            Scheduled: <span className="text-copy font-medium">{new Date(league.auctionConfig.scheduledStartAt).toLocaleString(undefined, { dateStyle: 'full', timeStyle: 'short' })}</span>
+          </p>
+        )}
       </div>
 
       {/* Danger Zone */}
