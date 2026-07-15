@@ -442,8 +442,12 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone, own
                   </td>
                   <td className="px-4 py-3.5">
                     <div className="flex items-center gap-2.5">
-                      {logoByUserId.get(s.userId) && (
+                      {logoByUserId.get(s.userId) ? (
                         <img src={logoByUserId.get(s.userId)!} alt={s.displayName} className="w-7 h-7 object-cover rounded-full flex-shrink-0" />
+                      ) : (
+                        <div className="w-7 h-7 rounded-full bg-field border border-line flex items-center justify-center flex-shrink-0">
+                          <span className="text-xs font-semibold text-copy-3">{s.displayName.charAt(0).toUpperCase()}</span>
+                        </div>
                       )}
                       <div>
                         <span className="text-sm font-medium text-copy">{s.displayName}</span>
