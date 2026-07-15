@@ -2491,36 +2491,40 @@ function WaiversTab({
                 </div>
               </div>
 
-              {/* Points + action */}
+              {/* Points + action — fixed widths so columns never shift */}
               <div className="flex items-center gap-3 flex-shrink-0">
-                {t.points > 0 && (
-                  <div className="text-right">
-                    <p className="text-sm font-bold text-copy tabular-nums">{t.points.toFixed(1)}</p>
-                    <p className="text-[10px] text-copy-3 leading-none">pts</p>
-                  </div>
-                )}
-                {t.isAvailable ? (
-                  canSubmit ? (
-                    <button
-                      onClick={e => { e.stopPropagation(); openAddForm(t.id); }}
-                      className="text-xs bg-brand hover:bg-brand-2 text-white px-3 py-1.5 rounded-lg font-medium transition-colors"
-                    >
-                      Add
-                    </button>
+                <div className="w-12 text-right">
+                  {t.points > 0 && (
+                    <>
+                      <p className="text-sm font-bold text-copy tabular-nums">{t.points.toFixed(1)}</p>
+                      <p className="text-[10px] text-copy-3 leading-none">pts</p>
+                    </>
+                  )}
+                </div>
+                <div className="w-10 flex items-center justify-center flex-shrink-0">
+                  {t.isAvailable ? (
+                    canSubmit ? (
+                      <button
+                        onClick={e => { e.stopPropagation(); openAddForm(t.id); }}
+                        className="text-xs bg-brand hover:bg-brand-2 text-white px-3 py-1.5 rounded-lg font-medium transition-colors"
+                      >
+                        Add
+                      </button>
+                    ) : (
+                      <span className="text-[11px] text-positive font-medium px-2 py-0.5 bg-positive-bg border border-positive/20 rounded-full">
+                        Free
+                      </span>
+                    )
                   ) : (
-                    <span className="text-[11px] text-positive font-medium px-2 py-0.5 bg-positive-bg border border-positive/20 rounded-full">
-                      Free
-                    </span>
-                  )
-                ) : (
-                  t.ownerLogoUrl ? (
-                    <img src={t.ownerLogoUrl} alt={t.ownerName ?? ''} className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
-                  ) : (
-                    <div className="w-7 h-7 rounded-full bg-field border border-line flex items-center justify-center flex-shrink-0" title={t.ownerName}>
-                      <span className="text-xs font-semibold text-copy-3">{(t.ownerName ?? '?')[0].toUpperCase()}</span>
-                    </div>
-                  )
-                )}
+                    t.ownerLogoUrl ? (
+                      <img src={t.ownerLogoUrl} alt={t.ownerName ?? ''} className="w-7 h-7 rounded-full object-cover" />
+                    ) : (
+                      <div className="w-7 h-7 rounded-full bg-field border border-line flex items-center justify-center" title={t.ownerName}>
+                        <span className="text-xs font-semibold text-copy-3">{(t.ownerName ?? '?')[0].toUpperCase()}</span>
+                      </div>
+                    )
+                  )}
+                </div>
               </div>
             </div>
           ))}
