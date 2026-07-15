@@ -2022,9 +2022,9 @@ function WaiversTab({
   }, [leagueId]);
 
   const ownerMap = useMemo(() => {
-    const m = new Map<string, string>();
+    const m = new Map<string, FantasyTeam>();
     for (const ft of fantasyTeams) {
-      for (const id of ft.ownedTeamIds) m.set(id, ft.displayName);
+      for (const id of ft.ownedTeamIds) m.set(id, ft);
     }
     return m;
   }, [fantasyTeams]);
@@ -2049,7 +2049,8 @@ function WaiversTab({
       losses: stats?.losses ?? 0, points: stats?.points ?? 0,
       sport: stats?.sport ?? t.sport,
       isAvailable: !ownerMap.has(t.id),
-      ownerName: ownerMap.get(t.id),
+      ownerName: ownerMap.get(t.id)?.displayName,
+      ownerLogoUrl: ownerMap.get(t.id)?.logoUrl ?? null,
     };
   }), [allLeagueTeams, comprehensiveTeamMap, ownerMap]);
 
@@ -2512,9 +2513,13 @@ function WaiversTab({
                     </span>
                   )
                 ) : (
-                  <span className="text-[11px] text-copy-3 max-w-[88px] truncate text-right leading-snug">
-                    {t.ownerName ?? 'Owned'}
-                  </span>
+                  t.ownerLogoUrl ? (
+                    <img src={t.ownerLogoUrl} alt={t.ownerName ?? ''} className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
+                  ) : (
+                    <div className="w-7 h-7 rounded-full bg-field border border-line flex items-center justify-center flex-shrink-0" title={t.ownerName}>
+                      <span className="text-xs font-semibold text-copy-3">{(t.ownerName ?? '?')[0].toUpperCase()}</span>
+                    </div>
+                  )
                 )}
               </div>
             </div>
