@@ -10,12 +10,6 @@ import { useTheme } from '@/context/ThemeContext';
 import { api } from '@/lib/api';
 import NotificationBell from './NotificationBell';
 
-const LEAGUE_MENU = [
-  { label: 'League Home', tab: 'home' },
-  { label: 'History',     tab: 'history' },
-  { label: 'Rules',       tab: 'rules' },
-  { label: 'Recent Activity', tab: 'activity' },
-];
 
 function SunIcon() {
   return (
@@ -132,32 +126,6 @@ export default function NavBar() {
                 );
               })}
 
-              {/* League hover menu */}
-              {leagueId && (
-                <div className="relative group">
-                  <button className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-1 ${
-                    leagueId ? 'bg-brand-dim text-brand' : 'text-copy-2 hover:text-copy hover:bg-field'
-                  }`}>
-                    League
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="6 9 12 15 18 9" />
-                    </svg>
-                  </button>
-                  <div className="absolute hidden group-hover:block left-0 top-full pt-1 z-50 min-w-[180px]">
-                    <div className="bg-card border border-line rounded-xl shadow-xl py-1 overflow-hidden">
-                      {LEAGUE_MENU.map(item => (
-                        <Link
-                          key={item.tab}
-                          href={`/leagues/${leagueId}?tab=${item.tab}`}
-                          className="flex items-center px-4 py-2.5 text-sm text-copy-2 hover:bg-field hover:text-copy transition-colors"
-                        >
-                          {item.label}
-                        </Link>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
             </nav>
           </div>
 
