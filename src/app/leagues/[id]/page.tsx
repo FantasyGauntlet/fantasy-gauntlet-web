@@ -2466,7 +2466,7 @@ function WaiversTab({
             <div
               key={t.id}
               className="flex items-center gap-3 px-4 py-3 hover:bg-field/40 transition-colors cursor-pointer"
-              onClick={() => openProfile({ teamId: t.id, name: t.name, logoUrl: t.logoUrl, sportLeagueId: t.sportLeagueId, wins: t.wins, draws: t.draws, losses: t.losses, points: t.points })}
+              onClick={() => openProfile({ teamId: t.id, name: t.name, logoUrl: t.logoUrl, sportLeagueId: t.sportLeagueId, wins: t.wins, draws: t.draws, losses: t.losses, points: t.points, ownerDisplayName: t.ownerName })}
             >
               {/* Logo */}
               <div className="w-9 h-9 flex-shrink-0 flex items-center justify-center">
