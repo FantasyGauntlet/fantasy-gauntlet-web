@@ -703,6 +703,8 @@ export default function AuctionPage() {
     setStartingAuction(true);
     try {
       await api.post(`/leagues/${id}/auction/start`);
+      // Mark league as in-auction locally so the Start button hides immediately
+      setLeague(l => l ? { ...l, state: 'auction' as const } : l);
       toast('info', 'Auction started!');
     } catch (e: unknown) {
       toast('error', e instanceof Error ? e.message : 'Failed to start auction');
