@@ -48,12 +48,14 @@ export default function AdminPage() {
   // ── Users ─────────────────────────────────────────────────────────────────
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
+  const [usersError, setUsersError] = useState<string | null>(null);
   const [userSearch, setUserSearch] = useState('');
 
   async function loadUsers() {
     setUsersLoading(true);
+    setUsersError(null);
     try { setUsers(await api.get<AdminUser[]>('/admin/users')); }
-    catch { setUsers([]); }
+    catch (e: unknown) { setUsersError(e instanceof Error ? e.message : String(e)); }
     setUsersLoading(false);
   }
 
@@ -1286,6 +1288,8 @@ export default function AdminPage() {
 
               {usersLoading ? (
                 <div className="flex items-center gap-2 text-copy-3 text-sm py-4"><Spinner /> Loading…</div>
+              ) : usersError ? (
+                <p className="text-danger text-sm py-4">Error: {usersError}</p>
               ) : users.length === 0 ? (
                 <p className="text-copy-3 text-sm py-4">No users found.</p>
               ) : (() => {
