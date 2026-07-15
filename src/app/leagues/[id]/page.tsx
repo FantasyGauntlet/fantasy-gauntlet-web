@@ -53,6 +53,7 @@ interface FantasyTeam {
   remainingBudget: number; totalPoints: number;
   faabRemaining?: number;
   coOwnerIds?: string[];
+  coOwnerDisplayNames?: string[];
 }
 
 interface SportTeam { id: string; name: string; shortName: string; sportLeagueId: string; logoUrl: string | null; }
@@ -382,7 +383,7 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone, own
   const { openProfile } = useTeamProfile();
 
   const logoByUserId = new Map(fantasyTeams.map(ft => [ft.userId, ft.logoUrl ?? null]));
-  const coOwnerIdsByUserId = new Map(fantasyTeams.map(ft => [ft.userId, ft.coOwnerIds ?? []]));
+  const coOwnerNamesByUserId = new Map(fantasyTeams.map(ft => [ft.userId, ft.coOwnerDisplayNames ?? []]));
 
   // Set of primary-owner userIds where the current user is owner or co-owner
   const myTeamOwnerIds = new Set(
@@ -448,8 +449,9 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone, own
                         <span className="text-sm font-medium text-copy">{s.displayName}</span>
                         {isMe && <span className="ml-2 text-xs text-brand font-medium">you</span>}
                         {(() => {
-                          const ownerIds = [s.userId, ...(coOwnerIdsByUserId.get(s.userId) ?? [])];
-                          const names = ownerIds.map(id => ownerNameByUserId[id]).filter(Boolean);
+                          const primary = ownerNameByUserId[s.userId];
+                          const coOwners = coOwnerNamesByUserId.get(s.userId) ?? [];
+                          const names = [primary, ...coOwners].filter(Boolean);
                           return names.length > 0 ? (
                             <p className="text-xs text-copy-3/70 mt-0.5">{names.join(' & ')}</p>
                           ) : null;
