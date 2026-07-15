@@ -2605,80 +2605,56 @@ function TransactionCounterTab({
 
   if (loading) return <div className="flex justify-center py-12"><Spinner /></div>;
 
-  return (
-    <div className="space-y-4">
-      {/* FAAB budgets */}
-      {waiverType === 'faab' && (
-        <div className="bg-card border border-line rounded-2xl overflow-hidden">
-          <div className="px-4 py-3 border-b border-line">
-            <p className="text-sm font-semibold text-copy">FAAB Budgets</p>
-            <p className="text-xs text-copy-3 mt-0.5">Starting budget: ${faabStartingBudget}</p>
-          </div>
-          <div className="divide-y divide-line/40">
-            {[...fantasyTeams]
-              .filter(ft => !ft.isPlaceholder)
-              .sort((a, b) => (b.faabRemaining ?? 0) - (a.faabRemaining ?? 0))
-              .map(ft => {
-                const remaining = ft.faabRemaining ?? 0;
-                const spent = faabStartingBudget - remaining;
-                const pct = faabStartingBudget > 0 ? (remaining / faabStartingBudget) * 100 : 0;
-                const isMe = ft.userId === userId || (ft.coOwnerIds ?? []).includes(userId ?? '');
-                return (
-                  <div key={ft.id} className={`px-4 py-3 ${isMe ? 'bg-brand-dim/30' : ''}`}>
-                    <div className="flex items-center gap-3 mb-1.5">
-                      <p className={`text-sm font-medium truncate flex-1 min-w-0 ${isMe ? 'text-brand' : 'text-copy'}`}>
-                        {ft.displayName}{isMe && <span className="text-copy-3 font-normal text-xs ml-1">(you)</span>}
-                      </p>
-                      <p className={`text-sm font-semibold tabular-nums flex-shrink-0 ${isMe ? 'text-brand' : 'text-copy'}`}>
-                        ${remaining}
-                        <span className="text-xs font-normal text-copy-3 ml-1">/ ${faabStartingBudget}</span>
-                      </p>
-                    </div>
-                    <div className="h-1.5 bg-field-2 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all ${isMe ? 'bg-brand' : 'bg-line-2'}`}
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                    <p className="text-xs text-copy-3 mt-1">${spent} spent</p>
-                  </div>
-                );
-              })}
-          </div>
-        </div>
-      )}
+  const isFaab = waiverType === 'faab';
 
-      {/* Waiver move counts */}
-      <div className="bg-card border border-line rounded-2xl overflow-hidden">
-        <div className="px-4 py-3 border-b border-line">
-          <p className="text-sm font-semibold text-copy">Waiver Moves</p>
-          <p className="text-xs text-copy-3 mt-0.5">{approvedClaims.length} total approved claims</p>
-        </div>
-        {rows.length === 0 ? (
-          <p className="text-copy-3 text-sm px-4 py-6 text-center">No approved waiver claims yet.</p>
-        ) : (
-          <div className="divide-y divide-line/40">
-            {rows.map(({ ft, moves, isMe }, i) => (
-              <div key={ft.id} className={`flex items-center gap-3 px-4 py-3 ${isMe ? 'bg-brand-dim/30' : ''}`}>
-                <span className="text-xs font-bold text-copy-3 w-5 text-right flex-shrink-0">#{i + 1}</span>
-                {ft.logoUrl ? (
-                  <img src={ft.logoUrl} alt={ft.displayName} className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
-                ) : (
-                  <div className="w-7 h-7 rounded-full bg-field border border-line flex items-center justify-center flex-shrink-0">
-                    <span className="text-xs font-semibold text-copy-3">{ft.displayName.charAt(0).toUpperCase()}</span>
-                  </div>
-                )}
-                <p className={`text-sm font-medium truncate flex-1 min-w-0 ${isMe ? 'text-brand' : 'text-copy'}`}>
-                  {ft.displayName}{isMe && <span className="text-copy-3 font-normal text-xs ml-1">(you)</span>}
-                </p>
-                <span className={`text-sm font-bold tabular-nums flex-shrink-0 ${moves > 0 ? 'text-copy' : 'text-copy-3'}`}>
-                  {moves} <span className="text-xs font-normal text-copy-3">move{moves !== 1 ? 's' : ''}</span>
+  return (
+    <div className="bg-card border border-line rounded-2xl overflow-hidden">
+      <table className="w-full">
+        <thead>
+          <tr className="border-b border-line bg-field/50">
+            <th className="text-left px-4 py-3 text-xs font-semibold text-copy-3 uppercase tracking-wider">Manager</th>
+            {isFaab && (
+              <th className="text-right px-4 py-3 text-xs font-semibold text-copy-3 uppercase tracking-wider">FAAB Left</th>
+            )}
+            <th className="text-right px-4 py-3 text-xs font-semibold text-copy-3 uppercase tracking-wider">Moves</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(({ ft, moves, isMe }) => (
+            <tr key={ft.id} className={`border-b border-line/40 ${isMe ? 'bg-brand-dim/30' : ''}`}>
+              <td className="px-4 py-3">
+                <div className="flex items-center gap-2.5">
+                  {ft.logoUrl ? (
+                    <img src={ft.logoUrl} alt={ft.displayName} className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
+                  ) : (
+                    <div className="w-7 h-7 rounded-full bg-field border border-line flex items-center justify-center flex-shrink-0">
+                      <span className="text-xs font-semibold text-copy-3">{ft.displayName.charAt(0).toUpperCase()}</span>
+                    </div>
+                  )}
+                  <span className={`text-sm font-medium ${isMe ? 'text-brand' : 'text-copy'}`}>
+                    {ft.displayName}{isMe && <span className="text-copy-3 font-normal text-xs ml-1">(you)</span>}
+                  </span>
+                </div>
+              </td>
+              {isFaab && (
+                <td className="px-4 py-3 text-right">
+                  <span className={`text-sm font-semibold tabular-nums ${isMe ? 'text-brand' : 'text-copy'}`}>
+                    ${ft.faabRemaining ?? 0}
+                  </span>
+                </td>
+              )}
+              <td className="px-4 py-3 text-right">
+                <span className={`text-sm font-semibold tabular-nums ${moves > 0 ? 'text-copy' : 'text-copy-3'}`}>
+                  {moves}
                 </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {rows.length === 0 && (
+        <p className="text-copy-3 text-sm px-4 py-6 text-center">No teams yet.</p>
+      )}
     </div>
   );
 }
