@@ -125,8 +125,8 @@ type TxEvent =
   | { type: 'trade'; id: string; date: string; proposerFantasyTeamId: string; receiverFantasyTeamId: string; offeredSportTeamIds: string[]; requestedSportTeamIds: string[]; }
   | { type: 'waiver'; id: string; date: string; claimantUserId: string; claimantDisplayName: string; addTeamId: string; dropTeamId: string | null; };
 
-type Tab = 'standings' | 'roster' | 'waivers' | 'home' | 'history' | 'rules' | 'activity' | 'commissioner';
-const VALID_TABS: Tab[] = ['standings', 'roster', 'waivers', 'home', 'history', 'rules', 'activity', 'commissioner'];
+type Tab = 'standings' | 'roster' | 'waivers' | 'transaction-counter' | 'auction-summary' | 'home' | 'history' | 'rules' | 'activity' | 'commissioner';
+const VALID_TABS: Tab[] = ['standings', 'roster', 'waivers', 'transaction-counter', 'auction-summary', 'home', 'history', 'rules', 'activity', 'commissioner'];
 
 const STATE_META: Record<string, { label: string; cls: string }> = {
   draft:     { label: 'Draft',     cls: 'bg-warn-bg text-warn border-warn/20' },
@@ -297,7 +297,7 @@ export default function LeaguePage() {
 
       {/* Tab bar */}
       <div className="flex gap-0.5 mb-6 border-b border-line">
-        {(['standings', 'roster', 'waivers'] as Tab[]).map(t => (
+        {(['standings', 'roster'] as Tab[]).map(t => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -307,9 +307,53 @@ export default function LeaguePage() {
                 : 'border-transparent text-copy-3 hover:text-copy-2 hover:border-line-2'
             }`}
           >
-            {t === 'waivers' ? 'Teams' : t.charAt(0).toUpperCase() + t.slice(1)}
+            {t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
         ))}
+
+        {/* Teams dropdown */}
+        {(() => {
+          const teamsSubTabs: { key: Tab; label: string }[] = [
+            { key: 'waivers', label: 'Waivers' },
+            { key: 'transaction-counter', label: 'Transaction Counter' },
+            { key: 'auction-summary', label: 'Auction Summary' },
+          ];
+          const isTeamsTab = teamsSubTabs.some(t => t.key === tab);
+          const activeTeamsLabel = teamsSubTabs.find(t => t.key === tab)?.label ?? 'Teams';
+          return (
+            <div className="relative group -mb-px">
+              <button
+                className={`px-4 py-2.5 text-sm font-medium transition-colors flex items-center gap-1 border-b-2 ${
+                  isTeamsTab
+                    ? 'border-brand text-brand'
+                    : 'border-transparent text-copy-3 hover:text-copy-2 hover:border-line-2'
+                }`}
+              >
+                {activeTeamsLabel}
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
+              <div className="absolute hidden group-hover:block left-0 top-full pt-1 z-50 min-w-[200px]">
+                <div className="bg-card border border-line rounded-xl shadow-xl py-1 overflow-hidden">
+                  {teamsSubTabs.map(t => (
+                    <button
+                      key={t.key}
+                      onClick={() => setTab(t.key)}
+                      className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
+                        tab === t.key
+                          ? 'bg-brand-dim text-brand font-medium'
+                          : 'text-copy-2 hover:bg-field hover:text-copy'
+                      }`}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* League dropdown tab */}
         <div className="relative group -mb-px">
@@ -367,6 +411,21 @@ export default function LeaguePage() {
           waiverType={league.waiverType ?? 'reserve-standings'}
           faabStartingBudget={league.faabStartingBudget ?? 100}
           rosterSize={league.selectedSports.length + (league.maxWildcard ?? 0)}
+        />
+      )}
+      {tab === 'transaction-counter' && (
+        <TransactionCounterTab
+          leagueId={id}
+          fantasyTeams={fantasyTeams}
+          waiverType={league.waiverType ?? 'reserve-standings'}
+          faabStartingBudget={league.faabStartingBudget ?? 100}
+          userId={user?.uid}
+        />
+      )}
+      {tab === 'auction-summary' && (
+        <AuctionSummaryTab
+          leagueId={id}
+          fantasyTeams={fantasyTeams}
         />
       )}
       {tab === 'home' && (
@@ -2108,12 +2167,7 @@ function WaiversTab({
       {/* Header */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <h2 className="text-sm font-semibold text-copy">Teams</h2>
-          {waiverType === 'faab' && myTeam && (
-            <p className="text-xs text-copy-3 mt-0.5">
-              FAAB remaining: <span className="font-semibold text-copy">${myTeam.faabRemaining ?? 0}</span>
-            </p>
-          )}
+          <h2 className="text-sm font-semibold text-copy">Waivers</h2>
         </div>
         <div className="flex items-center gap-2">
           {isCommissioner && pending.length > 0 && (
@@ -2139,34 +2193,6 @@ function WaiversTab({
       {submitSuccess && (
         <div className="bg-positive-bg border border-positive/20 rounded-xl px-4 py-3">
           <p className="text-positive text-sm">{submitSuccess}</p>
-        </div>
-      )}
-
-      {/* FAAB budget leaderboard */}
-      {waiverType === 'faab' && (
-        <div className="bg-card border border-line rounded-2xl overflow-hidden">
-          <div className="px-4 py-3 border-b border-line">
-            <p className="text-xs font-semibold text-copy-3 uppercase tracking-wider">FAAB Budgets</p>
-          </div>
-          <div className="divide-y divide-line/40">
-            {[...fantasyTeams]
-              .filter(ft => !ft.isPlaceholder)
-              .sort((a, b) => (b.faabRemaining ?? 0) - (a.faabRemaining ?? 0))
-              .map(ft => {
-                const remaining = ft.faabRemaining ?? 0;
-                const isMe = ft.userId === userId || (ft.coOwnerIds ?? []).includes(userId ?? '');
-                return (
-                  <div key={ft.id} className={`flex items-center gap-3 px-4 py-2.5 ${isMe ? 'bg-brand-dim/30' : ''}`}>
-                    <p className={`text-xs font-medium truncate flex-1 min-w-0 ${isMe ? 'text-brand' : 'text-copy'}`}>
-                      {ft.displayName}{isMe && <span className="text-copy-3 font-normal ml-1">(you)</span>}
-                    </p>
-                    <p className={`text-xs font-semibold tabular-nums flex-shrink-0 ${isMe ? 'text-brand' : 'text-copy'}`}>
-                      ${remaining}
-                    </p>
-                  </div>
-                );
-              })}
-          </div>
         </div>
       )}
 
@@ -2538,6 +2564,249 @@ function WaiversTab({
           <p className="text-copy-3 text-sm">No waiver claims yet.</p>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Transaction Counter Tab ──────────────────────────────────────────────────
+
+function TransactionCounterTab({
+  leagueId, fantasyTeams, waiverType, faabStartingBudget, userId,
+}: {
+  leagueId: string;
+  fantasyTeams: FantasyTeam[];
+  waiverType: 'reserve-standings' | 'faab';
+  faabStartingBudget: number;
+  userId?: string;
+}) {
+  const [claims, setClaims] = useState<WaiverClaim[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.get<WaiverClaim[]>(`/leagues/${leagueId}/waivers`)
+      .then(setClaims).catch(() => {}).finally(() => setLoading(false));
+  }, [leagueId]);
+
+  const approvedClaims = claims.filter((c: WaiverClaim) => c.status === 'approved');
+
+  const moveCounts = new Map<string, number>();
+  for (const c of approvedClaims) {
+    moveCounts.set(c.claimantUserId, (moveCounts.get(c.claimantUserId) ?? 0) + 1);
+  }
+
+  const rows = [...fantasyTeams]
+    .filter(ft => !ft.isPlaceholder)
+    .map(ft => ({
+      ft,
+      moves: moveCounts.get(ft.userId) ?? 0,
+      isMe: ft.userId === userId || (ft.coOwnerIds ?? []).includes(userId ?? ''),
+    }))
+    .sort((a, b) => b.moves - a.moves);
+
+  if (loading) return <div className="flex justify-center py-12"><Spinner /></div>;
+
+  return (
+    <div className="space-y-4">
+      {/* FAAB budgets */}
+      {waiverType === 'faab' && (
+        <div className="bg-card border border-line rounded-2xl overflow-hidden">
+          <div className="px-4 py-3 border-b border-line">
+            <p className="text-sm font-semibold text-copy">FAAB Budgets</p>
+            <p className="text-xs text-copy-3 mt-0.5">Starting budget: ${faabStartingBudget}</p>
+          </div>
+          <div className="divide-y divide-line/40">
+            {[...fantasyTeams]
+              .filter(ft => !ft.isPlaceholder)
+              .sort((a, b) => (b.faabRemaining ?? 0) - (a.faabRemaining ?? 0))
+              .map(ft => {
+                const remaining = ft.faabRemaining ?? 0;
+                const spent = faabStartingBudget - remaining;
+                const pct = faabStartingBudget > 0 ? (remaining / faabStartingBudget) * 100 : 0;
+                const isMe = ft.userId === userId || (ft.coOwnerIds ?? []).includes(userId ?? '');
+                return (
+                  <div key={ft.id} className={`px-4 py-3 ${isMe ? 'bg-brand-dim/30' : ''}`}>
+                    <div className="flex items-center gap-3 mb-1.5">
+                      <p className={`text-sm font-medium truncate flex-1 min-w-0 ${isMe ? 'text-brand' : 'text-copy'}`}>
+                        {ft.displayName}{isMe && <span className="text-copy-3 font-normal text-xs ml-1">(you)</span>}
+                      </p>
+                      <p className={`text-sm font-semibold tabular-nums flex-shrink-0 ${isMe ? 'text-brand' : 'text-copy'}`}>
+                        ${remaining}
+                        <span className="text-xs font-normal text-copy-3 ml-1">/ ${faabStartingBudget}</span>
+                      </p>
+                    </div>
+                    <div className="h-1.5 bg-field-2 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${isMe ? 'bg-brand' : 'bg-line-2'}`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-copy-3 mt-1">${spent} spent</p>
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+      )}
+
+      {/* Waiver move counts */}
+      <div className="bg-card border border-line rounded-2xl overflow-hidden">
+        <div className="px-4 py-3 border-b border-line">
+          <p className="text-sm font-semibold text-copy">Waiver Moves</p>
+          <p className="text-xs text-copy-3 mt-0.5">{approvedClaims.length} total approved claims</p>
+        </div>
+        {rows.length === 0 ? (
+          <p className="text-copy-3 text-sm px-4 py-6 text-center">No approved waiver claims yet.</p>
+        ) : (
+          <div className="divide-y divide-line/40">
+            {rows.map(({ ft, moves, isMe }, i) => (
+              <div key={ft.id} className={`flex items-center gap-3 px-4 py-3 ${isMe ? 'bg-brand-dim/30' : ''}`}>
+                <span className="text-xs font-bold text-copy-3 w-5 text-right flex-shrink-0">#{i + 1}</span>
+                {ft.logoUrl ? (
+                  <img src={ft.logoUrl} alt={ft.displayName} className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
+                ) : (
+                  <div className="w-7 h-7 rounded-full bg-field border border-line flex items-center justify-center flex-shrink-0">
+                    <span className="text-xs font-semibold text-copy-3">{ft.displayName.charAt(0).toUpperCase()}</span>
+                  </div>
+                )}
+                <p className={`text-sm font-medium truncate flex-1 min-w-0 ${isMe ? 'text-brand' : 'text-copy'}`}>
+                  {ft.displayName}{isMe && <span className="text-copy-3 font-normal text-xs ml-1">(you)</span>}
+                </p>
+                <span className={`text-sm font-bold tabular-nums flex-shrink-0 ${moves > 0 ? 'text-copy' : 'text-copy-3'}`}>
+                  {moves} <span className="text-xs font-normal text-copy-3">move{moves !== 1 ? 's' : ''}</span>
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Auction Summary Tab ───────────────────────────────────────────────────────
+
+interface AuctionResultDoc {
+  id: string;
+  leagueId: string;
+  completedAt: string;
+  lots: { teamId: string; winnerId: string | null; winningBid: number; passed: boolean }[];
+}
+
+function AuctionSummaryTab({
+  leagueId, fantasyTeams,
+}: {
+  leagueId: string;
+  fantasyTeams: FantasyTeam[];
+}) {
+  const [result, setResult] = useState<AuctionResultDoc | null>(null);
+  const [sportTeams, setSportTeams] = useState<Map<string, SportTeam>>(new Map());
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      api.get<AuctionResultDoc | null>(`/leagues/${leagueId}/auction/results`).catch(() => null),
+      api.get<SportGroup[]>(`/leagues/${leagueId}/sport-teams`).catch(() => [] as SportGroup[]),
+    ]).then(([res, groups]) => {
+      setResult(res);
+      const map = new Map<string, SportTeam>();
+      for (const g of groups) for (const t of g.teams) map.set(t.id, t);
+      setSportTeams(map);
+    }).finally(() => setLoading(false));
+  }, [leagueId]);
+
+  const ownerByUserId = new Map(fantasyTeams.map(ft => [ft.userId, ft.displayName]));
+
+  if (loading) return <div className="flex justify-center py-12"><Spinner /></div>;
+
+  if (!result) {
+    return (
+      <div className="text-center py-16 border border-dashed border-line rounded-2xl">
+        <p className="text-copy-3 text-sm">No auction results yet — the summary appears once the draft is complete.</p>
+      </div>
+    );
+  }
+
+  const sold = result.lots.filter(l => !l.passed && l.winnerId);
+  const passed = result.lots.filter(l => l.passed);
+  const totalSpent = sold.reduce((s, l) => s + l.winningBid, 0);
+
+  return (
+    <div className="space-y-4">
+      {/* Stats row */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="bg-card border border-line rounded-2xl p-4">
+          <p className="text-xs text-copy-3 uppercase tracking-wider mb-1">Teams Sold</p>
+          <p className="text-2xl font-bold text-copy">{sold.length}</p>
+        </div>
+        <div className="bg-card border border-line rounded-2xl p-4">
+          <p className="text-xs text-copy-3 uppercase tracking-wider mb-1">Total Spent</p>
+          <p className="text-2xl font-bold text-copy">${totalSpent}</p>
+        </div>
+        <div className="bg-card border border-line rounded-2xl p-4">
+          <p className="text-xs text-copy-3 uppercase tracking-wider mb-1">Passed</p>
+          <p className="text-2xl font-bold text-copy">{passed.length}</p>
+        </div>
+      </div>
+
+      {/* Results by owner */}
+      <div className="bg-card border border-line rounded-2xl overflow-hidden">
+        <div className="px-4 py-3 border-b border-line flex items-center justify-between">
+          <p className="text-sm font-semibold text-copy">Auction Results</p>
+          <p className="text-xs text-copy-3">
+            {new Date(result.completedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+          </p>
+        </div>
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-line bg-field/50">
+              <th className="text-left px-4 py-2.5 text-xs font-semibold text-copy-3 uppercase tracking-wider">Team</th>
+              <th className="text-left px-4 py-2.5 text-xs font-semibold text-copy-3 uppercase tracking-wider hidden sm:table-cell">Sport</th>
+              <th className="text-left px-4 py-2.5 text-xs font-semibold text-copy-3 uppercase tracking-wider">Owner</th>
+              <th className="text-right px-4 py-2.5 text-xs font-semibold text-copy-3 uppercase tracking-wider">Bid</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[...sold]
+              .sort((a, b) => b.winningBid - a.winningBid)
+              .map(lot => {
+                const st = sportTeams.get(lot.teamId);
+                const ownerName = lot.winnerId ? (ownerByUserId.get(lot.winnerId) ?? 'Unknown') : '—';
+                return (
+                  <tr key={lot.teamId} className="border-b border-line/40 hover:bg-field/30 transition-colors">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2.5">
+                        {st?.logoUrl ? (
+                          <img src={st.logoUrl} alt={st.name} className="w-7 h-7 object-contain flex-shrink-0" />
+                        ) : (
+                          <div className="w-7 h-7 rounded-lg bg-field-2 border border-line flex items-center justify-center flex-shrink-0">
+                            <span className="text-[10px] font-bold text-copy-3">{(st?.name ?? '?').slice(0, 2).toUpperCase()}</span>
+                          </div>
+                        )}
+                        <span className="text-sm font-medium text-copy">{st?.name ?? lot.teamId}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 hidden sm:table-cell">
+                      <span className="text-xs text-copy-3">{st ? formatLeagueName(st.sportLeagueId) : '—'}</span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="text-sm text-copy-2">{ownerName}</span>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <span className="text-sm font-bold text-copy">${lot.winningBid}</span>
+                    </td>
+                  </tr>
+                );
+              })}
+          </tbody>
+        </table>
+        {passed.length > 0 && (
+          <div className="px-4 py-3 border-t border-line/50 bg-field/20">
+            <p className="text-xs text-copy-3">
+              {passed.length} team{passed.length !== 1 ? 's' : ''} passed (no bids): {passed.map(l => sportTeams.get(l.teamId)?.name ?? l.teamId).join(', ')}
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
