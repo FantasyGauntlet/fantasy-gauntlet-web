@@ -382,6 +382,7 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone, own
   const { openProfile } = useTeamProfile();
 
   const logoByUserId = new Map(fantasyTeams.map(ft => [ft.userId, ft.logoUrl ?? null]));
+  const coOwnerIdsByUserId = new Map(fantasyTeams.map(ft => [ft.userId, ft.coOwnerIds ?? []]));
 
   // Set of primary-owner userIds where the current user is owner or co-owner
   const myTeamOwnerIds = new Set(
@@ -446,9 +447,13 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone, own
                       <div>
                         <span className="text-sm font-medium text-copy">{s.displayName}</span>
                         {isMe && <span className="ml-2 text-xs text-brand font-medium">you</span>}
-                        {ownerNameByUserId[s.userId] && (
-                          <p className="text-xs text-copy-3/70 mt-0.5">{ownerNameByUserId[s.userId]}</p>
-                        )}
+                        {(() => {
+                          const ownerIds = [s.userId, ...(coOwnerIdsByUserId.get(s.userId) ?? [])];
+                          const names = ownerIds.map(id => ownerNameByUserId[id]).filter(Boolean);
+                          return names.length > 0 ? (
+                            <p className="text-xs text-copy-3/70 mt-0.5">{names.join(' & ')}</p>
+                          ) : null;
+                        })()}
                       </div>
                     </div>
                   </td>
