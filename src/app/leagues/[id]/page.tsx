@@ -3352,6 +3352,11 @@ function CommissionerTab({
   const [leagueName, setLeagueName] = useState(league.name ?? '');
   const [leagueNameSaving, setLeagueNameSaving] = useState(false);
 
+  const [leagueWaiverType, setLeagueWaiverType] = useState<'reserve-standings' | 'faab'>(league.waiverType ?? 'reserve-standings');
+  const [leagueFaabBudget, setLeagueFaabBudget] = useState(league.faabStartingBudget ?? 100);
+  const [leagueSports, setLeagueSports] = useState<string[]>(league.selectedSports ?? []);
+  const [leagueSettingsSaving, setLeagueSettingsSaving] = useState(false);
+
   const inputCls = 'w-full bg-field border border-line-2 rounded-xl px-4 py-2.5 text-copy text-sm focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors';
 
   async function saveAuctionConfig(e: React.FormEvent) {
@@ -3422,6 +3427,23 @@ function CommissionerTab({
     }
   }
 
+  async function saveLeagueSettings() {
+    setLeagueSettingsSaving(true);
+    try {
+      const body: Record<string, unknown> = {
+        waiverType: leagueWaiverType,
+        selectedSports: leagueSports,
+      };
+      if (leagueWaiverType === 'faab') body.faabStartingBudget = leagueFaabBudget;
+      const updated = await api.patch<League>(`/leagues/${leagueId}/settings`, body);
+      setLeague(updated);
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Failed to save league settings');
+    } finally {
+      setLeagueSettingsSaving(false);
+    }
+  }
+
   async function saveLeagueName() {
     const trimmed = leagueName.trim();
     if (!trimmed) return;
@@ -3471,6 +3493,110 @@ function CommissionerTab({
           >
             {leagueNameSaving ? 'Saving…' : 'Save'}
           </button>
+        </div>
+      </div>
+
+      {/* League settings — waiver type, FAAB budget, sports (draft-only) */}
+      <div className="bg-card border border-line rounded-2xl p-5">
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div>
+            <h2 className="text-sm font-semibold text-copy">League Settings</h2>
+            <p className="text-xs text-copy-3 mt-0.5">
+              {league.state === 'draft'
+                ? 'Locked once the draft begins.'
+                : 'Locked — draft has started.'}
+            </p>
+          </div>
+          <button
+            onClick={saveLeagueSettings}
+            disabled={leagueSettingsSaving || league.state !== 'draft' || leagueSports.length === 0}
+            className="flex-shrink-0 bg-brand hover:bg-brand-2 disabled:opacity-40 text-white text-xs font-semibold px-3 py-2 rounded-xl transition-colors whitespace-nowrap"
+          >
+            {leagueSettingsSaving ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+        <div className="space-y-4">
+          {/* Waiver type */}
+          <div>
+            <p className="text-xs font-medium text-copy-2 mb-2">Waiver Type</p>
+            <div className="flex gap-2">
+              {(['reserve-standings', 'faab'] as const).map(type => (
+                <button
+                  key={type}
+                  onClick={() => setLeagueWaiverType(type)}
+                  disabled={league.state !== 'draft'}
+                  className={`flex-1 py-2 rounded-xl border text-xs font-semibold transition-colors disabled:opacity-50 ${
+                    leagueWaiverType === type
+                      ? 'bg-brand text-white border-brand'
+                      : 'bg-field border-line text-copy-2 hover:border-brand hover:text-brand'
+                  }`}
+                >
+                  {type === 'faab' ? 'FAAB' : 'Standard (Standings)'}
+                </button>
+              ))}
+            </div>
+          </div>
+          {/* FAAB budget */}
+          {leagueWaiverType === 'faab' && (
+            <div>
+              <label className="block text-xs font-medium text-copy-2 mb-1.5">Starting FAAB Budget</label>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-copy-3">$</span>
+                <input
+                  type="number"
+                  min={1}
+                  value={leagueFaabBudget}
+                  disabled={league.state !== 'draft'}
+                  onChange={e => setLeagueFaabBudget(Math.max(1, Number(e.target.value)))}
+                  className="w-28 bg-field border border-line-2 rounded-xl px-3 py-2 text-sm text-copy focus:outline-none focus:border-brand disabled:opacity-50 transition-colors"
+                />
+              </div>
+            </div>
+          )}
+          {/* Sports */}
+          <div>
+            <p className="text-xs font-medium text-copy-2 mb-2">Sports</p>
+            <div className="grid grid-cols-2 gap-1.5">
+              {[
+                { key: 'nhl',             label: 'NHL' },
+                { key: 'nba',             label: 'NBA' },
+                { key: 'nfl',             label: 'NFL' },
+                { key: 'mlb',             label: 'MLB' },
+                { key: 'premier-league',  label: 'Premier League' },
+                { key: 'ucl',             label: 'UCL' },
+                { key: 'ncaa-football',   label: 'NCAA Football' },
+                { key: 'ncaa-basketball', label: 'NCAA Basketball' },
+                { key: 'world-cup',       label: 'World Cup' },
+              ].map(({ key, label }) => {
+                const checked = leagueSports.includes(key);
+                return (
+                  <label
+                    key={key}
+                    className={`flex items-center gap-2.5 px-3 py-2 rounded-xl border select-none transition-colors ${
+                      checked ? 'bg-brand-dim border-brand/30' : 'bg-field border-line'
+                    } ${league.state !== 'draft' ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      disabled={league.state !== 'draft'}
+                      onChange={() => {
+                        if (league.state !== 'draft') return;
+                        setLeagueSports(prev =>
+                          prev.includes(key) ? prev.filter(s => s !== key) : [...prev, key],
+                        );
+                      }}
+                      className="w-3.5 h-3.5 accent-brand"
+                    />
+                    <span className="text-xs font-medium text-copy">{label}</span>
+                  </label>
+                );
+              })}
+            </div>
+            {leagueSports.length === 0 && (
+              <p className="text-xs text-danger mt-2">Select at least one sport.</p>
+            )}
+          </div>
         </div>
       </div>
 
