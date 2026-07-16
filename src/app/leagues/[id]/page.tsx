@@ -3349,6 +3349,9 @@ function CommissionerTab({
   const [waiverHour, setWaiverHour] = useState(league.waiverSettings?.processingHour ?? 17);
   const [waiverSettingsSaving, setWaiverSettingsSaving] = useState(false);
 
+  const [leagueName, setLeagueName] = useState(league.name ?? '');
+  const [leagueNameSaving, setLeagueNameSaving] = useState(false);
+
   const inputCls = 'w-full bg-field border border-line-2 rounded-xl px-4 py-2.5 text-copy text-sm focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors';
 
   async function saveAuctionConfig(e: React.FormEvent) {
@@ -3419,6 +3422,20 @@ function CommissionerTab({
     }
   }
 
+  async function saveLeagueName() {
+    const trimmed = leagueName.trim();
+    if (!trimmed) return;
+    setLeagueNameSaving(true);
+    try {
+      const updated = await api.patch<League>(`/leagues/${leagueId}/settings`, { name: trimmed });
+      setLeague(updated);
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Failed to save league name');
+    } finally {
+      setLeagueNameSaving(false);
+    }
+  }
+
   async function saveWaiverSettings() {
     setWaiverSettingsSaving(true);
     try {
@@ -3436,6 +3453,27 @@ function CommissionerTab({
 
   return (
     <div className="space-y-4">
+      {/* League name */}
+      <div className="bg-card border border-line rounded-2xl p-5">
+        <h2 className="text-sm font-semibold text-copy mb-4">League Name</h2>
+        <div className="flex gap-2">
+          <input
+            value={leagueName}
+            onChange={e => setLeagueName(e.target.value)}
+            placeholder="League name"
+            className={inputCls}
+            onKeyDown={e => e.key === 'Enter' && saveLeagueName()}
+          />
+          <button
+            onClick={saveLeagueName}
+            disabled={leagueNameSaving || !leagueName.trim() || leagueName.trim() === league.name}
+            className="flex-shrink-0 bg-brand hover:bg-brand-2 disabled:opacity-40 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors"
+          >
+            {leagueNameSaving ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+      </div>
+
       {/* Delete modal */}
       {showDeleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
