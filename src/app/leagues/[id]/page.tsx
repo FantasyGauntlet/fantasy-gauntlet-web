@@ -3923,12 +3923,15 @@ function RulesTab({ league }: { league: League }) {
           <section>
             <h3 className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-3">Scoring Breakdown</h3>
             <div className="overflow-x-auto rounded-xl border border-line">
-              <table className="w-full text-sm min-w-max">
+              <table
+                className="w-full table-fixed text-sm"
+                style={{ minWidth: `${180 + league.seasonRefs.length * 88}px` }}
+              >
                 <thead>
                   <tr className="bg-field/60 border-b border-line">
-                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-copy-3 min-w-[140px]"></th>
+                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-copy-3 w-[180px]"></th>
                     {league.seasonRefs.map(ref => (
-                      <th key={ref.sportLeagueId} className="text-center px-4 py-2.5 text-xs font-semibold text-copy-3 whitespace-nowrap">
+                      <th key={ref.sportLeagueId} className="text-center px-3 py-2.5 text-xs font-semibold text-copy-3 leading-snug">
                         {formatLeagueName(ref.sportLeagueId)}
                       </th>
                     ))}
@@ -3943,7 +3946,7 @@ function RulesTab({ league }: { league: League }) {
                   <tr className="border-t border-line/50">
                     <td className="px-4 py-2.5 font-medium text-copy">Win</td>
                     {league.seasonRefs.map(ref => (
-                      <td key={ref.sportLeagueId} className="px-4 py-2.5 text-center text-copy-2">
+                      <td key={ref.sportLeagueId} className="px-3 py-2.5 text-center tabular-nums text-copy-2">
                         {ref.winValue.toFixed(1)}
                       </td>
                     ))}
@@ -3951,7 +3954,7 @@ function RulesTab({ league }: { league: League }) {
                   <tr className="border-t border-line/50">
                     <td className="px-4 py-2.5 font-medium text-copy">Draw / OT Loss</td>
                     {league.seasonRefs.map(ref => (
-                      <td key={ref.sportLeagueId} className="px-4 py-2.5 text-center text-copy-2">
+                      <td key={ref.sportLeagueId} className="px-3 py-2.5 text-center tabular-nums text-copy-2">
                         {(ref.drawValue ?? 0).toFixed(1)}
                       </td>
                     ))}
@@ -3971,7 +3974,7 @@ function RulesTab({ league }: { league: League }) {
                     <tr key={label} className={`border-t border-line/50${i === 3 ? ' font-semibold' : ''}`}>
                       <td className={`px-4 py-2.5 text-copy ${i === 3 ? 'font-semibold' : 'font-medium'}`}>{label}</td>
                       {league.seasonRefs.map(ref => (
-                        <td key={ref.sportLeagueId} className={`px-4 py-2.5 text-center ${i === 3 ? 'text-copy font-semibold' : 'text-copy-2'}`}>
+                        <td key={ref.sportLeagueId} className={`px-3 py-2.5 text-center tabular-nums ${i === 3 ? 'text-copy font-semibold' : 'text-copy-2'}`}>
                           {pts}
                         </td>
                       ))}
