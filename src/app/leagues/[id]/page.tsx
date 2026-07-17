@@ -2819,6 +2819,8 @@ function LeagueHomeTab({
   fantasyTeams: FantasyTeam[];
 }) {
   const msgEndRef = useRef<HTMLDivElement>(null);
+  const annImageInputRef = useRef<HTMLInputElement>(null);
+  const msgImageInputRef = useRef<HTMLInputElement>(null);
 
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [newAnnouncement, setNewAnnouncement] = useState('');
@@ -2826,12 +2828,16 @@ function LeagueHomeTab({
   const [showAnnounceForm, setShowAnnounceForm] = useState(false);
   const [showAnnImageInput, setShowAnnImageInput] = useState(false);
   const [annImageUrl, setAnnImageUrl] = useState('');
+  const [annImageUploading, setAnnImageUploading] = useState(false);
+  const [annImageProgress, setAnnImageProgress] = useState(0);
 
   const [messages, setMessages] = useState<LeagueMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [messageSending, setMessageSending] = useState(false);
   const [showMsgImageInput, setShowMsgImageInput] = useState(false);
   const [msgImageUrl, setMsgImageUrl] = useState('');
+  const [msgImageUploading, setMsgImageUploading] = useState(false);
+  const [msgImageProgress, setMsgImageProgress] = useState(0);
 
   function renderContent(content: string) {
     const imagePattern = /https?:\/\/\S+\.(?:gif|jpg|jpeg|png|webp)(?:[?#]\S*)?|https?:\/\/(?:media\.tenor\.com|media(?:\d+)?\.giphy\.com|i\.imgur\.com)\S*/gi;
@@ -2852,6 +2858,37 @@ function LeagueHomeTab({
     const u = imageUrl.trim();
     if (t && u) return `${t}\n${u}`;
     return t || u;
+  }
+
+  async function uploadImage(
+    file: File,
+    setUrl: (url: string) => void,
+    setUploading: (v: boolean) => void,
+    setProgress: (v: number) => void,
+  ) {
+    if (!storage) { alert('Firebase Storage not initialized.'); return; }
+    const ext = file.name.split('.').pop() ?? 'jpg';
+    const path = `message-images/${leagueId}_${Date.now()}.${ext}`;
+    const sRef = storageRef(storage, path);
+    setUploading(true);
+    setProgress(0);
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const task = uploadBytesResumable(sRef, file, { contentType: file.type });
+        const timeout = setTimeout(() => { task.cancel(); reject(new Error('Upload timed out.')); }, 30000);
+        task.on('state_changed',
+          (snap: { bytesTransferred: number; totalBytes: number }) => setProgress(Math.round(snap.bytesTransferred / snap.totalBytes * 100)),
+          (err: unknown) => { clearTimeout(timeout); reject(err); },
+          () => { clearTimeout(timeout); resolve(); },
+        );
+      });
+      setUrl(await getDownloadURL(sRef));
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Upload failed');
+    } finally {
+      setUploading(false);
+      setProgress(0);
+    }
   }
 
   useEffect(() => {
@@ -2967,30 +3004,42 @@ function LeagueHomeTab({
           <div ref={msgEndRef} />
         </div>
         <div className="px-5 py-3 border-t border-line">
+          <input ref={msgImageInputRef} type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) uploadImage(f, setMsgImageUrl, setMsgImageUploading, setMsgImageProgress); e.target.value = ''; }} />
           {showMsgImageInput && (
-            <div className="flex gap-2 mb-2">
-              <input
-                type="url"
-                value={msgImageUrl}
-                onChange={e => setMsgImageUrl(e.target.value)}
-                placeholder="Paste image or GIF URL..."
-                className="flex-1 bg-field border border-line-2 rounded-xl px-3 py-1.5 text-copy text-xs placeholder-copy-3 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors"
-              />
-              <button type="button" onClick={() => { setShowMsgImageInput(false); setMsgImageUrl(''); }} className="text-copy-3 hover:text-danger text-xs px-2">✕</button>
+            <div className="mb-2">
+              {msgImageUrl ? (
+                <div className="flex items-center gap-2">
+                  <img src={msgImageUrl} alt="" className="h-14 rounded-lg object-contain border border-line" />
+                  <button type="button" onClick={() => setMsgImageUrl('')} className="text-xs text-danger hover:text-danger/80">Remove</button>
+                </div>
+              ) : (
+                <div
+                  onClick={() => !msgImageUploading && msgImageInputRef.current?.click()}
+                  onDragOver={e => e.preventDefault()}
+                  onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f?.type.startsWith('image/')) uploadImage(f, setMsgImageUrl, setMsgImageUploading, setMsgImageProgress); }}
+                  className="border border-dashed border-line-2 rounded-xl px-4 py-3 text-center cursor-pointer hover:border-brand/40 transition-colors"
+                >
+                  {msgImageUploading
+                    ? <p className="text-xs text-copy-3">Uploading {msgImageProgress}%…</p>
+                    : <p className="text-xs text-copy-3">Drop, paste or <span className="text-brand">browse</span> to attach an image</p>}
+                  {msgImageUploading && <div className="mt-1.5 h-1 bg-line rounded-full overflow-hidden"><div className="h-full bg-brand transition-all duration-200" style={{ width: `${msgImageProgress}%` }} /></div>}
+                </div>
+              )}
             </div>
           )}
           <form onSubmit={handleSendMessage} className="flex gap-2">
             <input
               value={newMessage}
               onChange={e => setNewMessage(e.target.value)}
+              onPaste={e => { const item = [...e.clipboardData.items].find(i => i.type.startsWith('image/')); if (!item) return; const f = item.getAsFile(); if (f) { e.preventDefault(); setShowMsgImageInput(true); uploadImage(f, setMsgImageUrl, setMsgImageUploading, setMsgImageProgress); } }}
               placeholder="Send a message..."
               maxLength={500}
               className="flex-1 bg-field border border-line-2 rounded-xl px-4 py-2 text-copy text-sm placeholder-copy-3 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors"
             />
             <button
               type="button"
-              onClick={() => setShowMsgImageInput(v => !v)}
-              title="Attach image or GIF"
+              onClick={() => { setShowMsgImageInput(v => !v); if (showMsgImageInput) setMsgImageUrl(''); }}
+              title="Attach image"
               className={`flex-shrink-0 border text-sm px-3 py-2 rounded-xl transition-colors ${showMsgImageInput ? 'bg-brand-dim border-brand text-brand' : 'bg-field border-line-2 text-copy-3 hover:text-copy hover:border-line'}`}
             >
               🖼
@@ -3024,31 +3073,41 @@ function LeagueHomeTab({
         </div>
         {isCommissioner && showAnnounceForm && (
           <form onSubmit={handleAddAnnouncement} className="px-5 py-4 border-b border-line bg-field/30 space-y-2">
+            <input ref={annImageInputRef} type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) uploadImage(f, setAnnImageUrl, setAnnImageUploading, setAnnImageProgress); e.target.value = ''; }} />
             <textarea
               value={newAnnouncement}
               onChange={e => setNewAnnouncement(e.target.value)}
+              onPaste={e => { const item = [...e.clipboardData.items].find(i => i.type.startsWith('image/')); if (!item) return; const f = item.getAsFile(); if (f) { e.preventDefault(); setShowAnnImageInput(true); uploadImage(f, setAnnImageUrl, setAnnImageUploading, setAnnImageProgress); } }}
               placeholder="Write an announcement or custom rule..."
               rows={3}
               maxLength={1000}
               className="w-full bg-card border border-line-2 rounded-xl px-4 py-2.5 text-copy text-sm placeholder-copy-3 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors resize-none"
             />
             {showAnnImageInput && (
-              <div className="flex gap-2">
-                <input
-                  type="url"
-                  value={annImageUrl}
-                  onChange={e => setAnnImageUrl(e.target.value)}
-                  placeholder="Paste image or GIF URL..."
-                  className="flex-1 bg-card border border-line-2 rounded-xl px-3 py-1.5 text-copy text-xs placeholder-copy-3 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors"
-                />
-                <button type="button" onClick={() => { setShowAnnImageInput(false); setAnnImageUrl(''); }} className="text-copy-3 hover:text-danger text-xs px-2">✕</button>
-              </div>
+              annImageUrl ? (
+                <div className="flex items-center gap-2">
+                  <img src={annImageUrl} alt="" className="h-14 rounded-lg object-contain border border-line" />
+                  <button type="button" onClick={() => setAnnImageUrl('')} className="text-xs text-danger hover:text-danger/80">Remove</button>
+                </div>
+              ) : (
+                <div
+                  onClick={() => !annImageUploading && annImageInputRef.current?.click()}
+                  onDragOver={e => e.preventDefault()}
+                  onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f?.type.startsWith('image/')) uploadImage(f, setAnnImageUrl, setAnnImageUploading, setAnnImageProgress); }}
+                  className="border border-dashed border-line-2 rounded-xl px-4 py-3 text-center cursor-pointer hover:border-brand/40 transition-colors"
+                >
+                  {annImageUploading
+                    ? <p className="text-xs text-copy-3">Uploading {annImageProgress}%…</p>
+                    : <p className="text-xs text-copy-3">Drop, paste or <span className="text-brand">browse</span> to attach an image</p>}
+                  {annImageUploading && <div className="mt-1.5 h-1 bg-line rounded-full overflow-hidden"><div className="h-full bg-brand transition-all duration-200" style={{ width: `${annImageProgress}%` }} /></div>}
+                </div>
+              )
             )}
             <div className="flex items-center justify-between gap-2">
               <button
                 type="button"
-                onClick={() => setShowAnnImageInput(v => !v)}
-                title="Attach image or GIF"
+                onClick={() => { setShowAnnImageInput(v => !v); if (showAnnImageInput) setAnnImageUrl(''); }}
+                title="Attach image"
                 className={`border text-xs px-3 py-1.5 rounded-xl transition-colors ${showAnnImageInput ? 'bg-brand-dim border-brand text-brand' : 'bg-field border-line text-copy-3 hover:text-copy hover:border-line-2'}`}
               >
                 🖼 Image
