@@ -1003,7 +1003,7 @@ export default function AuctionPage() {
                       });
                       if (sports.length <= 1) return null;
                       return (
-                        <div className="flex flex-wrap gap-1">
+                        <div className="flex gap-1 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
                           <button
                             onClick={() => setSnakePickSport(null)}
                             className={`text-xs font-semibold px-2.5 py-1 rounded-full transition-colors ${!snakePickSport ? 'bg-brand text-white' : 'bg-field border border-line text-copy-3 hover:text-copy hover:border-line-2'}`}
@@ -1463,7 +1463,7 @@ export default function AuctionPage() {
             {isSnake && snakeDraftOrder.length > 0 && status !== 'closed' && (
               <div className="bg-card border border-line rounded-2xl p-4">
                 <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide mb-3">
-                  Up Next — {availableTeams.length} remaining
+                  Up Next
                 </p>
                 {(() => {
                   const n = snakeDraftOrder.length;
@@ -1489,15 +1489,15 @@ export default function AuctionPage() {
                         const label = isMe ? 'You' : (ft?.displayName?.split(' ')[0] ?? participantName(uid).split(' ')[0]);
                         return (
                           <div key={pickIndex} className="flex flex-col items-center gap-1 flex-shrink-0 w-14">
+                            <span className={`text-[10px] tabular-nums font-semibold ${isCurrent ? 'text-brand' : idx === 1 ? 'text-warn' : 'text-copy-3'}`}>
+                              #{pickIndex + 1}
+                            </span>
                             <div className={`rounded-xl p-0.5 ${isCurrent ? 'ring-2 ring-brand ring-offset-1 ring-offset-card' : idx === 1 ? 'ring-1 ring-warn/60 ring-offset-1 ring-offset-card' : ''}`}>
                               <TeamLogo logoUrl={ft?.logoUrl ?? null} name={ft?.displayName ?? uid} size={10} />
                             </div>
                             <p className={`text-[10px] text-center leading-tight w-full truncate font-medium ${isCurrent ? 'text-brand' : idx === 1 ? 'text-warn' : isMe ? 'text-brand/70' : 'text-copy-3'}`}>
                               {label}
                             </p>
-                            {isCurrent && (
-                              <span className="text-[9px] font-bold bg-brand text-white px-1 py-px rounded-full leading-tight">NOW</span>
-                            )}
                           </div>
                         );
                       })}
