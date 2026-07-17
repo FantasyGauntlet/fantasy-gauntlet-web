@@ -912,6 +912,57 @@ export default function AuctionPage() {
 
       {/* Active auction UI */}
       {roomIsOpen && (status === 'waiting' || status === 'active' || status === 'closed') && (
+        <>
+
+        {/* ── Sticky draft ticker ─────────────────────────────────────── */}
+        {isSnake && snakeDraftOrder.length > 0 && status !== 'closed' && (() => {
+          const n = snakeDraftOrder.length;
+          const totalPicks = snakePickHistory.length + availableTeams.length;
+          const ftMap = new Map(fantasyTeams.map(ft => [ft.userId, ft]));
+          const upcoming: { uid: string; pickIndex: number }[] = [];
+          const end = Math.min(totalPicks, snakePickIndex + n * 3 + 1);
+          for (let i = snakePickIndex; i < end; i++) {
+            const round = Math.floor(i / n);
+            const posInRound = i % n;
+            const uid = round % 2 === 0 ? snakeDraftOrder[posInRound] : snakeDraftOrder[n - 1 - posInRound];
+            upcoming.push({ uid, pickIndex: i });
+          }
+          const overflow = Math.max(0, totalPicks - snakePickIndex - upcoming.length);
+          return (
+            <div className="sticky top-0 z-30 bg-card/95 backdrop-blur-sm border border-line rounded-2xl px-4 py-3 mb-4">
+              <div className="flex items-center gap-4">
+                <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide flex-shrink-0">Up Next</p>
+                <div className="flex gap-3 overflow-x-auto scrollbar-none flex-1 -mr-1 pr-1">
+                  {upcoming.map(({ uid, pickIndex }, idx) => {
+                    const ft = ftMap.get(uid);
+                    const isCurrent = pickIndex === snakePickIndex;
+                    const isMe = uid === user?.uid;
+                    const label = isMe ? 'You' : (ft?.displayName?.split(' ')[0] ?? participantName(uid).split(' ')[0]);
+                    return (
+                      <div key={pickIndex} className="flex flex-col items-center gap-0.5 flex-shrink-0 w-12">
+                        <span className={`text-[10px] tabular-nums font-semibold ${isCurrent ? 'text-brand' : idx === 1 ? 'text-warn' : 'text-copy-3'}`}>
+                          #{pickIndex + 1}
+                        </span>
+                        <div className={`rounded-lg p-0.5 ${isCurrent ? 'ring-2 ring-brand ring-offset-1 ring-offset-card' : idx === 1 ? 'ring-1 ring-warn/60 ring-offset-1 ring-offset-card' : ''}`}>
+                          <TeamLogo logoUrl={ft?.logoUrl ?? null} name={ft?.displayName ?? uid} size={8} />
+                        </div>
+                        <p className={`text-[10px] text-center leading-tight w-full truncate font-medium ${isCurrent ? 'text-brand' : idx === 1 ? 'text-warn' : isMe ? 'text-brand/70' : 'text-copy-3'}`}>
+                          {label}
+                        </p>
+                      </div>
+                    );
+                  })}
+                  {overflow > 0 && (
+                    <div className="flex flex-col items-center justify-center flex-shrink-0 w-8 self-center">
+                      <span className="text-xs text-copy-3 font-medium">+{overflow}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_272px] gap-4">
 
           {/* ── Left column ──────────────────────────────────────── */}
@@ -1006,7 +1057,7 @@ export default function AuctionPage() {
                         <div className="flex gap-1 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
                           <button
                             onClick={() => setSnakePickSport(null)}
-                            className={`text-xs font-semibold px-2.5 py-1 rounded-full transition-colors ${!snakePickSport ? 'bg-brand text-white' : 'bg-field border border-line text-copy-3 hover:text-copy hover:border-line-2'}`}
+                            className={`flex-shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full transition-colors ${!snakePickSport ? 'bg-brand text-white' : 'bg-field border border-line text-copy-3 hover:text-copy hover:border-line-2'}`}
                           >
                             All <span className="opacity-70">({availableTeams.length})</span>
                           </button>
@@ -1014,7 +1065,7 @@ export default function AuctionPage() {
                             <button
                               key={sport}
                               onClick={() => setSnakePickSport(s => s === sport ? null : sport)}
-                              className={`text-xs font-semibold px-2.5 py-1 rounded-full transition-colors ${snakePickSport === sport ? 'bg-brand text-white' : 'bg-field border border-line text-copy-3 hover:text-copy hover:border-line-2'}`}
+                              className={`flex-shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full transition-colors ${snakePickSport === sport ? 'bg-brand text-white' : 'bg-field border border-line text-copy-3 hover:text-copy hover:border-line-2'}`}
                             >
                               {fln(sport)} <span className="opacity-70">({sportCounts.get(sport)})</span>
                             </button>
@@ -1030,7 +1081,7 @@ export default function AuctionPage() {
                       onChange={e => setSnakePickSearch(e.target.value)}
                       className="w-full bg-field border border-line-2 rounded-xl px-4 py-2.5 text-copy text-sm placeholder-copy-3 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors"
                     />
-                    <div className="max-h-52 overflow-y-auto space-y-1 -mr-1 pr-1">
+                    <div className="max-h-80 overflow-y-auto space-y-1 -mr-1 pr-1">
                       {(() => {
                         const q = snakePickSearch.toLowerCase();
                         const filtered = availableTeams.filter(t =>
@@ -1459,58 +1510,6 @@ export default function AuctionPage() {
               </div>
             )}
 
-            {/* Snake: upcoming pick order */}
-            {isSnake && snakeDraftOrder.length > 0 && status !== 'closed' && (
-              <div className="bg-card border border-line rounded-2xl p-4">
-                <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide mb-3">
-                  Up Next
-                </p>
-                {(() => {
-                  const n = snakeDraftOrder.length;
-                  const totalPicks = snakePickHistory.length + availableTeams.length;
-                  const ftMap = new Map(fantasyTeams.map(ft => [ft.userId, ft]));
-                  // Build the upcoming queue (current pick onward), up to n*2+1 entries
-                  const upcoming: { uid: string; pickIndex: number }[] = [];
-                  const end = Math.min(totalPicks, snakePickIndex + n * 2 + 1);
-                  for (let i = snakePickIndex; i < end; i++) {
-                    const round = Math.floor(i / n);
-                    const posInRound = i % n;
-                    const uid = round % 2 === 0 ? snakeDraftOrder[posInRound] : snakeDraftOrder[n - 1 - posInRound];
-                    upcoming.push({ uid, pickIndex: i });
-                  }
-                  const visible = upcoming.slice(0, 12);
-                  const overflow = upcoming.length - visible.length;
-                  return (
-                    <div className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1">
-                      {visible.map(({ uid, pickIndex }, idx) => {
-                        const ft = ftMap.get(uid);
-                        const isCurrent = pickIndex === snakePickIndex;
-                        const isMe = uid === user?.uid;
-                        const label = isMe ? 'You' : (ft?.displayName?.split(' ')[0] ?? participantName(uid).split(' ')[0]);
-                        return (
-                          <div key={pickIndex} className="flex flex-col items-center gap-1 flex-shrink-0 w-14">
-                            <span className={`text-[10px] tabular-nums font-semibold ${isCurrent ? 'text-brand' : idx === 1 ? 'text-warn' : 'text-copy-3'}`}>
-                              #{pickIndex + 1}
-                            </span>
-                            <div className={`rounded-xl p-0.5 ${isCurrent ? 'ring-2 ring-brand ring-offset-1 ring-offset-card' : idx === 1 ? 'ring-1 ring-warn/60 ring-offset-1 ring-offset-card' : ''}`}>
-                              <TeamLogo logoUrl={ft?.logoUrl ?? null} name={ft?.displayName ?? uid} size={10} />
-                            </div>
-                            <p className={`text-[10px] text-center leading-tight w-full truncate font-medium ${isCurrent ? 'text-brand' : idx === 1 ? 'text-warn' : isMe ? 'text-brand/70' : 'text-copy-3'}`}>
-                              {label}
-                            </p>
-                          </div>
-                        );
-                      })}
-                      {overflow > 0 && (
-                        <div className="flex flex-col items-center justify-center flex-shrink-0 w-10 self-center">
-                          <span className="text-xs text-copy-3 font-medium">+{overflow}</span>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })()}
-              </div>
-            )}
 
             {/* Results — auction mode */}
             {!isSnake && soldLots.length > 0 && (
@@ -1818,6 +1817,7 @@ export default function AuctionPage() {
 
           </div>
         </div>
+        </>
       )}
     </div>
   );
