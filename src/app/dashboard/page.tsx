@@ -201,7 +201,7 @@ export default function DashboardPage() {
       {!loading && leagues.length > 0 && (
         <div className="grid grid-cols-3 gap-3">
           {[
-            { label: 'My Leagues', value: leagues.length },
+            { label: 'My Leagues', value: activeLeagues.length },
             { label: 'In Season',  value: activeCount },
             { label: 'Drafting',   value: draftingCount },
           ].map(s => (

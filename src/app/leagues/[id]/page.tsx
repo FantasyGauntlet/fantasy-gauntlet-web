@@ -241,9 +241,9 @@ export default function LeaguePage() {
 
   const leagueSubTabs: { key: Tab; label: string }[] = [
     { key: 'home',        label: 'League Home' },
-    { key: 'history',     label: 'History' },
-    { key: 'rules',       label: 'Rules' },
     { key: 'activity',    label: 'Recent Activity' },
+    { key: 'rules',       label: 'Rules' },
+    { key: 'history',     label: 'History' },
     ...(isCommissioner ? [{ key: 'commissioner' as Tab, label: 'Commissioner Settings' }] : []),
   ];
   const isLeagueTab = leagueSubTabs.some(t => t.key === tab);
@@ -435,7 +435,7 @@ export default function LeaguePage() {
         <LeagueHomeTab league={league} isCommissioner={isCommissioner} leagueId={id} memberCount={members.length} userId={user?.uid} fantasyTeams={fantasyTeams} />
       )}
       {tab === 'history' && (
-        <HistoryTab leagueId={id} leagueGroupId={league.leagueGroupId} />
+        <HistoryTab leagueId={id} leagueGroupId={league.leagueGroupId} previousLeagueId={league.previousLeagueId} />
       )}
       {tab === 'rules' && <RulesTab league={league} />}
       {tab === 'activity' && (
@@ -1348,6 +1348,7 @@ function RosterTab({
                 onChange={e => { const f = e.target.files?.[0]; if (f) uploadLogo(f); e.target.value = ''; }}
               />
               <div
+                tabIndex={0}
                 onClick={() => !logoUploading && logoInputRef.current?.click()}
                 onDragOver={e => { e.preventDefault(); setLogoDragging(true); }}
                 onDragLeave={() => setLogoDragging(false)}
@@ -1356,6 +1357,12 @@ function RosterTab({
                   setLogoDragging(false);
                   const f = e.dataTransfer.files[0];
                   if (f && f.type.startsWith('image/')) uploadLogo(f);
+                }}
+                onPaste={e => {
+                  const item = [...e.clipboardData.items].find(i => i.type.startsWith('image/'));
+                  if (!item) return;
+                  const f = item.getAsFile();
+                  if (f) { e.preventDefault(); uploadLogo(f); }
                 }}
                 className={`relative border-2 border-dashed rounded-xl transition-colors ${logoUploading ? 'cursor-wait' : 'cursor-pointer'} ${
                   logoDragging ? 'border-brand bg-brand/5' : 'border-line-2 hover:border-brand/40 hover:bg-field/40'
@@ -1370,7 +1377,7 @@ function RosterTab({
                       onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
                     />
                     <p className="text-xs text-copy-3">
-                      {logoUploading ? `Uploading ${logoUploadProgress}%…` : 'Drop a new image or click to replace'}
+                      {logoUploading ? `Uploading ${logoUploadProgress}%…` : 'Drop, paste, or click to replace'}
                     </p>
                   </div>
                 ) : (
@@ -1381,7 +1388,7 @@ function RosterTab({
                       <line x1="12" y1="3" x2="12" y2="15" />
                     </svg>
                     <p className="text-sm font-medium text-copy-2">
-                      {logoUploading ? `Uploading ${logoUploadProgress}%…` : 'Drop your logo here'}
+                      {logoUploading ? `Uploading ${logoUploadProgress}%…` : 'Drop or paste your logo here'}
                     </p>
                     <p className="text-xs text-copy-3">or click to browse — PNG, JPG, SVG</p>
                   </div>
@@ -3127,25 +3134,32 @@ function LeagueHomeTab({
 
 // ─── History Tab ──────────────────────────────────────────────────────────────
 
-function HistoryTab({ leagueId, leagueGroupId }: { leagueId: string; leagueGroupId?: string }) {
+function HistoryTab({ leagueId, leagueGroupId, previousLeagueId }: { leagueId: string; leagueGroupId?: string; previousLeagueId?: string }) {
   const router = useRouter();
   const [seasons, setSeasons] = useState<{ id: string; name: string; createdAt: string }[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [standings, setStandings] = useState<Standing[] | null>(null);
-  const [loadingSeasons, setLoadingSeasons] = useState(!!leagueGroupId);
+  const hasSource = !!leagueGroupId || !!previousLeagueId;
+  const [loadingSeasons, setLoadingSeasons] = useState(hasSource);
   const [loadingStandings, setLoadingStandings] = useState(false);
 
   useEffect(() => {
-    if (!leagueGroupId) return;
-    api.get<{ id: string; name: string; createdAt: string }[]>(`/leagues/group/${leagueGroupId}`)
-      .then(all => {
-        const past = all.filter(s => s.id !== leagueId);
-        setSeasons(past);
-        if (past.length > 0) setSelectedId(past[past.length - 1].id);
-      })
-      .catch(() => {})
-      .finally(() => setLoadingSeasons(false));
-  }, [leagueGroupId, leagueId]);
+    if (leagueGroupId) {
+      api.get<{ id: string; name: string; createdAt: string }[]>(`/leagues/group/${leagueGroupId}`)
+        .then(all => {
+          const past = all.filter(s => s.id !== leagueId);
+          setSeasons(past);
+          if (past.length > 0) setSelectedId(past[past.length - 1].id);
+        })
+        .catch(() => {})
+        .finally(() => setLoadingSeasons(false));
+    } else if (previousLeagueId) {
+      api.get<{ id: string; name: string; createdAt: string }>(`/leagues/${previousLeagueId}`)
+        .then(prev => { setSeasons([prev]); setSelectedId(prev.id); })
+        .catch(() => {})
+        .finally(() => setLoadingSeasons(false));
+    }
+  }, [leagueGroupId, previousLeagueId, leagueId]);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -3157,7 +3171,7 @@ function HistoryTab({ leagueId, leagueGroupId }: { leagueId: string; leagueGroup
       .finally(() => setLoadingStandings(false));
   }, [selectedId]);
 
-  if (!leagueGroupId || (!loadingSeasons && seasons.length === 0)) {
+  if (!hasSource || (!loadingSeasons && seasons.length === 0)) {
     return (
       <div className="bg-card border border-line rounded-2xl p-10 text-center">
         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-copy-3 mx-auto mb-3">
