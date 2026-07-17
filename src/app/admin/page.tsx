@@ -10,7 +10,7 @@ const BASE = 'https://fantasy-gauntlet-backend-production.up.railway.app/api/v1'
 interface SyncResult { label: string; status: 'idle' | 'loading' | 'success' | 'error'; message: string; }
 interface SportLeague { id: string; name: string; }
 interface Team { id: string; name: string; logoUrl?: string | null; }
-interface Season { id: string; label: string; }
+interface Season { id: string; label: string; regularSeasonStart: string; regularSeasonEnd: string; }
 interface BonusPoint { id: string; teamId: string; teamName: string; seasonId: string; seasonLabel: string; sportLeagueId: string; label: string; points: number; awardedAt: string; }
 interface AdminLeague { id: string; name: string; state: 'draft' | 'auction' | 'active' | 'completed' | 'cancelled'; selectedSports: string[]; commissionerId: string; memberCap: number | null; createdAt: string; }
 
@@ -30,7 +30,7 @@ const SYNCS = [
   { key: 'records',      label: 'Sync Records',             endpoint: '/admin/ingestion/records' },
 ];
 
-type Tab = 'sync' | 'bonus' | 'scoring' | 'preset' | 'deadlines' | 'leagues' | 'elimination' | 'users';
+type Tab = 'sync' | 'bonus' | 'scoring' | 'preset' | 'deadlines' | 'leagues' | 'elimination' | 'users' | 'season-dates';
 
 interface AdminUser { id: string; email: string; displayName: string; roles: string[]; isPremium: boolean; createdAt: string; }
 
@@ -447,15 +447,65 @@ export default function AdminPage() {
     setElimToggling(prev => { const n = new Set(prev); n.delete(teamId); return n; });
   }
 
+  // ── Season Dates ────────────────────────────────────────────────────────────
+  const [seasonDatesBySport, setSeasonDatesBySport] = useState<Record<string, Season[]>>({});
+  const [seasonDatesLoaded, setSeasonDatesLoaded] = useState(false);
+  const [seasonDatesLoading, setSeasonDatesLoading] = useState(false);
+  const [seasonDateDrafts, setSeasonDateDrafts] = useState<Record<string, string>>({});
+  const [seasonDateStatuses, setSeasonDateStatuses] = useState<Record<string, { status: 'idle' | 'loading' | 'success' | 'error'; message: string }>>({});
+
+  useEffect(() => {
+    if (tab !== 'season-dates' || seasonDatesLoaded || sports.length === 0) return;
+    setSeasonDatesLoaded(true);
+    setSeasonDatesLoading(true);
+    Promise.all(
+      sports.map(s =>
+        fetch(`${BASE}/sports/leagues/${s.id}/seasons`)
+          .then(r => r.json())
+          .then((seasons: Season[]) => [s.id, [...seasons].sort((a, b) => b.label.localeCompare(a.label))] as [string, Season[]])
+          .catch(() => [s.id, []] as [string, Season[]])
+      )
+    ).then(entries => {
+      const bySport = Object.fromEntries(entries);
+      setSeasonDatesBySport(bySport);
+      const drafts: Record<string, string> = {};
+      for (const seasons of Object.values(bySport)) {
+        for (const s of seasons) drafts[s.id] = s.regularSeasonEnd;
+      }
+      setSeasonDateDrafts(drafts);
+    }).finally(() => setSeasonDatesLoading(false));
+  }, [tab, seasonDatesLoaded, sports]);
+
+  async function saveSeasonEndDate(seasonId: string) {
+    const newDate = seasonDateDrafts[seasonId];
+    if (!newDate) return;
+    setSeasonDateStatuses(s => ({ ...s, [seasonId]: { status: 'loading', message: '' } }));
+    try {
+      const res = await api.patch<{ leaguesUpdated: number }>(`/admin/seasons/${seasonId}/end-date`, { endDate: newDate });
+      const msg = res.leaguesUpdated > 0 ? `Saved · ${res.leaguesUpdated} league${res.leaguesUpdated !== 1 ? 's' : ''} updated` : 'Saved';
+      setSeasonDateStatuses(s => ({ ...s, [seasonId]: { status: 'success', message: msg } }));
+      setSeasonDatesBySport(prev => {
+        const next = { ...prev };
+        for (const sportId of Object.keys(next)) {
+          next[sportId] = next[sportId].map(s => s.id === seasonId ? { ...s, regularSeasonEnd: newDate } : s);
+        }
+        return next;
+      });
+    } catch (e: unknown) {
+      setSeasonDateStatuses(s => ({ ...s, [seasonId]: { status: 'error', message: e instanceof Error ? e.message : 'Failed' } }));
+    }
+  }
+
   const tabs: { key: Tab; label: string }[] = [
-    { key: 'sync',        label: 'Data Sync' },
-    { key: 'bonus',       label: 'Bonus Points' },
-    { key: 'scoring',     label: 'League Scoring' },
-    { key: 'preset',      label: 'Auction Preset' },
-    { key: 'deadlines',   label: 'Deadlines' },
-    { key: 'leagues',     label: 'Leagues' },
-    { key: 'elimination', label: 'Elimination' },
-    { key: 'users',       label: 'Users' },
+    { key: 'sync',         label: 'Data Sync' },
+    { key: 'bonus',        label: 'Bonus Points' },
+    { key: 'scoring',      label: 'League Scoring' },
+    { key: 'preset',       label: 'Auction Preset' },
+    { key: 'deadlines',    label: 'Deadlines' },
+    { key: 'season-dates', label: 'Season Dates' },
+    { key: 'leagues',      label: 'Leagues' },
+    { key: 'elimination',  label: 'Elimination' },
+    { key: 'users',        label: 'Users' },
   ];
 
   return (
@@ -1061,6 +1111,85 @@ export default function AdminPage() {
             )}
           </div>
         )}
+        {/* ── Season Dates ── */}
+        {tab === 'season-dates' && (
+          <div className="space-y-4">
+            <div className="bg-card border border-line rounded-2xl p-5">
+              <h2 className="text-sm font-semibold text-copy mb-1">Season End Dates</h2>
+              <p className="text-xs text-copy-3">
+                Override the hardcoded end date for any season. Saving propagates the change to the <code className="font-mono bg-field px-1 py-0.5 rounded">endDate</code> on all active and draft leagues that include that season.
+              </p>
+            </div>
+
+            {seasonDatesLoading && (
+              <div className="flex items-center gap-2 text-copy-3 text-sm py-4 px-1">
+                <Spinner /> Loading seasons…
+              </div>
+            )}
+
+            {!seasonDatesLoading && sports.map(sport => {
+              const seasons = seasonDatesBySport[sport.id] ?? [];
+              if (seasons.length === 0) return null;
+              return (
+                <div key={sport.id} className="bg-card border border-line rounded-2xl overflow-hidden">
+                  <div className="px-5 py-3 border-b border-line bg-field/30">
+                    <p className="text-sm font-semibold text-copy">{sport.name}</p>
+                  </div>
+                  <div className="divide-y divide-line/50">
+                    {seasons.map(season => {
+                      const st = seasonDateStatuses[season.id];
+                      const draft = seasonDateDrafts[season.id] ?? season.regularSeasonEnd;
+                      const isDirty = draft !== season.regularSeasonEnd;
+                      return (
+                        <div key={season.id} className="flex items-center gap-3 px-5 py-3 flex-wrap">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-copy">{season.label}</p>
+                            <p className="text-xs text-copy-3 mt-0.5">
+                              Start: {season.regularSeasonStart}
+                            </p>
+                          </div>
+
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <label className="text-xs text-copy-3 hidden sm:block">End</label>
+                            <input
+                              type="date"
+                              value={draft}
+                              onChange={e => {
+                                setSeasonDateDrafts(d => ({ ...d, [season.id]: e.target.value }));
+                                setSeasonDateStatuses(s => ({ ...s, [season.id]: { status: 'idle', message: '' } }));
+                              }}
+                              className="bg-field border border-line-2 rounded-lg px-3 py-1.5 text-sm text-copy focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors"
+                            />
+                            <button
+                              onClick={() => saveSeasonEndDate(season.id)}
+                              disabled={!isDirty || st?.status === 'loading'}
+                              className="flex items-center gap-1 bg-brand hover:bg-brand-2 disabled:opacity-40 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+                            >
+                              {st?.status === 'loading' ? <Spinner /> : null}
+                              Save
+                            </button>
+                          </div>
+
+                          <div className="w-full sm:w-auto flex-shrink-0 min-w-[160px]">
+                            {st && st.status !== 'idle' && (
+                              <p className={`text-xs ${
+                                st.status === 'success' ? 'text-positive' :
+                                st.status === 'error'   ? 'text-danger'   : 'text-copy-3'
+                              }`}>
+                                {st.status === 'loading' ? 'Saving…' : st.message}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         {/* ── Leagues ── */}
         {tab === 'leagues' && (
           <div className="space-y-3">
