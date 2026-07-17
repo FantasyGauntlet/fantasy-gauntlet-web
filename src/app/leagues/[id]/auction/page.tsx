@@ -1096,7 +1096,7 @@ export default function AuctionPage() {
                       const isMe = nextUid === user?.uid;
                       return (
                         <span className={`font-medium ${isMe ? 'text-brand' : 'text-copy-2'}`}>
-                          {isMe ? 'You're up next!' : `${participantName(nextUid)} next`}
+                          {isMe ? "You're up next!" : `${participantName(nextUid)} next`}
                         </span>
                       );
                     })()}
