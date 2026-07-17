@@ -184,6 +184,7 @@ export default function AuctionPage() {
   const [snakePickIndex, setSnakePickIndex] = useState(0);
   const [snakePickHistory, setSnakePickHistory] = useState<SnakePick[]>([]);
   const [snakePickSearch, setSnakePickSearch] = useState('');
+  const [snakePickSport, setSnakePickSport] = useState<string | null>(null);
   const [snakePickPending, setSnakePickPending] = useState(false);
   // Commissioner: set draft order for snake-defined
   const [settingDraftOrder, setSettingDraftOrder] = useState(false);
@@ -397,6 +398,7 @@ export default function AuctionPage() {
         setSnakePickerUserId(data.pickerUserId);
         setSnakePickIndex(data.pickIndex ?? 0);
         setSnakePickSearch('');
+        setSnakePickSport(null);
         setSnakePickPending(false);
         setStatus('active');
         const t = data.timerSeconds ?? 60;
@@ -418,6 +420,7 @@ export default function AuctionPage() {
         setSnakePickIndex(data.nextPickIndex ?? 0);
         setSnakePickPending(false);
         setSnakePickSearch('');
+        setSnakePickSport(null);
         // Update the winner's roster locally (mirrors team_sold path)
         if (data.pickerUserId) {
           setFantasyTeams(prev => {
@@ -990,6 +993,36 @@ export default function AuctionPage() {
 
                 {snakePickerUserId === user?.uid ? (
                   <div className="space-y-2">
+                    {/* Sport filter tabs */}
+                    {(() => {
+                      const sportCounts = new Map<string, number>();
+                      for (const t of availableTeams) sportCounts.set(t.sportLeagueId, (sportCounts.get(t.sportLeagueId) ?? 0) + 1);
+                      const sports = [...sportCounts.keys()].sort((a, b) => {
+                        const ai = SPORT_ORDER.indexOf(a); const bi = SPORT_ORDER.indexOf(b);
+                        return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+                      });
+                      if (sports.length <= 1) return null;
+                      return (
+                        <div className="flex flex-wrap gap-1">
+                          <button
+                            onClick={() => setSnakePickSport(null)}
+                            className={`text-xs font-semibold px-2.5 py-1 rounded-full transition-colors ${!snakePickSport ? 'bg-brand text-white' : 'bg-field border border-line text-copy-3 hover:text-copy hover:border-line-2'}`}
+                          >
+                            All <span className="opacity-70">({availableTeams.length})</span>
+                          </button>
+                          {sports.map(sport => (
+                            <button
+                              key={sport}
+                              onClick={() => setSnakePickSport(s => s === sport ? null : sport)}
+                              className={`text-xs font-semibold px-2.5 py-1 rounded-full transition-colors ${snakePickSport === sport ? 'bg-brand text-white' : 'bg-field border border-line text-copy-3 hover:text-copy hover:border-line-2'}`}
+                            >
+                              {fln(sport)} <span className="opacity-70">({sportCounts.get(sport)})</span>
+                            </button>
+                          ))}
+                        </div>
+                      );
+                    })()}
+                    {/* Search */}
                     <input
                       type="text"
                       placeholder="Search teams…"
@@ -1000,11 +1033,12 @@ export default function AuctionPage() {
                     <div className="max-h-52 overflow-y-auto space-y-1 -mr-1 pr-1">
                       {(() => {
                         const q = snakePickSearch.toLowerCase();
-                        const filtered = availableTeams.filter(
-                          t => !q || t.name.toLowerCase().includes(q) || t.shortName.toLowerCase().includes(q)
+                        const filtered = availableTeams.filter(t =>
+                          (!snakePickSport || t.sportLeagueId === snakePickSport) &&
+                          (!q || t.name.toLowerCase().includes(q) || t.shortName.toLowerCase().includes(q))
                         );
                         if (filtered.length === 0) {
-                          return <p className="text-xs text-copy-3 text-center py-4">No teams match your search</p>;
+                          return <p className="text-xs text-copy-3 text-center py-4">No teams match</p>;
                         }
                         return filtered.map(team => (
                           <button
@@ -1016,7 +1050,7 @@ export default function AuctionPage() {
                             <TeamLogo logoUrl={team.logoUrl} name={team.name} size={7} />
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium text-copy truncate">{team.name}</p>
-                              <p className="text-xs text-copy-3">{fln(team.sportLeagueId)}</p>
+                              {!snakePickSport && <p className="text-xs text-copy-3">{fln(team.sportLeagueId)}</p>}
                             </div>
                             <span className="text-xs font-semibold text-brand flex-shrink-0">
                               {snakePickPending ? '…' : 'Pick'}
