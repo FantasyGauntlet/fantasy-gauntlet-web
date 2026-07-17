@@ -69,6 +69,56 @@ function SkeletonCard() {
   );
 }
 
+// ─── League card ──────────────────────────────────────────────────────────────
+
+function LeagueCard({ league, muted = false }: { league: League; muted?: boolean }) {
+  const meta = STATE_META[league.state] ?? STATE_META.completed;
+  const season = formatSeason(league.startDate, league.endDate);
+  return (
+    <Link
+      href={`/leagues/${league.id}`}
+      className={`group border rounded-2xl p-5 transition-all block ${
+        muted
+          ? 'bg-field border-line hover:border-line-2 hover:bg-card'
+          : 'bg-card hover:bg-card-hover border-line hover:border-brand/30'
+      }`}
+    >
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <h3 className={`font-semibold leading-snug transition-colors ${muted ? 'text-copy-2 group-hover:text-copy' : 'text-copy group-hover:text-brand'}`}>
+          {league.name}
+        </h3>
+        <span className={`flex-shrink-0 text-xs font-medium px-2.5 py-1 rounded-full border inline-flex items-center gap-1.5 ${meta.cls}`}>
+          <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70 flex-shrink-0" />
+          {meta.label}
+        </span>
+      </div>
+      {league.selectedSports && league.selectedSports.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-4">
+          {league.selectedSports.slice(0, 3).map(s => (
+            <span key={s} className="text-xs bg-field border border-line text-copy-3 px-2 py-0.5 rounded-md">
+              {formatSport(s)}
+            </span>
+          ))}
+          {league.selectedSports.length > 3 && (
+            <span className="text-xs text-copy-3 self-center">+{league.selectedSports.length - 3}</span>
+          )}
+        </div>
+      )}
+      <div className="flex items-center justify-between gap-2 text-xs text-copy-3">
+        <span className="flex items-center gap-1">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+            <circle cx="9" cy="7" r="4" />
+            <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
+          </svg>
+          {league.memberCount}{league.maxMembers ? ` / ${league.maxMembers}` : ''}
+        </span>
+        {season && <span>{season}</span>}
+      </div>
+    </Link>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
@@ -88,7 +138,9 @@ export default function DashboardPage() {
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
-  const activeCount = leagues.filter(l => l.state === 'active' || l.state === 'auction').length;
+  const activeLeagues = leagues.filter(l => l.state !== 'completed' && l.state !== 'cancelled');
+  const pastLeagues   = leagues.filter(l => l.state === 'completed' || l.state === 'cancelled');
+  const activeCount   = leagues.filter(l => l.state === 'active' || l.state === 'auction').length;
   const draftingCount = leagues.filter(l => l.state === 'draft' || l.state === 'auction').length;
 
   return (
@@ -161,59 +213,29 @@ export default function DashboardPage() {
           </Link>
         </div>
       ) : (
-        <div>
-          <h2 className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-3">My Leagues</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {leagues.map(league => {
-              const meta = STATE_META[league.state] ?? STATE_META.completed;
-              const season = formatSeason(league.startDate, league.endDate);
-              return (
-                <Link
-                  key={league.id}
-                  href={`/leagues/${league.id}`}
-                  className="group bg-card hover:bg-card-hover border border-line hover:border-brand/30 rounded-2xl p-5 transition-all block"
-                >
-                  {/* Name + state */}
-                  <div className="flex items-start justify-between gap-3 mb-3">
-                    <h3 className="font-semibold text-copy group-hover:text-brand transition-colors leading-snug">
-                      {league.name}
-                    </h3>
-                    <span className={`flex-shrink-0 text-xs font-medium px-2.5 py-1 rounded-full border inline-flex items-center gap-1.5 ${meta.cls}`}>
-                      <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70 flex-shrink-0" />
-                      {meta.label}
-                    </span>
-                  </div>
+        <div className="space-y-8">
+          {/* Active leagues */}
+          {activeLeagues.length > 0 && (
+            <div>
+              <h2 className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-3">My Leagues</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {activeLeagues.map(league => <LeagueCard key={league.id} league={league} />)}
+              </div>
+            </div>
+          )}
 
-                  {/* Sports */}
-                  {league.selectedSports && league.selectedSports.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 mb-4">
-                      {league.selectedSports.slice(0, 3).map(s => (
-                        <span key={s} className="text-xs bg-field border border-line text-copy-3 px-2 py-0.5 rounded-md">
-                          {formatSport(s)}
-                        </span>
-                      ))}
-                      {league.selectedSports.length > 3 && (
-                        <span className="text-xs text-copy-3 self-center">+{league.selectedSports.length - 3}</span>
-                      )}
-                    </div>
-                  )}
+          {/* Past seasons */}
+          {pastLeagues.length > 0 && (
+            <div>
+              <h2 className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-3">Past Seasons</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {pastLeagues.map(league => <LeagueCard key={league.id} league={league} muted />)}
+              </div>
+            </div>
+          )}
 
-                  {/* Footer */}
-                  <div className="flex items-center justify-between gap-2 text-xs text-copy-3">
-                    <span className="flex items-center gap-1">
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
-                        <circle cx="9" cy="7" r="4" />
-                        <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
-                      </svg>
-                      {league.memberCount}{league.maxMembers ? ` / ${league.maxMembers}` : ''}
-                    </span>
-                    {season && <span>{season}</span>}
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
+          {/* Fallback: only past leagues (no active ones) */}
+          {activeLeagues.length === 0 && pastLeagues.length === 0 && null}
         </div>
       )}
     </div>
