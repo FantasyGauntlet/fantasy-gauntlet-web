@@ -21,7 +21,7 @@ interface League {
   } | null;
 }
 
-interface FantasyTeam { id: string; userId: string; displayName: string; remainingBudget: number; isPlaceholder: boolean; }
+interface FantasyTeam { id: string; userId: string; displayName: string; remainingBudget: number; isPlaceholder: boolean; logoUrl?: string | null; }
 interface SportTeam { id: string; name: string; shortName: string; sportLeagueId: string; logoUrl: string | null; }
 interface SportGroup { sport: string; teams: SportTeam[]; }
 
@@ -1463,51 +1463,52 @@ export default function AuctionPage() {
             {isSnake && snakeDraftOrder.length > 0 && status !== 'closed' && (
               <div className="bg-card border border-line rounded-2xl p-4">
                 <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide mb-3">
-                  Pick Order — {availableTeams.length} team{availableTeams.length !== 1 ? 's' : ''} remaining
+                  Up Next — {availableTeams.length} remaining
                 </p>
-                <div className="space-y-0.5 max-h-52 overflow-y-auto -mr-1 pr-1">
-                  {(() => {
-                    const n = snakeDraftOrder.length;
-                    const totalPicks = snakePickHistory.length + availableTeams.length;
-                    const rows = [];
-                    const start = Math.max(0, snakePickIndex - 1);
-                    const end = Math.min(totalPicks, snakePickIndex + n * 2 + 1);
-                    for (let i = start; i < end; i++) {
-                      const round = Math.floor(i / n);
-                      const posInRound = i % n;
-                      const uid = round % 2 === 0
-                        ? snakeDraftOrder[posInRound]
-                        : snakeDraftOrder[n - 1 - posInRound];
-                      const isCurrent = i === snakePickIndex && status === 'active';
-                      const isNext = i === snakePickIndex + 1;
-                      const isDone = i < snakePickIndex;
-                      const isMe = uid === user?.uid;
-                      rows.push(
-                        <div key={i} className={`flex items-center gap-2.5 px-2 py-1.5 rounded-lg ${isCurrent ? 'bg-brand/10' : isNext ? 'bg-warn/8' : ''}`}>
-                          <span className={`text-xs tabular-nums w-5 text-right flex-shrink-0 ${isDone ? 'text-copy-3' : isCurrent ? 'text-brand font-bold' : isNext ? 'text-warn font-semibold' : 'text-copy-3'}`}>
-                            {i + 1}
-                          </span>
-                          <span className={`text-sm flex-1 truncate ${isDone ? 'text-copy-3 line-through' : isCurrent ? 'text-brand font-semibold' : isNext ? (isMe ? 'text-brand font-semibold' : 'text-warn font-semibold') : isMe ? 'text-brand font-medium' : 'text-copy'}`}>
-                            {isMe ? 'You' : participantName(uid)}
-                          </span>
-                          {isDone && snakePickHistory[i] && (
-                            <span className="text-xs text-copy-3 truncate max-w-[90px]">{snakePickHistory[i].teamName}</span>
-                          )}
-                          {isCurrent && (
-                            <span className="text-[10px] font-bold bg-brand text-white px-1.5 py-0.5 rounded-full flex-shrink-0">NOW</span>
-                          )}
-                          {isNext && (
-                            <span className="text-[10px] font-bold bg-warn text-white px-1.5 py-0.5 rounded-full flex-shrink-0">NEXT</span>
-                          )}
-                          {!isCurrent && !isNext && !isDone && posInRound === 0 && (
-                            <span className="text-[10px] text-copy-3 flex-shrink-0">R{round + 1}</span>
-                          )}
+                {(() => {
+                  const n = snakeDraftOrder.length;
+                  const totalPicks = snakePickHistory.length + availableTeams.length;
+                  const ftMap = new Map(fantasyTeams.map(ft => [ft.userId, ft]));
+                  // Build the upcoming queue (current pick onward), up to n*2+1 entries
+                  const upcoming: { uid: string; pickIndex: number }[] = [];
+                  const end = Math.min(totalPicks, snakePickIndex + n * 2 + 1);
+                  for (let i = snakePickIndex; i < end; i++) {
+                    const round = Math.floor(i / n);
+                    const posInRound = i % n;
+                    const uid = round % 2 === 0 ? snakeDraftOrder[posInRound] : snakeDraftOrder[n - 1 - posInRound];
+                    upcoming.push({ uid, pickIndex: i });
+                  }
+                  const visible = upcoming.slice(0, 12);
+                  const overflow = upcoming.length - visible.length;
+                  return (
+                    <div className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1">
+                      {visible.map(({ uid, pickIndex }, idx) => {
+                        const ft = ftMap.get(uid);
+                        const isCurrent = pickIndex === snakePickIndex;
+                        const isMe = uid === user?.uid;
+                        const label = isMe ? 'You' : (ft?.displayName?.split(' ')[0] ?? participantName(uid).split(' ')[0]);
+                        return (
+                          <div key={pickIndex} className="flex flex-col items-center gap-1 flex-shrink-0 w-14">
+                            <div className={`rounded-xl p-0.5 ${isCurrent ? 'ring-2 ring-brand ring-offset-1 ring-offset-card' : idx === 1 ? 'ring-1 ring-warn/60 ring-offset-1 ring-offset-card' : ''}`}>
+                              <TeamLogo logoUrl={ft?.logoUrl ?? null} name={ft?.displayName ?? uid} size={10} />
+                            </div>
+                            <p className={`text-[10px] text-center leading-tight w-full truncate font-medium ${isCurrent ? 'text-brand' : idx === 1 ? 'text-warn' : isMe ? 'text-brand/70' : 'text-copy-3'}`}>
+                              {label}
+                            </p>
+                            {isCurrent && (
+                              <span className="text-[9px] font-bold bg-brand text-white px-1 py-px rounded-full leading-tight">NOW</span>
+                            )}
+                          </div>
+                        );
+                      })}
+                      {overflow > 0 && (
+                        <div className="flex flex-col items-center justify-center flex-shrink-0 w-10 self-center">
+                          <span className="text-xs text-copy-3 font-medium">+{overflow}</span>
                         </div>
-                      );
-                    }
-                    return rows;
-                  })()}
-                </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             )}
 
