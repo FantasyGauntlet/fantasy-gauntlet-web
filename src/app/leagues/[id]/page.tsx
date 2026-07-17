@@ -3731,6 +3731,31 @@ function CommissionerTab({
               </button>
             </div>
           )}
+          {league.state === 'active' && (
+            <div className="flex items-center justify-between gap-3 pb-4 mb-4 border-b border-line">
+              <div>
+                <p className="text-xs font-medium text-copy">End Season</p>
+                <p className="text-xs text-copy-3 mt-0.5">
+                  Marks the season as complete and locks all rosters.
+                  {league.endDate && (
+                    <> Planned end: <span className="font-medium text-copy-2">{new Date(league.endDate + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>.</>
+                  )}
+                </p>
+              </div>
+              <button
+                onClick={async () => {
+                  if (!confirm('End the season now? This marks the league as completed and cannot be undone.')) return;
+                  try {
+                    const updated = await api.patch<League>(`/leagues/${leagueId}/state`, { state: 'completed' });
+                    setLeague(updated);
+                  } catch (e: unknown) { alert(e instanceof Error ? e.message : 'Failed'); }
+                }}
+                className="flex-shrink-0 bg-danger hover:bg-danger/80 text-white text-xs font-semibold px-3 py-2 rounded-xl transition-colors whitespace-nowrap"
+              >
+                End Season
+              </button>
+            </div>
+          )}
           {(league.state === 'completed' || league.state === 'active') && (
             <div className="flex items-center justify-between gap-3">
               <div>
