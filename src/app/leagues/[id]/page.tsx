@@ -450,12 +450,29 @@ export default function LeaguePage() {
   );
 }
 
+// ─── Lightbox ─────────────────────────────────────────────────────────────────
+
+function Lightbox({ url, onClose }: { url: string | null; onClose: () => void }) {
+  if (!url) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm" onClick={onClose}>
+      <button onClick={onClose} className="absolute top-4 right-4 text-white/70 hover:text-white transition-colors" aria-label="Close">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+          <path d="M18 6L6 18M6 6l12 12" />
+        </svg>
+      </button>
+      <img src={url} alt="" className="max-w-[90vw] max-h-[90vh] rounded-xl object-contain shadow-2xl" onClick={e => e.stopPropagation()} />
+    </div>
+  );
+}
+
 // ─── Standings Tab ────────────────────────────────────────────────────────────
 
 function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone, ownerNameByUserId }: { leagueId: string; userId?: string; fantasyTeams: FantasyTeam[]; topZone?: number | null; bottomZone?: number | null; ownerNameByUserId: Record<string, string>; }) {
   const [standings, setStandings] = useState<Standing[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const { openProfile } = useTeamProfile();
 
   const logoByUserId = new Map(fantasyTeams.map(ft => [ft.userId, ft.logoUrl ?? null]));
@@ -519,7 +536,7 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone, own
                   <td className="px-4 py-3.5">
                     <div className="flex items-center gap-2.5">
                       {logoByUserId.get(s.userId) ? (
-                        <img src={logoByUserId.get(s.userId)!} alt={s.displayName} className="w-7 h-7 object-cover rounded-full flex-shrink-0" />
+                        <img src={logoByUserId.get(s.userId)!} alt={s.displayName} className="w-7 h-7 object-cover rounded-full flex-shrink-0 cursor-pointer" onClick={() => setLightboxUrl(logoByUserId.get(s.userId)!)} />
                       ) : (
                         <div className="w-7 h-7 rounded-full bg-field border border-line flex items-center justify-center flex-shrink-0">
                           <span className="text-xs font-semibold text-copy-3">{s.displayName.charAt(0).toUpperCase()}</span>
@@ -622,6 +639,7 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone, own
           })}
         </tbody>
       </table>
+      <Lightbox url={lightboxUrl} onClose={() => setLightboxUrl(null)} />
     </div>
   );
 }
@@ -659,6 +677,7 @@ function RosterTab({
   const [logoUploadProgress, setLogoUploadProgress] = useState(0);
   const [logoDragging, setLogoDragging] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
   const [coOwners, setCoOwners] = useState<{ uid: string; email: string }[]>([]);
   const [coOwnerEmail, setCoOwnerEmail] = useState('');
@@ -1176,7 +1195,7 @@ function RosterTab({
         <div className="flex items-center justify-between px-5 py-4 border-b border-line">
           <div className="flex items-center gap-3 min-w-0">
             {viewingTeam?.logoUrl && (
-              <img src={viewingTeam.logoUrl} alt={viewingTeam.displayName} className="w-10 h-10 object-cover rounded-full flex-shrink-0" />
+              <img src={viewingTeam.logoUrl} alt={viewingTeam.displayName} className="w-10 h-10 object-cover rounded-full flex-shrink-0 cursor-pointer" onClick={() => setLightboxUrl(viewingTeam.logoUrl!)} />
             )}
             <div className="min-w-0">
               <p className="text-sm font-semibold text-copy">
@@ -1793,6 +1812,7 @@ function RosterTab({
           </div>
         </div>
       )}
+      <Lightbox url={lightboxUrl} onClose={() => setLightboxUrl(null)} />
     </div>
   );
 }
@@ -2600,6 +2620,7 @@ function TransactionCounterTab({
 }) {
   const [claims, setClaims] = useState<WaiverClaim[]>([]);
   const [loading, setLoading] = useState(true);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
   useEffect(() => {
     api.get<WaiverClaim[]>(`/leagues/${leagueId}/waivers`)
@@ -2644,7 +2665,7 @@ function TransactionCounterTab({
               <td className="px-4 py-3">
                 <div className="flex items-center gap-2.5">
                   {ft.logoUrl ? (
-                    <img src={ft.logoUrl} alt={ft.displayName} className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
+                    <img src={ft.logoUrl} alt={ft.displayName} className="w-7 h-7 rounded-full object-cover flex-shrink-0 cursor-pointer" onClick={() => setLightboxUrl(ft.logoUrl!)} />
                   ) : (
                     <div className="w-7 h-7 rounded-full bg-field border border-line flex items-center justify-center flex-shrink-0">
                       <span className="text-xs font-semibold text-copy-3">{ft.displayName.charAt(0).toUpperCase()}</span>
@@ -2674,6 +2695,7 @@ function TransactionCounterTab({
       {rows.length === 0 && (
         <p className="text-copy-3 text-sm px-4 py-6 text-center">No teams yet.</p>
       )}
+      <Lightbox url={lightboxUrl} onClose={() => setLightboxUrl(null)} />
     </div>
   );
 }
@@ -3188,29 +3210,7 @@ function LeagueHomeTab({
         </div>
       </div>
 
-      {/* ── Lightbox ───────────────────────────────────────────────────────────── */}
-      {lightboxUrl && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
-          onClick={() => setLightboxUrl(null)}
-        >
-          <button
-            onClick={() => setLightboxUrl(null)}
-            className="absolute top-4 right-4 text-white/70 hover:text-white transition-colors"
-            aria-label="Close"
-          >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
-          </button>
-          <img
-            src={lightboxUrl}
-            alt=""
-            className="max-w-[90vw] max-h-[90vh] rounded-xl object-contain shadow-2xl"
-            onClick={e => e.stopPropagation()}
-          />
-        </div>
-      )}
+      <Lightbox url={lightboxUrl} onClose={() => setLightboxUrl(null)} />
 
     </div>
   );
