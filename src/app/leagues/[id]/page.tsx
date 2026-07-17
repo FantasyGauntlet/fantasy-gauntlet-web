@@ -2838,6 +2838,7 @@ function LeagueHomeTab({
   const [msgImageUrl, setMsgImageUrl] = useState('');
   const [msgImageUploading, setMsgImageUploading] = useState(false);
   const [msgImageProgress, setMsgImageProgress] = useState(0);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
   function renderContent(content: string) {
     const imagePattern = /https?:\/\/\S+\.(?:gif|jpg|jpeg|png|webp)(?:[?#]\S*)?|https?:\/\/(?:media\.tenor\.com|media(?:\d+)?\.giphy\.com|i\.imgur\.com)\S*/gi;
@@ -2983,7 +2984,7 @@ function LeagueHomeTab({
                   <div className="text-sm text-copy-2 break-words space-y-1">
                     {renderContent(msg.content).map((part, i) =>
                       part.type === 'image'
-                        ? <img key={i} src={part.value} alt="" className="max-w-xs max-h-48 rounded-lg object-contain" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                        ? <img key={i} src={part.value} alt="" className="max-w-xs max-h-48 rounded-lg object-contain cursor-zoom-in" onClick={() => setLightboxUrl(part.value)} onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                         : part.value ? <span key={i} className="whitespace-pre-wrap">{part.value}</span> : null
                     )}
                   </div>
@@ -3139,7 +3140,7 @@ function LeagueHomeTab({
                   <div className="text-sm text-copy leading-relaxed break-words space-y-1">
                     {renderContent(ann.content).map((part, i) =>
                       part.type === 'image'
-                        ? <img key={i} src={part.value} alt="" className="max-w-xs max-h-48 rounded-lg object-contain" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                        ? <img key={i} src={part.value} alt="" className="max-w-xs max-h-48 rounded-lg object-contain cursor-zoom-in" onClick={() => setLightboxUrl(part.value)} onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                         : part.value ? <span key={i} className="whitespace-pre-wrap">{part.value}</span> : null
                     )}
                   </div>
@@ -3186,6 +3187,30 @@ function LeagueHomeTab({
           </div>
         </div>
       </div>
+
+      {/* ── Lightbox ───────────────────────────────────────────────────────────── */}
+      {lightboxUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+          onClick={() => setLightboxUrl(null)}
+        >
+          <button
+            onClick={() => setLightboxUrl(null)}
+            className="absolute top-4 right-4 text-white/70 hover:text-white transition-colors"
+            aria-label="Close"
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+          <img
+            src={lightboxUrl}
+            alt=""
+            className="max-w-[90vw] max-h-[90vh] rounded-xl object-contain shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          />
+        </div>
+      )}
 
     </div>
   );
