@@ -138,6 +138,7 @@ export default function DashboardPage() {
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
+  const [showPast, setShowPast] = useState(false);
   const activeLeagues = leagues.filter(l => l.state !== 'completed' && l.state !== 'cancelled');
   const pastLeagues   = leagues.filter(l => l.state === 'completed' || l.state === 'cancelled');
   const activeCount   = leagues.filter(l => l.state === 'active' || l.state === 'auction').length;
@@ -227,10 +228,29 @@ export default function DashboardPage() {
           {/* Past seasons */}
           {pastLeagues.length > 0 && (
             <div>
-              <h2 className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-3">Past Seasons</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {pastLeagues.map(league => <LeagueCard key={league.id} league={league} muted />)}
-              </div>
+              <button
+                onClick={() => setShowPast(v => !v)}
+                className="flex items-center gap-2 group mb-3"
+              >
+                <h2 className="text-xs font-semibold text-copy-3 uppercase tracking-widest group-hover:text-copy-2 transition-colors">
+                  Past Seasons
+                </h2>
+                <span className="text-xs text-copy-3 bg-field border border-line px-1.5 py-0.5 rounded-full group-hover:border-line-2 transition-colors">
+                  {pastLeagues.length}
+                </span>
+                <svg
+                  width="12" height="12" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
+                  className={`text-copy-3 transition-transform ${showPast ? 'rotate-180' : ''}`}
+                >
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
+              {showPast && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {pastLeagues.map(league => <LeagueCard key={league.id} league={league} muted />)}
+                </div>
+              )}
             </div>
           )}
 
