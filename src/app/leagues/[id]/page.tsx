@@ -37,6 +37,8 @@ interface League {
   waiverSettings?: { processingDay: string; processingHour: number } | null;
   waiverType?: 'reserve-standings' | 'faab';
   faabStartingBudget?: number;
+  leagueGroupId?: string;
+  createdAt?: string;
 }
 
 interface Member { id: string; userId: string; role: 'commissioner' | 'member'; joinedAt: string; displayName?: string; }
@@ -180,6 +182,7 @@ export default function LeaguePage() {
   const [fantasyTeams, setFantasyTeams] = useState<FantasyTeam[]>([]);
   const [tab, setTab] = useState<Tab>('standings');
   const [loading, setLoading] = useState(true);
+  const [leagueGroup, setLeagueGroup] = useState<{ id: string; name: string; createdAt: string }[]>([]);
 
   useEffect(() => {
     Promise.all([
@@ -197,6 +200,15 @@ export default function LeaguePage() {
     const t = new URLSearchParams(window.location.search).get('tab') as Tab | null;
     if (t && VALID_TABS.includes(t)) setTab(t);
   }, []);
+
+  // Fetch all seasons in this franchise group
+  useEffect(() => {
+    const groupId = league?.leagueGroupId;
+    if (!groupId) return;
+    api.get<{ id: string; name: string; createdAt: string }[]>(`/leagues/group/${groupId}`)
+      .then(setLeagueGroup)
+      .catch(() => {});
+  }, [league?.leagueGroupId]);
 
   async function startAuction() {
     try {
@@ -258,6 +270,31 @@ export default function LeaguePage() {
                 {stateMeta.label}
               </span>
             </div>
+            {leagueGroup.length > 1 && (
+              <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                <span className="text-xs text-copy-3 mr-0.5">Season:</span>
+                {leagueGroup.map((season) => {
+                  const year = new Date(season.createdAt).getFullYear();
+                  const isCurrent = season.id === id;
+                  return isCurrent ? (
+                    <span
+                      key={season.id}
+                      className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-brand text-white"
+                    >
+                      {year}
+                    </span>
+                  ) : (
+                    <button
+                      key={season.id}
+                      onClick={() => router.push(`/leagues/${season.id}`)}
+                      className="text-xs font-medium px-2.5 py-0.5 rounded-full bg-field border border-line text-copy-3 hover:text-copy hover:border-line-2 transition-colors"
+                    >
+                      {year}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
           <div className="flex flex-col items-end gap-2">
             {league.state === 'draft' && league.auctionConfig?.scheduledStartAt && (
