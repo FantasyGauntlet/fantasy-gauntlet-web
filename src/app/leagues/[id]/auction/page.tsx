@@ -1081,7 +1081,7 @@ export default function AuctionPage() {
                       onChange={e => setSnakePickSearch(e.target.value)}
                       className="w-full bg-field border border-line-2 rounded-xl px-4 py-2.5 text-copy text-sm placeholder-copy-3 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors"
                     />
-                    <div className="max-h-80 overflow-y-auto space-y-1 -mr-1 pr-1">
+                    <div className="max-h-[30rem] overflow-y-auto space-y-1 -mr-1 pr-1">
                       {(() => {
                         const q = snakePickSearch.toLowerCase();
                         const filtered = availableTeams.filter(t =>
