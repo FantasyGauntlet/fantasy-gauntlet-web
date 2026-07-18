@@ -245,6 +245,7 @@ export default function AuctionPage() {
   const socketRef = useRef<Socket | null>(null);
   const toastId = useRef(0);
   const lotFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const justWonRef = useRef(false);
   // Tracks the last server-sent timer value and when we received it, so we can
   // interpolate the countdown between server ticks (prevents timer drift/jumpiness)
   const timerSyncRef = useRef<{ remaining: number; receivedAt: number } | null>(null);
@@ -515,7 +516,11 @@ export default function AuctionPage() {
       // ──────────────────────────────────────────────────────────────────
 
       socket.on('lot_opened', (data: any) => {
-        playSound('newLot', soundMuted);
+        if (justWonRef.current) {
+          justWonRef.current = false;
+        } else {
+          playSound('newLot', soundMuted);
+        }
         // Cancel any pending "clear lot" timeout from team_sold / team_passed
         if (lotFlashTimerRef.current) {
           clearTimeout(lotFlashTimerRef.current);
@@ -612,6 +617,8 @@ export default function AuctionPage() {
         });
         if (data.winnerId === userRef.current?.uid) {
           toast('success', `You won ${info?.name ?? data.teamId} for $${data.winningBid}!`);
+          justWonRef.current = true;
+          playSound('yourTurn', soundMuted);
         }
         timerSyncRef.current = null;
         lotFlashTimerRef.current = setTimeout(() => {
