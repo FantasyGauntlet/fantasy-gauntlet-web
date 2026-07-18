@@ -131,32 +131,35 @@ function playSound(type: 'newLot' | 'yourTurn', muted: boolean) {
   if (muted) return;
   try {
     const ctx = new AudioContext();
-    const gain = ctx.createGain();
-    gain.connect(ctx.destination);
 
     if (type === 'yourTurn') {
-      // Two ascending notes — grabs attention
-      [{ f: 523.25, t: 0 }, { f: 659.25, t: 0.18 }].forEach(({ f, t }) => {
+      // Three-note rise (C5 → E5 → G5), each note rings long
+      [{ f: 523.25, t: 0 }, { f: 659.25, t: 0.22 }, { f: 783.99, t: 0.44 }].forEach(({ f, t }) => {
+        const g = ctx.createGain();
+        g.connect(ctx.destination);
         const osc = ctx.createOscillator();
-        osc.type = 'sine';
+        osc.type = 'triangle';
         osc.frequency.setValueAtTime(f, ctx.currentTime + t);
-        osc.connect(gain);
-        gain.gain.setValueAtTime(0, ctx.currentTime + t);
-        gain.gain.linearRampToValueAtTime(0.35, ctx.currentTime + t + 0.02);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.35);
+        osc.connect(g);
+        g.gain.setValueAtTime(0, ctx.currentTime + t);
+        g.gain.linearRampToValueAtTime(0.28, ctx.currentTime + t + 0.015);
+        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.9);
         osc.start(ctx.currentTime + t);
-        osc.stop(ctx.currentTime + t + 0.4);
+        osc.stop(ctx.currentTime + t + 0.95);
       });
     } else {
-      // Single soft chime
+      // Warm bell — triangle wave, soft attack, long ring
+      const g = ctx.createGain();
+      g.connect(ctx.destination);
       const osc = ctx.createOscillator();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(880, ctx.currentTime);
-      osc.connect(gain);
-      gain.gain.setValueAtTime(0.2, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(660, ctx.currentTime);
+      osc.connect(g);
+      g.gain.setValueAtTime(0, ctx.currentTime);
+      g.gain.linearRampToValueAtTime(0.3, ctx.currentTime + 0.015);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.7);
       osc.start();
-      osc.stop(ctx.currentTime + 0.45);
+      osc.stop(ctx.currentTime + 0.75);
     }
   } catch { /* autoplay blocked or unsupported — silently ignore */ }
 }
