@@ -127,7 +127,8 @@ function ToastStack({ toasts }: { toasts: Toast[] }) {
 
 // ─── Sound ────────────────────────────────────────────────────────────────────
 
-function playSound(type: 'newLot' | 'yourTurn') {
+function playSound(type: 'newLot' | 'yourTurn', muted: boolean) {
+  if (muted) return;
   try {
     const ctx = new AudioContext();
     const gain = ctx.createGain();
@@ -167,6 +168,18 @@ export default function AuctionPage() {
   const { user } = useAuth();
   const { openProfile } = useTeamProfile();
   const router = useRouter();
+
+  const [soundMuted, setSoundMuted] = useState<boolean>(() => {
+    try { return localStorage.getItem('fg_draft_muted') === 'true'; } catch { return false; }
+  });
+
+  function toggleMute() {
+    setSoundMuted(m => {
+      const next = !m;
+      try { localStorage.setItem('fg_draft_muted', String(next)); } catch { /* ignore */ }
+      return next;
+    });
+  }
 
   // ── Data ──────────────────────────────────────────────────────────────────
   const [league, setLeague] = useState<League | null>(null);
@@ -438,7 +451,7 @@ export default function AuctionPage() {
         setSnakePickSelected(null);
         setSnakePickPending(false);
         setStatus('active');
-        if (data.pickerUserId === user?.uid) playSound('yourTurn');
+        if (data.pickerUserId === user?.uid) playSound('yourTurn', soundMuted);
         const t = data.timerSeconds ?? 60;
         timerSyncRef.current = { remaining: t, receivedAt: Date.now() };
         setTimerRemaining(t);
@@ -499,7 +512,7 @@ export default function AuctionPage() {
       // ──────────────────────────────────────────────────────────────────
 
       socket.on('lot_opened', (data: any) => {
-        playSound('newLot');
+        playSound('newLot', soundMuted);
         // Cancel any pending "clear lot" timeout from team_sold / team_passed
         if (lotFlashTimerRef.current) {
           clearTimeout(lotFlashTimerRef.current);
@@ -893,7 +906,24 @@ export default function AuctionPage() {
           <span className="text-copy-3">/</span>
           <span className="text-brand font-semibold">Draft Room</span>
         </div>
-        <div className="flex items-center gap-2 text-sm text-copy-2">
+        <div className="flex items-center gap-3 text-sm text-copy-2">
+          <button
+            onClick={toggleMute}
+            title={soundMuted ? 'Unmute sounds' : 'Mute sounds'}
+            className="text-copy-3 hover:text-copy transition-colors"
+          >
+            {soundMuted ? (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                <line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/>
+              </svg>
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+              </svg>
+            )}
+          </button>
           <Dot color={connected ? 'green' : 'red'} />
           <span>{connected ? 'Live' : 'Disconnected'}</span>
         </div>
