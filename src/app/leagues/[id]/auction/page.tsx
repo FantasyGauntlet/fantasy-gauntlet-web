@@ -125,6 +125,41 @@ function ToastStack({ toasts }: { toasts: Toast[] }) {
   );
 }
 
+// ─── Sound ────────────────────────────────────────────────────────────────────
+
+function playSound(type: 'newLot' | 'yourTurn') {
+  try {
+    const ctx = new AudioContext();
+    const gain = ctx.createGain();
+    gain.connect(ctx.destination);
+
+    if (type === 'yourTurn') {
+      // Two ascending notes — grabs attention
+      [{ f: 523.25, t: 0 }, { f: 659.25, t: 0.18 }].forEach(({ f, t }) => {
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(f, ctx.currentTime + t);
+        osc.connect(gain);
+        gain.gain.setValueAtTime(0, ctx.currentTime + t);
+        gain.gain.linearRampToValueAtTime(0.35, ctx.currentTime + t + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.35);
+        osc.start(ctx.currentTime + t);
+        osc.stop(ctx.currentTime + t + 0.4);
+      });
+    } else {
+      // Single soft chime
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, ctx.currentTime);
+      osc.connect(gain);
+      gain.gain.setValueAtTime(0.2, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.45);
+    }
+  } catch { /* autoplay blocked or unsupported — silently ignore */ }
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 export default function AuctionPage() {
@@ -403,6 +438,7 @@ export default function AuctionPage() {
         setSnakePickSelected(null);
         setSnakePickPending(false);
         setStatus('active');
+        if (data.pickerUserId === user?.uid) playSound('yourTurn');
         const t = data.timerSeconds ?? 60;
         timerSyncRef.current = { remaining: t, receivedAt: Date.now() };
         setTimerRemaining(t);
@@ -463,6 +499,7 @@ export default function AuctionPage() {
       // ──────────────────────────────────────────────────────────────────
 
       socket.on('lot_opened', (data: any) => {
+        playSound('newLot');
         // Cancel any pending "clear lot" timeout from team_sold / team_passed
         if (lotFlashTimerRef.current) {
           clearTimeout(lotFlashTimerRef.current);
