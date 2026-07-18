@@ -414,6 +414,7 @@ export default function LeaguePage() {
           waiverType={league.waiverType ?? 'reserve-standings'}
           faabStartingBudget={league.faabStartingBudget ?? 100}
           rosterSize={league.selectedSports.length + (league.maxWildcard ?? 0)}
+          waiverSettings={league.waiverSettings}
         />
       )}
       {tab === 'transaction-counter' && (
@@ -1995,7 +1996,7 @@ function ClaimCard({
 }
 
 function WaiversTab({
-  leagueId, isCommissioner, userId, fantasyTeams, selectedSports, waiverType, faabStartingBudget, rosterSize,
+  leagueId, isCommissioner, userId, fantasyTeams, selectedSports, waiverType, faabStartingBudget, rosterSize, waiverSettings,
 }: {
   leagueId: string;
   isCommissioner: boolean;
@@ -2005,6 +2006,7 @@ function WaiversTab({
   waiverType: 'reserve-standings' | 'faab';
   faabStartingBudget: number;
   rosterSize: number;
+  waiverSettings?: { processingDay: string; processingHour: number } | null;
 }) {
   const [claims, setClaims] = useState<WaiverClaim[]>([]);
   const [pool, setPool] = useState<TeamWithRecord[]>([]);
@@ -2193,8 +2195,39 @@ function WaiversTab({
 
   const addedTeam = addTeamId ? comprehensiveTeamMap.get(addTeamId) : null;
 
+  const nextProcessingLabel = (() => {
+    const day = waiverSettings?.processingDay ?? 'tuesday';
+    const hour = waiverSettings?.processingHour ?? 11;
+    const dayLabel = day.charAt(0).toUpperCase() + day.slice(1);
+    const timeLabel = hour === 0 ? '12:00 AM' : hour < 12 ? `${hour}:00 AM` : hour === 12 ? '12:00 PM' : `${hour - 12}:00 PM`;
+    // Compute how many days until next occurrence
+    const dayIndex = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'].indexOf(day);
+    if (dayIndex === -1) return `${dayLabel} at ${timeLabel} EST`;
+    const now = new Date();
+    const etNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    const todayIdx = etNow.getDay();
+    const etHour = etNow.getHours();
+    let daysUntil = (dayIndex - todayIdx + 7) % 7;
+    if (daysUntil === 0 && etHour >= hour) daysUntil = 7;
+    const isToday = daysUntil === 0;
+    const isTomorrow = daysUntil === 1;
+    const when = isToday ? 'today' : isTomorrow ? 'tomorrow' : `${dayLabel}`;
+    return `${when} at ${timeLabel} EST`;
+  })();
+
   return (
     <div className="space-y-6">
+      {/* Processing schedule banner */}
+      {(waiverSettings || true) && (
+        <div className="flex items-center gap-3 bg-field border border-line rounded-xl px-4 py-3">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-copy-3 flex-shrink-0">
+            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+          </svg>
+          <p className="text-sm text-copy-2">
+            Waivers process <span className="font-semibold text-copy">{nextProcessingLabel}</span>
+          </p>
+        </div>
+      )}
       {/* Header */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
@@ -3503,7 +3536,7 @@ function CommissionerTab({
   const [zonesSaving, setZonesSaving] = useState(false);
 
   const [waiverDay, setWaiverDay] = useState(league.waiverSettings?.processingDay ?? 'tuesday');
-  const [waiverHour, setWaiverHour] = useState(league.waiverSettings?.processingHour ?? 17);
+  const [waiverHour, setWaiverHour] = useState(league.waiverSettings?.processingHour ?? 11);
   const [waiverSettingsSaving, setWaiverSettingsSaving] = useState(false);
 
   const [leagueName, setLeagueName] = useState(league.name ?? '');
@@ -4159,7 +4192,7 @@ function RulesTab({ league }: { league: League }) {
             {(() => {
               const ws = league.waiverSettings;
               const wDay = ws?.processingDay ?? 'tuesday';
-              const wHour = ws?.processingHour ?? 17;
+              const wHour = ws?.processingHour ?? 11;
               const wDayLabel = wDay.charAt(0).toUpperCase() + wDay.slice(1);
               const wTimeLabel = wHour === 0 ? '12:00 AM' : wHour < 12 ? `${wHour}:00 AM` : wHour === 12 ? '12:00 PM' : `${wHour - 12}:00 PM`;
               return [
