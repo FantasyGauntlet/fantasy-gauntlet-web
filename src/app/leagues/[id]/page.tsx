@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, useRef } from 'react';
+import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ref as storageRef, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
@@ -181,7 +181,13 @@ export default function LeaguePage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [fantasyTeams, setFantasyTeams] = useState<FantasyTeam[]>([]);
   const [tab, setTab] = useState<Tab>('standings');
+  const [mountedTabs, setMountedTabs] = useState<Set<Tab>>(() => new Set<Tab>(['standings']));
   const [loading, setLoading] = useState(true);
+
+  const switchTab = useCallback((next: Tab) => {
+    setMountedTabs((prev: Set<Tab>) => prev.has(next) ? prev : new Set<Tab>([...prev, next]));
+    setTab(next);
+  }, []);
 
   useEffect(() => {
     Promise.all([
@@ -197,8 +203,8 @@ export default function LeaguePage() {
   // Read initial tab from URL search param (set by NavBar dropdown links)
   useEffect(() => {
     const t = new URLSearchParams(window.location.search).get('tab') as Tab | null;
-    if (t && VALID_TABS.includes(t)) setTab(t);
-  }, []);
+    if (t && VALID_TABS.includes(t)) switchTab(t);
+  }, [switchTab]);
 
 
   async function startAuction() {
@@ -303,7 +309,7 @@ export default function LeaguePage() {
         {(['standings', 'roster'] as Tab[]).map(t => (
           <button
             key={t}
-            onClick={() => setTab(t)}
+            onClick={() => switchTab(t)}
             className={`px-4 py-2.5 text-sm font-medium transition-colors -mb-px border-b-2 capitalize ${
               tab === t
                 ? 'border-brand text-brand'
@@ -342,7 +348,7 @@ export default function LeaguePage() {
                   {teamsSubTabs.map(t => (
                     <button
                       key={t.key}
-                      onClick={() => setTab(t.key)}
+                      onClick={() => switchTab(t.key)}
                       className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
                         tab === t.key
                           ? 'bg-brand-dim text-brand font-medium'
@@ -377,7 +383,7 @@ export default function LeaguePage() {
               {leagueSubTabs.map(t => (
                 <button
                   key={t.key}
-                  onClick={() => setTab(t.key)}
+                  onClick={() => switchTab(t.key)}
                   className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
                     tab === t.key
                       ? 'bg-brand-dim text-brand font-medium'
@@ -392,59 +398,80 @@ export default function LeaguePage() {
         </div>
       </div>
 
-      {tab === 'standings' && <StandingsTab leagueId={id} userId={user?.uid} fantasyTeams={fantasyTeams} topZone={league.topZone} bottomZone={league.bottomZone} ownerNameByUserId={Object.fromEntries(members.filter(m => m.displayName).map(m => [m.userId, m.displayName!]))} />}
-      {tab === 'roster' && (
-        <RosterTab
-          leagueId={id}
-          leagueState={league.state}
-          fantasyTeams={fantasyTeams}
-          setFantasyTeams={setFantasyTeams}
-          isCommissioner={isCommissioner}
-          userId={user?.uid}
-          ownerNameByUserId={Object.fromEntries(members.filter(m => m.displayName).map(m => [m.userId, m.displayName!]))}
-        />
+      {mountedTabs.has('standings') && (
+        <div className={tab !== 'standings' ? 'hidden' : ''}>
+          <StandingsTab leagueId={id} userId={user?.uid} fantasyTeams={fantasyTeams} topZone={league.topZone} bottomZone={league.bottomZone} ownerNameByUserId={Object.fromEntries(members.filter(m => m.displayName).map(m => [m.userId, m.displayName!]))} />
+        </div>
       )}
-      {tab === 'waivers' && (
-        <WaiversTab
-          leagueId={id}
-          isCommissioner={isCommissioner}
-          userId={user?.uid}
-          fantasyTeams={fantasyTeams}
-          selectedSports={league.selectedSports}
-          waiverType={league.waiverType ?? 'reserve-standings'}
-          faabStartingBudget={league.faabStartingBudget ?? 100}
-          rosterSize={league.selectedSports.length + (league.maxWildcard ?? 0)}
-          waiverSettings={league.waiverSettings}
-        />
+      {mountedTabs.has('roster') && (
+        <div className={tab !== 'roster' ? 'hidden' : ''}>
+          <RosterTab
+            leagueId={id}
+            leagueState={league.state}
+            fantasyTeams={fantasyTeams}
+            setFantasyTeams={setFantasyTeams}
+            isCommissioner={isCommissioner}
+            userId={user?.uid}
+            ownerNameByUserId={Object.fromEntries(members.filter(m => m.displayName).map(m => [m.userId, m.displayName!]))}
+          />
+        </div>
       )}
-      {tab === 'transaction-counter' && (
-        <TransactionCounterTab
-          leagueId={id}
-          fantasyTeams={fantasyTeams}
-          waiverType={league.waiverType ?? 'reserve-standings'}
-          faabStartingBudget={league.faabStartingBudget ?? 100}
-          userId={user?.uid}
-        />
+      {mountedTabs.has('waivers') && (
+        <div className={tab !== 'waivers' ? 'hidden' : ''}>
+          <WaiversTab
+            leagueId={id}
+            isCommissioner={isCommissioner}
+            userId={user?.uid}
+            fantasyTeams={fantasyTeams}
+            selectedSports={league.selectedSports}
+            waiverType={league.waiverType ?? 'reserve-standings'}
+            faabStartingBudget={league.faabStartingBudget ?? 100}
+            rosterSize={league.selectedSports.length + (league.maxWildcard ?? 0)}
+            waiverSettings={league.waiverSettings}
+          />
+        </div>
       )}
-      {tab === 'auction-summary' && (
-        <AuctionSummaryTab
-          leagueId={id}
-          fantasyTeams={fantasyTeams}
-        />
+      {mountedTabs.has('transaction-counter') && (
+        <div className={tab !== 'transaction-counter' ? 'hidden' : ''}>
+          <TransactionCounterTab
+            leagueId={id}
+            fantasyTeams={fantasyTeams}
+            waiverType={league.waiverType ?? 'reserve-standings'}
+            faabStartingBudget={league.faabStartingBudget ?? 100}
+            userId={user?.uid}
+          />
+        </div>
       )}
-      {tab === 'home' && (
-        <LeagueHomeTab league={league} isCommissioner={isCommissioner} leagueId={id} memberCount={members.length} userId={user?.uid} fantasyTeams={fantasyTeams} />
+      {mountedTabs.has('auction-summary') && (
+        <div className={tab !== 'auction-summary' ? 'hidden' : ''}>
+          <AuctionSummaryTab leagueId={id} fantasyTeams={fantasyTeams} />
+        </div>
       )}
-      {tab === 'history' && (
-        <HistoryTab leagueId={id} leagueGroupId={league.leagueGroupId} previousLeagueId={league.previousLeagueId} />
+      {mountedTabs.has('home') && (
+        <div className={tab !== 'home' ? 'hidden' : ''}>
+          <LeagueHomeTab league={league} isCommissioner={isCommissioner} leagueId={id} memberCount={members.length} userId={user?.uid} fantasyTeams={fantasyTeams} />
+        </div>
       )}
-      {tab === 'rules' && <RulesTab league={league} />}
-      {tab === 'activity' && (
-        <RecentActivityTab leagueId={id} fantasyTeams={fantasyTeams} />
+      {mountedTabs.has('history') && (
+        <div className={tab !== 'history' ? 'hidden' : ''}>
+          <HistoryTab leagueId={id} leagueGroupId={league.leagueGroupId} previousLeagueId={league.previousLeagueId} />
+        </div>
       )}
-      {tab === 'commissioner' && isCommissioner && (
-        <div className="space-y-4">
-          <CommissionerTab league={league} setLeague={setLeague} leagueId={id} />
+      {mountedTabs.has('rules') && (
+        <div className={tab !== 'rules' ? 'hidden' : ''}>
+          <RulesTab league={league} />
+        </div>
+      )}
+      {mountedTabs.has('activity') && (
+        <div className={tab !== 'activity' ? 'hidden' : ''}>
+          <RecentActivityTab leagueId={id} fantasyTeams={fantasyTeams} />
+        </div>
+      )}
+      {mountedTabs.has('commissioner') && isCommissioner && (
+        <div className={tab !== 'commissioner' ? 'hidden' : ''}>
+          <div className="space-y-4">
+            <CommissionerTab league={league} setLeague={setLeague} leagueId={id} />
+          </div>
         </div>
       )}
     </div>
