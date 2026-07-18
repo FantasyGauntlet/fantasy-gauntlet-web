@@ -127,40 +127,24 @@ function ToastStack({ toasts }: { toasts: Toast[] }) {
 
 // ─── Sound ────────────────────────────────────────────────────────────────────
 
-function playSound(type: 'newLot' | 'yourTurn', muted: boolean) {
+function playSound(muted: boolean) {
   if (muted) return;
   try {
     const ctx = new AudioContext();
-
-    if (type === 'yourTurn') {
-      // Three-note rise (C5 → E5 → G5), each note rings long
-      [{ f: 523.25, t: 0 }, { f: 659.25, t: 0.22 }, { f: 783.99, t: 0.44 }].forEach(({ f, t }) => {
-        const g = ctx.createGain();
-        g.connect(ctx.destination);
-        const osc = ctx.createOscillator();
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(f, ctx.currentTime + t);
-        osc.connect(g);
-        g.gain.setValueAtTime(0, ctx.currentTime + t);
-        g.gain.linearRampToValueAtTime(0.28, ctx.currentTime + t + 0.015);
-        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.9);
-        osc.start(ctx.currentTime + t);
-        osc.stop(ctx.currentTime + t + 0.95);
-      });
-    } else {
-      // Warm bell — triangle wave, soft attack, long ring
+    // Three-note rise (C5 → E5 → G5)
+    [{ f: 523.25, t: 0 }, { f: 659.25, t: 0.22 }, { f: 783.99, t: 0.44 }].forEach(({ f, t }) => {
       const g = ctx.createGain();
       g.connect(ctx.destination);
       const osc = ctx.createOscillator();
       osc.type = 'triangle';
-      osc.frequency.setValueAtTime(660, ctx.currentTime);
+      osc.frequency.setValueAtTime(f, ctx.currentTime + t);
       osc.connect(g);
-      g.gain.setValueAtTime(0, ctx.currentTime);
-      g.gain.linearRampToValueAtTime(0.3, ctx.currentTime + 0.015);
-      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.7);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.75);
-    }
+      g.gain.setValueAtTime(0, ctx.currentTime + t);
+      g.gain.linearRampToValueAtTime(0.28, ctx.currentTime + t + 0.015);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.9);
+      osc.start(ctx.currentTime + t);
+      osc.stop(ctx.currentTime + t + 0.95);
+    });
   } catch { /* autoplay blocked or unsupported — silently ignore */ }
 }
 
@@ -245,7 +229,6 @@ export default function AuctionPage() {
   const socketRef = useRef<Socket | null>(null);
   const toastId = useRef(0);
   const lotFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const justWonRef = useRef(false);
   // Tracks the last server-sent timer value and when we received it, so we can
   // interpolate the countdown between server ticks (prevents timer drift/jumpiness)
   const timerSyncRef = useRef<{ remaining: number; receivedAt: number } | null>(null);
@@ -455,7 +438,7 @@ export default function AuctionPage() {
         setSnakePickSelected(null);
         setSnakePickPending(false);
         setStatus('active');
-        if (data.pickerUserId === user?.uid) playSound('yourTurn', soundMuted);
+        if (data.pickerUserId === user?.uid) playSound(soundMuted);
         const t = data.timerSeconds ?? 60;
         timerSyncRef.current = { remaining: t, receivedAt: Date.now() };
         setTimerRemaining(t);
@@ -516,11 +499,6 @@ export default function AuctionPage() {
       // ──────────────────────────────────────────────────────────────────
 
       socket.on('lot_opened', (data: any) => {
-        if (justWonRef.current) {
-          justWonRef.current = false;
-        } else {
-          playSound('newLot', soundMuted);
-        }
         // Cancel any pending "clear lot" timeout from team_sold / team_passed
         if (lotFlashTimerRef.current) {
           clearTimeout(lotFlashTimerRef.current);
@@ -617,8 +595,7 @@ export default function AuctionPage() {
         });
         if (data.winnerId === userRef.current?.uid) {
           toast('success', `You won ${info?.name ?? data.teamId} for $${data.winningBid}!`);
-          justWonRef.current = true;
-          playSound('yourTurn', soundMuted);
+          playSound(soundMuted);
         }
         timerSyncRef.current = null;
         lotFlashTimerRef.current = setTimeout(() => {
