@@ -159,6 +159,8 @@ export default function AuctionPage() {
   const [soundMuted, setSoundMuted] = useState<boolean>(() => {
     try { return localStorage.getItem('fg_draft_muted') === 'true'; } catch { return false; }
   });
+  const soundMutedRef = useRef(soundMuted);
+  useEffect(() => { soundMutedRef.current = soundMuted; }, [soundMuted]);
 
   function toggleMute() {
     setSoundMuted(m => {
@@ -438,7 +440,7 @@ export default function AuctionPage() {
         setSnakePickSelected(null);
         setSnakePickPending(false);
         setStatus('active');
-        if (data.pickerUserId === user?.uid) playSound(soundMuted);
+        if (data.pickerUserId === user?.uid) playSound(soundMutedRef.current);
         const t = data.timerSeconds ?? 60;
         timerSyncRef.current = { remaining: t, receivedAt: Date.now() };
         setTimerRemaining(t);
@@ -595,7 +597,7 @@ export default function AuctionPage() {
         });
         if (data.winnerId === userRef.current?.uid) {
           toast('success', `You won ${info?.name ?? data.teamId} for $${data.winningBid}!`);
-          playSound(soundMuted);
+          playSound(soundMutedRef.current);
         }
         timerSyncRef.current = null;
         lotFlashTimerRef.current = setTimeout(() => {
