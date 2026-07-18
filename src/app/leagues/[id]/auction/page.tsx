@@ -127,24 +127,39 @@ function ToastStack({ toasts }: { toasts: Toast[] }) {
 
 // ─── Sound ────────────────────────────────────────────────────────────────────
 
-function playSound(muted: boolean) {
+function playSound(type: 'newLot' | 'win', muted: boolean) {
   if (muted) return;
   try {
     const ctx = new AudioContext();
-    // Three-note rise (C5 → E5 → G5)
-    [{ f: 523.25, t: 0 }, { f: 659.25, t: 0.22 }, { f: 783.99, t: 0.44 }].forEach(({ f, t }) => {
+    if (type === 'win') {
+      // Three-note rise (C5 → E5 → G5)
+      [{ f: 523.25, t: 0 }, { f: 659.25, t: 0.22 }, { f: 783.99, t: 0.44 }].forEach(({ f, t }) => {
+        const g = ctx.createGain();
+        g.connect(ctx.destination);
+        const osc = ctx.createOscillator();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(f, ctx.currentTime + t);
+        osc.connect(g);
+        g.gain.setValueAtTime(0, ctx.currentTime + t);
+        g.gain.linearRampToValueAtTime(0.28, ctx.currentTime + t + 0.015);
+        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.9);
+        osc.start(ctx.currentTime + t);
+        osc.stop(ctx.currentTime + t + 0.95);
+      });
+    } else {
+      // Warm bell — single tone, soft attack, long ring
       const g = ctx.createGain();
       g.connect(ctx.destination);
       const osc = ctx.createOscillator();
       osc.type = 'triangle';
-      osc.frequency.setValueAtTime(f, ctx.currentTime + t);
+      osc.frequency.setValueAtTime(660, ctx.currentTime);
       osc.connect(g);
-      g.gain.setValueAtTime(0, ctx.currentTime + t);
-      g.gain.linearRampToValueAtTime(0.28, ctx.currentTime + t + 0.015);
-      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.9);
-      osc.start(ctx.currentTime + t);
-      osc.stop(ctx.currentTime + t + 0.95);
-    });
+      g.gain.setValueAtTime(0, ctx.currentTime);
+      g.gain.linearRampToValueAtTime(0.3, ctx.currentTime + 0.015);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.7);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.75);
+    }
   } catch { /* autoplay blocked or unsupported — silently ignore */ }
 }
 
@@ -161,6 +176,7 @@ export default function AuctionPage() {
   });
   const soundMutedRef = useRef(soundMuted);
   useEffect(() => { soundMutedRef.current = soundMuted; }, [soundMuted]);
+  const justWonRef = useRef(false);
 
   function toggleMute() {
     setSoundMuted(m => {
@@ -440,7 +456,7 @@ export default function AuctionPage() {
         setSnakePickSelected(null);
         setSnakePickPending(false);
         setStatus('active');
-        if (data.pickerUserId === user?.uid) playSound(soundMutedRef.current);
+        if (data.pickerUserId === user?.uid) playSound('win', soundMutedRef.current);
         const t = data.timerSeconds ?? 60;
         timerSyncRef.current = { remaining: t, receivedAt: Date.now() };
         setTimerRemaining(t);
@@ -501,6 +517,11 @@ export default function AuctionPage() {
       // ──────────────────────────────────────────────────────────────────
 
       socket.on('lot_opened', (data: any) => {
+        if (justWonRef.current) {
+          justWonRef.current = false;
+        } else {
+          playSound('newLot', soundMutedRef.current);
+        }
         // Cancel any pending "clear lot" timeout from team_sold / team_passed
         if (lotFlashTimerRef.current) {
           clearTimeout(lotFlashTimerRef.current);
@@ -597,7 +618,8 @@ export default function AuctionPage() {
         });
         if (data.winnerId === userRef.current?.uid) {
           toast('success', `You won ${info?.name ?? data.teamId} for $${data.winningBid}!`);
-          playSound(soundMutedRef.current);
+          justWonRef.current = true;
+          playSound('win', soundMutedRef.current);
         }
         timerSyncRef.current = null;
         lotFlashTimerRef.current = setTimeout(() => {
