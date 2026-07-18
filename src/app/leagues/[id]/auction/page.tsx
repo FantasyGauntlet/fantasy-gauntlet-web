@@ -1340,7 +1340,14 @@ export default function AuctionPage() {
                                   : 'bg-field hover:bg-field-2'
                               }`}
                             >
-                              {pendingBidAmt === amt ? '…' : `$${amt}`}
+                              {pendingBidAmt === amt ? '…' : (
+                                <>
+                                  ${amt}
+                                  {currentLot?.currentBidderId && (
+                                    <span className="opacity-50 ml-1">(+{amt - currentLot.currentBid})</span>
+                                  )}
+                                </>
+                              )}
                             </button>
                           ))}
                       </div>
