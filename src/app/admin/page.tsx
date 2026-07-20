@@ -392,6 +392,17 @@ export default function AdminPage() {
     }
   }
 
+  async function rebuildSeasonRefs(leagueId: string) {
+    setLeagueStatuses(s => ({ ...s, [leagueId]: { status: 'loading', message: '' } }));
+    try {
+      const res = await api.post<{ message: string; added: string[]; kept: string[] }>(`/admin/leagues/${leagueId}/rebuild-season-refs`);
+      const summary = `Added: ${res.added.length ? res.added.join(', ') : 'none'} · Kept: ${res.kept.join(', ')}`;
+      setLeagueStatuses(s => ({ ...s, [leagueId]: { status: 'success', message: summary } }));
+    } catch (e: unknown) {
+      setLeagueStatuses(s => ({ ...s, [leagueId]: { status: 'error', message: e instanceof Error ? e.message : 'Failed' } }));
+    }
+  }
+
   const STATE_TRANSITIONS: Record<AdminLeague['state'], AdminLeague['state'][]> = {
     draft:     ['auction', 'active', 'cancelled'],
     auction:   ['active', 'cancelled'],
@@ -1266,6 +1277,18 @@ export default function AdminPage() {
                           </div>
                         </div>
                       )}
+
+                      {/* Rebuild season refs */}
+                      <div>
+                        <p className="text-xs font-medium text-copy-2 mb-2">Season Refs</p>
+                        <button
+                          onClick={() => rebuildSeasonRefs(league.id)}
+                          disabled={lStatus?.status === 'loading'}
+                          className="text-xs font-medium px-3 py-1.5 rounded-lg border bg-field hover:bg-field-2 border-line text-copy-2 disabled:opacity-50 transition-colors"
+                        >
+                          Rebuild Season Refs
+                        </button>
+                      </div>
 
                       {/* Status feedback */}
                       {lStatus && lStatus.status !== 'idle' && (
