@@ -4083,6 +4083,13 @@ function CommissionerTab({
                     onChange={e => { const v = e.target.valueAsNumber; if (!isNaN(v)) setAuctionForm(f => ({ ...f, countdownSeconds: v })); }}
                     className={inputCls} />
                 </div>
+                <div>
+                  <label className="block text-xs font-medium text-copy-2 mb-1.5">Wildcard Slots</label>
+                  <input type="number" min={0} max={10} required value={auctionForm.maxWildcard}
+                    onFocus={e => e.target.select()}
+                    onChange={e => { const v = e.target.valueAsNumber; if (!isNaN(v)) setAuctionForm(f => ({ ...f, maxWildcard: v })); }}
+                    className={inputCls} />
+                </div>
               </div>
             );
           })()}
