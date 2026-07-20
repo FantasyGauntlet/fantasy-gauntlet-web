@@ -3253,6 +3253,7 @@ function LeagueHomeTab({
             { label: 'Start', value: <span className="text-copy">{league.startDate}</span> },
             { label: 'End', value: <span className="text-copy">{league.endDate}</span> },
             { label: 'Members', value: <span className="text-copy">{memberCount}{league.memberCap ? ` / ${league.memberCap}` : ''}</span> },
+            { label: 'Roster Size', value: <span className="text-copy">{league.selectedSports.length + (league.maxWildcard ?? 0)}{(league.maxWildcard ?? 0) > 0 ? ` (${league.maxWildcard} wildcard${league.maxWildcard !== 1 ? 's' : ''})` : ''}</span> },
           ].map(row => (
             <div key={row.label}>
               <p className="text-xs text-copy-3 mb-0.5">{row.label}</p>
