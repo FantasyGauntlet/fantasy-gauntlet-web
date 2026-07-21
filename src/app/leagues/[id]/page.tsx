@@ -1878,7 +1878,7 @@ const WAIVER_STATUS_CLS: Record<string, string> = {
 
 function ClaimCard({
   claim, isCommissioner, teamMap, reviewing, denyingId, denyReason,
-  onApprove, onStartDeny, onDenyReasonChange, onConfirmDeny, onCancelDeny,
+  onApprove, onStartDeny, onDenyReasonChange, onConfirmDeny, onCancelDeny, onWithdraw,
 }: {
   claim: WaiverClaim;
   isCommissioner: boolean;
@@ -1891,6 +1891,7 @@ function ClaimCard({
   onDenyReasonChange: (v: string) => void;
   onConfirmDeny: (id: string) => void;
   onCancelDeny: () => void;
+  onWithdraw?: (id: string) => void;
 }) {
   const { openProfile } = useTeamProfile();
   const dropTeam = claim.dropTeamId ? teamMap.get(claim.dropTeamId) ?? null : null;
@@ -1989,6 +1990,18 @@ function ClaimCard({
             </p>
           )}
         </div>
+
+        {/* Withdraw — own pending claim */}
+        {onWithdraw && claim.status === 'pending' && (
+          <div className="flex-shrink-0">
+            <button
+              onClick={() => onWithdraw(claim.id)}
+              className="text-xs bg-field border border-line text-copy-3 hover:border-danger/40 hover:text-danger px-3 py-1.5 rounded-lg transition-colors font-medium"
+            >
+              Withdraw
+            </button>
+          </div>
+        )}
 
         {/* Commissioner actions */}
         {isCommissioner && claim.status === 'pending' && (
@@ -2195,6 +2208,15 @@ function WaiversTab({
     } catch (e: unknown) {
       setSubmitError(e instanceof Error ? e.message : 'Failed to submit claim');
     } finally { setSubmitting(false); }
+  }
+
+  async function withdraw(claimId: string) {
+    try {
+      await api.delete(`/leagues/${leagueId}/waivers/${claimId}`);
+      setClaims(c => c.filter(x => x.id !== claimId));
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Failed to withdraw claim');
+    }
   }
 
   async function approve(claimId: string) {
@@ -2652,7 +2674,7 @@ function WaiversTab({
           </p>
           <div className="space-y-2">
             {pending.filter(c => c.claimantUserId === userId).map(c => (
-              <ClaimCard key={c.id} claim={c} {...claimCardProps} />
+              <ClaimCard key={c.id} claim={c} {...claimCardProps} onWithdraw={withdraw} />
             ))}
           </div>
         </div>
@@ -2665,7 +2687,14 @@ function WaiversTab({
             Pending · {pending.length}
           </p>
           <div className="space-y-2">
-            {pending.map(c => <ClaimCard key={c.id} claim={c} {...claimCardProps} />)}
+            {pending.map(c => (
+              <ClaimCard
+                key={c.id}
+                claim={c}
+                {...claimCardProps}
+                onWithdraw={c.claimantUserId === userId ? withdraw : undefined}
+              />
+            ))}
           </div>
         </div>
       )}
