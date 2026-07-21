@@ -212,6 +212,7 @@ export default function AuctionPage() {
   const [paused, setPaused] = useState(false);
   // Separated from currentLot so timer ticks only re-render the TimerRing, not the whole lot card
   const [timerRemaining, setTimerRemaining] = useState(0);
+  const [lotAvgPrice, setLotAvgPrice] = useState<number | null>(null);
 
   // ── UI ────────────────────────────────────────────────────────────────────
   const [bidInput, setBidInput] = useState('');
@@ -743,6 +744,17 @@ export default function AuctionPage() {
     const interval = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(interval);
   }, [scheduledStartAt]);
+
+  // ── Fetch avg price whenever the active lot changes ───────────────────────
+  useEffect(() => {
+    const teamId = currentLot?.teamId;
+    if (!teamId) { setLotAvgPrice(null); return; }
+    let cancelled = false;
+    api.get<{ avgPrice: number | null }>(`/sports/teams/${teamId}/auction-stats`)
+      .then(r => { if (!cancelled) setLotAvgPrice(r.avgPrice); })
+      .catch(() => { if (!cancelled) setLotAvgPrice(null); });
+    return () => { cancelled = true; };
+  }, [currentLot?.teamId]);
 
   // ── Actions ───────────────────────────────────────────────────────────────
 
@@ -1290,6 +1302,9 @@ export default function AuctionPage() {
                       {currentLot.sportLeagueId ? fln(currentLot.sportLeagueId) : '???'}
                     </p>
                     <h2 className="text-xl font-bold text-copy leading-tight truncate">{currentLot.teamName ?? '???'}</h2>
+                    {lotAvgPrice != null && (
+                      <p className="text-xs text-copy-3 mt-0.5">Avg. price: <span className="text-copy font-semibold">${lotAvgPrice}</span></p>
+                    )}
                     {lotFlash && (
                       <span className={`inline-block mt-1 text-xs font-bold px-2 py-0.5 rounded-full ${
                         lotFlash === 'sold' ? 'bg-positive/20 text-positive' : 'bg-line text-copy-3'
