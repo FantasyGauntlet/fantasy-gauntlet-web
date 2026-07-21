@@ -582,6 +582,18 @@ export default function AuctionPage() {
         }
       });
 
+      socket.on('bid_reversed', (data: any) => {
+        setCurrentLot(prev => {
+          if (!prev) return prev;
+          return { ...prev, currentBid: data.currentBid, currentBidderId: data.currentBidderId ?? null };
+        });
+        if (data.timerRemaining !== undefined) {
+          timerSyncRef.current = { remaining: data.timerRemaining, receivedAt: Date.now() };
+          setTimerRemaining(data.timerRemaining);
+        }
+        toast('warn', 'Last bid reversed by commissioner');
+      });
+
       socket.on('timer_update', (data: any) => {
         timerSyncRef.current = { remaining: data.remaining, receivedAt: Date.now() };
         setTimerRemaining(data.remaining);
@@ -1426,16 +1438,11 @@ export default function AuctionPage() {
                         {paused ? 'Resume Clock' : 'Pause Clock'}
                       </button>
                       <button
-                        onClick={() => socketRef.current?.emit('commissioner_add_time', { seconds: 30 })}
-                        className="bg-field hover:bg-field-2 border border-line text-copy-2 text-sm font-medium px-3 py-2 rounded-xl transition-colors"
+                        onClick={() => socketRef.current?.emit('commissioner_reverse_bid')}
+                        className="bg-field hover:bg-field-2 border border-line text-copy-2 text-sm font-medium px-4 py-2 rounded-xl transition-colors"
+                        title="Undo the most recent bid and restart the timer"
                       >
-                        +30s
-                      </button>
-                      <button
-                        onClick={() => socketRef.current?.emit('commissioner_add_time', { seconds: 60 })}
-                        className="bg-field hover:bg-field-2 border border-line text-copy-2 text-sm font-medium px-3 py-2 rounded-xl transition-colors"
-                      >
-                        +60s
+                        Reverse Last Bid
                       </button>
                       <button
                         onClick={() => socketRef.current?.emit('commissioner_reset_timer')}
