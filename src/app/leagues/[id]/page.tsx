@@ -1992,13 +1992,28 @@ function ClaimCard({
         </div>
 
         {/* Withdraw — own pending claim */}
-        {onWithdraw && claim.status === 'pending' && (
+        {onWithdraw && claim.status === 'pending' && !isCommissioner && (
           <div className="flex-shrink-0">
             <button
               onClick={() => onWithdraw(claim.id)}
               className="text-xs bg-field border border-line text-copy-3 hover:border-danger/40 hover:text-danger px-3 py-1.5 rounded-lg transition-colors font-medium"
             >
               Withdraw
+            </button>
+          </div>
+        )}
+
+        {/* Commissioner delete — any claim, any status */}
+        {onWithdraw && isCommissioner && (
+          <div className="flex-shrink-0">
+            <button
+              onClick={() => onWithdraw(claim.id)}
+              title="Delete claim"
+              className="text-copy-3 hover:text-danger transition-colors p-1.5 rounded-lg hover:bg-danger-bg/40"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2" />
+              </svg>
             </button>
           </div>
         )}
@@ -2704,7 +2719,14 @@ function WaiversTab({
         <div>
           <p className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-2">History</p>
           <div className="space-y-2">
-            {history.map(c => <ClaimCard key={c.id} claim={c} {...claimCardProps} />)}
+            {history.map(c => (
+              <ClaimCard
+                key={c.id}
+                claim={c}
+                {...claimCardProps}
+                onWithdraw={isCommissioner ? withdraw : undefined}
+              />
+            ))}
           </div>
         </div>
       )}
