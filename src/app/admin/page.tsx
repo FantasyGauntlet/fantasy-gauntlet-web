@@ -38,12 +38,13 @@ interface AuctionPricingResult {
   leagueId: string;
   leagueName: string;
   leagueState: string;
-  completedAt: string;
+  completedAt: string | null;
   excludeFromPricing: boolean;
   soldCount: number;
   passedCount: number;
   totalSpend: number;
   startingBudget: number | null;
+  hasResults: boolean;
 }
 
 function Spinner({ size = 'sm' }: { size?: 'sm' | 'md' }) {
@@ -1546,22 +1547,34 @@ export default function AdminPage() {
                             </span>
                           </div>
                           <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-                            <span className="text-xs text-copy-3">
-                              {r.soldCount} sold · {r.passedCount} passed
-                            </span>
-                            {r.totalSpend > 0 && (
-                              <span className="text-xs text-copy-3">
-                                Total spend: <span className="text-copy font-medium">${r.totalSpend.toLocaleString()}</span>
+                            {r.hasResults ? (
+                              <>
+                                <span className="text-xs text-copy-3">
+                                  {r.soldCount} sold · {r.passedCount} passed
+                                </span>
+                                {r.totalSpend > 0 && (
+                                  <span className="text-xs text-copy-3">
+                                    Total: <span className="text-copy font-medium">${r.totalSpend.toLocaleString()}</span>
+                                  </span>
+                                )}
+                                {r.startingBudget && (
+                                  <span className="text-xs text-copy-3">
+                                    Budget: <span className="text-copy font-medium">${r.startingBudget}</span>
+                                  </span>
+                                )}
+                              </>
+                            ) : (
+                              <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full">
+                                No result data
                               </span>
                             )}
-                            {r.startingBudget && (
+                            {r.completedAt ? (
                               <span className="text-xs text-copy-3">
-                                Budget: <span className="text-copy font-medium">${r.startingBudget}</span>
+                                {new Date(r.completedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                               </span>
+                            ) : (
+                              <span className="text-xs text-copy-3">In progress or closed without result</span>
                             )}
-                            <span className="text-xs text-copy-3">
-                              {new Date(r.completedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                            </span>
                           </div>
                         </div>
 
