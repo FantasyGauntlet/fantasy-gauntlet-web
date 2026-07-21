@@ -183,10 +183,27 @@ export default function LeaguePage() {
   const [tab, setTab] = useState<Tab>('standings');
   const [mountedTabs, setMountedTabs] = useState<Set<Tab>>(() => new Set<Tab>(['standings']));
   const [loading, setLoading] = useState(true);
+  const [openDropdown, setOpenDropdown] = useState<'teams' | 'league' | null>(null);
+  const tabBarRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleOutsideClick(e: MouseEvent | TouchEvent) {
+      if (tabBarRef.current && !tabBarRef.current.contains(e.target as Node)) {
+        setOpenDropdown(null);
+      }
+    }
+    document.addEventListener('mousedown', handleOutsideClick);
+    document.addEventListener('touchstart', handleOutsideClick);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('touchstart', handleOutsideClick);
+    };
+  }, []);
 
   const switchTab = useCallback((next: Tab) => {
     setMountedTabs((prev: Set<Tab>) => prev.has(next) ? prev : new Set<Tab>([...prev, next]));
     setTab(next);
+    setOpenDropdown(null);
   }, []);
 
   useEffect(() => {
@@ -305,7 +322,7 @@ export default function LeaguePage() {
       </div>
 
       {/* Tab bar */}
-      <div className="flex gap-0.5 mb-6 border-b border-line">
+      <div ref={tabBarRef} className="flex gap-0.5 mb-6 border-b border-line">
         {(['standings', 'roster'] as Tab[]).map(t => (
           <button
             key={t}
@@ -330,71 +347,77 @@ export default function LeaguePage() {
           const isTeamsTab = teamsSubTabs.some(t => t.key === tab);
           const activeTeamsLabel = teamsSubTabs.find(t => t.key === tab)?.label ?? 'Teams';
           return (
-            <div className="relative group -mb-px">
+            <div className="relative -mb-px">
               <button
+                onClick={() => setOpenDropdown(openDropdown === 'teams' ? null : 'teams')}
                 className={`px-4 py-2.5 text-sm font-medium transition-colors flex items-center gap-1 border-b-2 ${
-                  isTeamsTab
+                  isTeamsTab || openDropdown === 'teams'
                     ? 'border-brand text-brand'
                     : 'border-transparent text-copy-3 hover:text-copy-2 hover:border-line-2'
                 }`}
               >
                 {activeTeamsLabel}
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform ${openDropdown === 'teams' ? 'rotate-180' : ''}`}>
                   <polyline points="6 9 12 15 18 9" />
                 </svg>
               </button>
-              <div className="absolute hidden group-hover:block left-0 top-full pt-1 z-50 min-w-[200px]">
-                <div className="bg-card border border-line rounded-xl shadow-xl py-1 overflow-hidden">
-                  {teamsSubTabs.map(t => (
-                    <button
-                      key={t.key}
-                      onClick={() => switchTab(t.key)}
-                      className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
-                        tab === t.key
-                          ? 'bg-brand-dim text-brand font-medium'
-                          : 'text-copy-2 hover:bg-field hover:text-copy'
-                      }`}
-                    >
-                      {t.label}
-                    </button>
-                  ))}
+              {openDropdown === 'teams' && (
+                <div className="absolute left-0 top-full pt-1 z-50 min-w-[200px]">
+                  <div className="bg-card border border-line rounded-xl shadow-xl py-1 overflow-hidden">
+                    {teamsSubTabs.map(t => (
+                      <button
+                        key={t.key}
+                        onClick={() => switchTab(t.key)}
+                        className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
+                          tab === t.key
+                            ? 'bg-brand-dim text-brand font-medium'
+                            : 'text-copy-2 hover:bg-field hover:text-copy'
+                        }`}
+                      >
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           );
         })()}
 
         {/* League dropdown tab */}
-        <div className="relative group -mb-px">
+        <div className="relative -mb-px">
           <button
+            onClick={() => setOpenDropdown(openDropdown === 'league' ? null : 'league')}
             className={`px-4 py-2.5 text-sm font-medium transition-colors flex items-center gap-1 border-b-2 ${
-              isLeagueTab
+              isLeagueTab || openDropdown === 'league'
                 ? 'border-brand text-brand'
                 : 'border-transparent text-copy-3 hover:text-copy-2 hover:border-line-2'
             }`}
           >
             {activeLeagueLabel}
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform ${openDropdown === 'league' ? 'rotate-180' : ''}`}>
               <polyline points="6 9 12 15 18 9" />
             </svg>
           </button>
-          <div className="absolute hidden group-hover:block left-0 top-full pt-1 z-50 min-w-[200px]">
-            <div className="bg-card border border-line rounded-xl shadow-xl py-1 overflow-hidden">
-              {leagueSubTabs.map(t => (
-                <button
-                  key={t.key}
-                  onClick={() => switchTab(t.key)}
-                  className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
-                    tab === t.key
-                      ? 'bg-brand-dim text-brand font-medium'
-                      : 'text-copy-2 hover:bg-field hover:text-copy'
-                  }`}
-                >
-                  {t.label}
-                </button>
-              ))}
+          {openDropdown === 'league' && (
+            <div className="absolute left-0 top-full pt-1 z-50 min-w-[200px]">
+              <div className="bg-card border border-line rounded-xl shadow-xl py-1 overflow-hidden">
+                {leagueSubTabs.map(t => (
+                  <button
+                    key={t.key}
+                    onClick={() => switchTab(t.key)}
+                    className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
+                      tab === t.key
+                        ? 'bg-brand-dim text-brand font-medium'
+                        : 'text-copy-2 hover:bg-field hover:text-copy'
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
 
@@ -611,8 +634,8 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone, own
                   }
                   return (
                   <tr key={`${s.userId}-bd`} className="border-b border-line/50 bg-field/20">
-                    <td colSpan={5} className="px-6 py-4 space-y-3">
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                    <td colSpan={5} className="px-3 sm:px-6 py-4 space-y-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
                         {[...s.teamBreakdown].sort((a, b) => {
                             const ai = SPORT_ORDER.indexOf(a.sportLeagueId);
                             const bi = SPORT_ORDER.indexOf(b.sportLeagueId);
@@ -2581,7 +2604,7 @@ function WaiversTab({
                 </div>
               </div>
 
-              {/* Points + action — fixed widths so columns never shift */}
+              {/* Points + action */}
               <div className="flex items-center gap-3 flex-shrink-0">
                 <div className="w-12 text-right">
                   {t.points > 0 && (
@@ -2591,17 +2614,17 @@ function WaiversTab({
                     </>
                   )}
                 </div>
-                <div className="w-10 flex items-center justify-center flex-shrink-0">
+                <div className="flex items-center justify-center flex-shrink-0">
                   {t.isAvailable ? (
                     canSubmit ? (
                       <button
                         onClick={e => { e.stopPropagation(); openAddForm(t.id); }}
-                        className="text-xs bg-brand hover:bg-brand-2 text-white px-3 py-1.5 rounded-lg font-medium transition-colors"
+                        className="text-xs bg-brand hover:bg-brand-2 text-white px-3 py-1.5 rounded-lg font-medium transition-colors whitespace-nowrap"
                       >
                         Add
                       </button>
                     ) : (
-                      <span className="text-[11px] text-positive font-medium px-2 py-0.5 bg-positive-bg border border-positive/20 rounded-full">
+                      <span className="text-[11px] text-positive font-medium px-2 py-0.5 bg-positive-bg border border-positive/20 rounded-full whitespace-nowrap">
                         Free
                       </span>
                     )
