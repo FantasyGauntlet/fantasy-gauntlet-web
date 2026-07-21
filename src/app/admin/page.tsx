@@ -30,9 +30,21 @@ const SYNCS = [
   { key: 'records',      label: 'Sync Records',             endpoint: '/admin/ingestion/records' },
 ];
 
-type Tab = 'sync' | 'bonus' | 'scoring' | 'preset' | 'deadlines' | 'leagues' | 'elimination' | 'users' | 'season-dates';
+type Tab = 'sync' | 'bonus' | 'scoring' | 'preset' | 'deadlines' | 'leagues' | 'elimination' | 'users' | 'season-dates' | 'pricing';
 
 interface AdminUser { id: string; email: string; displayName: string; roles: string[]; isPremium: boolean; createdAt: string; }
+
+interface AuctionPricingResult {
+  leagueId: string;
+  leagueName: string;
+  leagueState: string;
+  completedAt: string;
+  excludeFromPricing: boolean;
+  soldCount: number;
+  passedCount: number;
+  totalSpend: number;
+  startingBudget: number | null;
+}
 
 function Spinner({ size = 'sm' }: { size?: 'sm' | 'md' }) {
   const s = size === 'sm' ? 'w-4 h-4 border-[1.5px]' : 'w-6 h-6 border-2';
@@ -60,6 +72,34 @@ export default function AdminPage() {
   }
 
   useEffect(() => { if (tab === 'users') loadUsers(); }, [tab]);
+
+  // ── Auction Pricing ───────────────────────────────────────────────────────
+  const [pricingResults, setPricingResults] = useState<AuctionPricingResult[]>([]);
+  const [pricingLoading, setPricingLoading] = useState(false);
+  const [pricingToggles, setPricingToggles] = useState<Record<string, boolean>>({});
+  const [pricingFilter, setPricingFilter] = useState<'all' | 'included' | 'excluded'>('all');
+
+  async function loadPricing() {
+    setPricingLoading(true);
+    try {
+      const data = await api.get<AuctionPricingResult[]>('/admin/auction-pricing');
+      setPricingResults(data);
+    } catch (e: unknown) { console.error(e); }
+    finally { setPricingLoading(false); }
+  }
+
+  async function togglePricingExclusion(leagueId: string, currentlyExcluded: boolean) {
+    setPricingToggles(t => ({ ...t, [leagueId]: true }));
+    try {
+      await api.patch(`/admin/auction-pricing/${leagueId}/exclude`, { exclude: !currentlyExcluded });
+      setPricingResults(prev => prev.map(r =>
+        r.leagueId === leagueId ? { ...r, excludeFromPricing: !currentlyExcluded } : r,
+      ));
+    } catch (e: unknown) { alert(e instanceof Error ? e.message : 'Failed'); }
+    finally { setPricingToggles(t => ({ ...t, [leagueId]: false })); }
+  }
+
+  useEffect(() => { if (tab === 'pricing') loadPricing(); }, [tab]);
 
   // ── Data Sync ──────────────────────────────────────────────────────────────
   const [results, setResults] = useState<Record<string, SyncResult>>({});
@@ -526,6 +566,7 @@ export default function AdminPage() {
     { key: 'season-dates', label: 'Season Dates' },
     { key: 'leagues',      label: 'Leagues' },
     { key: 'elimination',  label: 'Elimination' },
+    { key: 'pricing',      label: 'Auction Pricing' },
     { key: 'users',        label: 'Users' },
   ];
 
@@ -1429,6 +1470,121 @@ export default function AdminPage() {
             )}
           </div>
         )}
+        {/* ── Auction Pricing ── */}
+        {tab === 'pricing' && (
+          <div className="space-y-4">
+            <div className="bg-card border border-line rounded-2xl p-5">
+              <div className="flex items-center justify-between gap-4 mb-4 flex-wrap">
+                <div>
+                  <h2 className="text-sm font-semibold text-copy">Auction Pricing Sources</h2>
+                  <p className="text-xs text-copy-3 mt-0.5">
+                    Control which completed leagues count toward average auction prices. Exclude test leagues or one-off drafts.
+                  </p>
+                </div>
+                <button
+                  onClick={loadPricing}
+                  disabled={pricingLoading}
+                  className="text-xs font-medium px-3 py-1.5 rounded-lg border bg-field hover:bg-field-2 border-line text-copy-2 disabled:opacity-50 transition-colors"
+                >
+                  {pricingLoading ? 'Loading…' : 'Refresh'}
+                </button>
+              </div>
+
+              {/* Filter pills */}
+              <div className="flex gap-1.5 mb-4">
+                {(['all', 'included', 'excluded'] as const).map(f => (
+                  <button
+                    key={f}
+                    onClick={() => setPricingFilter(f)}
+                    className={`px-3 py-1 rounded-full text-xs font-medium transition-colors capitalize ${
+                      pricingFilter === f
+                        ? 'bg-brand text-white'
+                        : 'bg-field border border-line text-copy-3 hover:text-copy'
+                    }`}
+                  >
+                    {f === 'all'
+                      ? `All (${pricingResults.length})`
+                      : f === 'included'
+                      ? `Included (${pricingResults.filter(r => !r.excludeFromPricing).length})`
+                      : `Excluded (${pricingResults.filter(r => r.excludeFromPricing).length})`}
+                  </button>
+                ))}
+              </div>
+
+              {pricingLoading ? (
+                <div className="flex justify-center py-8"><Spinner size="md" /></div>
+              ) : pricingResults.length === 0 ? (
+                <p className="text-copy-3 text-sm text-center py-8">No completed auction results found.</p>
+              ) : (
+                <div className="space-y-2">
+                  {pricingResults
+                    .filter(r =>
+                      pricingFilter === 'all' ? true :
+                      pricingFilter === 'included' ? !r.excludeFromPricing :
+                      r.excludeFromPricing,
+                    )
+                    .map(r => (
+                      <div
+                        key={r.leagueId}
+                        className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-colors ${
+                          r.excludeFromPricing
+                            ? 'bg-field/40 border-line/50 opacity-60'
+                            : 'bg-card border-line'
+                        }`}
+                      >
+                        {/* Inclusion indicator */}
+                        <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${r.excludeFromPricing ? 'bg-copy-3' : 'bg-positive'}`} />
+
+                        {/* League info */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className={`text-sm font-semibold ${r.excludeFromPricing ? 'line-through text-copy-3' : 'text-copy'}`}>
+                              {r.leagueName}
+                            </p>
+                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full border bg-field text-copy-3 border-line capitalize">
+                              {r.leagueState}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+                            <span className="text-xs text-copy-3">
+                              {r.soldCount} sold · {r.passedCount} passed
+                            </span>
+                            {r.totalSpend > 0 && (
+                              <span className="text-xs text-copy-3">
+                                Total spend: <span className="text-copy font-medium">${r.totalSpend.toLocaleString()}</span>
+                              </span>
+                            )}
+                            {r.startingBudget && (
+                              <span className="text-xs text-copy-3">
+                                Budget: <span className="text-copy font-medium">${r.startingBudget}</span>
+                              </span>
+                            )}
+                            <span className="text-xs text-copy-3">
+                              {new Date(r.completedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Toggle button */}
+                        <button
+                          onClick={() => togglePricingExclusion(r.leagueId, r.excludeFromPricing)}
+                          disabled={pricingToggles[r.leagueId]}
+                          className={`flex-shrink-0 text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-50 ${
+                            r.excludeFromPricing
+                              ? 'bg-positive-bg border-positive/20 text-positive hover:bg-positive hover:text-white'
+                              : 'bg-danger-bg border-danger/20 text-danger hover:bg-danger hover:text-white'
+                          }`}
+                        >
+                          {pricingToggles[r.leagueId] ? '…' : r.excludeFromPricing ? 'Include' : 'Exclude'}
+                        </button>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {tab === 'users' && (
           <div className="space-y-4">
             {/* Stats */}
