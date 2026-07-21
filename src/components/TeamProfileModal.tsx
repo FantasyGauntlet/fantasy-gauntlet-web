@@ -13,10 +13,19 @@ interface FormResult {
   wasHome: boolean;
 }
 
+interface AuctionBreakdownRow {
+  leagueId: string;
+  leagueName: string;
+  completedAt: string;
+  price: number;
+  excluded: boolean;
+}
+
 interface AuctionStats {
   avgPrice: number | null;
   leaguesDrafted: number;
   leaguePrice: number | null;
+  breakdown: AuctionBreakdownRow[];
 }
 
 interface TeamNews {
@@ -417,6 +426,35 @@ async function fetchTeamNews(teamId: string, sportLeagueId: string | undefined):
   return { articles };
 }
 
+function AuctionBreakdownList({ rows }: { rows: AuctionBreakdownRow[] }) {
+  return (
+    <div className="border-t border-line/50 divide-y divide-line/30">
+      {rows.map(r => {
+        const year = r.completedAt ? new Date(r.completedAt).getFullYear() : null;
+        return (
+          <div key={r.leagueId} className={`flex items-center gap-3 px-5 py-2.5 ${r.excluded ? 'opacity-50' : ''}`}>
+            <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${r.excluded ? 'bg-copy-3' : 'bg-positive'}`} />
+            <div className="flex-1 min-w-0">
+              <p className={`text-xs font-medium truncate ${r.excluded ? 'line-through text-copy-3' : 'text-copy'}`}>
+                {r.leagueName}
+              </p>
+              {year && <p className="text-[10px] text-copy-3">{year}</p>}
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {r.excluded && (
+                <span className="text-[10px] text-copy-3 bg-field border border-line px-1.5 py-0.5 rounded-full">excluded</span>
+              )}
+              <span className={`text-xs font-semibold tabular-nums ${r.excluded ? 'text-copy-3' : 'text-copy'}`}>
+                ${r.price}
+              </span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export function TeamProfileModal() {
@@ -429,6 +467,7 @@ export function TeamProfileModal() {
   const [loadingForm, setLoadingForm] = useState(false);
   const [loadingStats, setLoadingStats] = useState(false);
   const [loadingNews, setLoadingNews] = useState(false);
+  const [auctionBreakdownOpen, setAuctionBreakdownOpen] = useState(false);
 
   const [parsedRows, setParsedRows] = useState<ParsedTeamRow[] | null>(null);
   const [pollData, setPollData] = useState<PollEntry[] | null>(null);
@@ -442,11 +481,13 @@ export function TeamProfileModal() {
     if (!profile) {
       setForm(null); setAuctionStats(null); setNews(null);
       setParsedRows(null); setPollData(null); setActiveTab('overview');
+      setAuctionBreakdownOpen(false);
       return;
     }
 
     setForm(null); setAuctionStats(null); setNews(null);
     setParsedRows(null); setPollData(null); setActiveTab('overview');
+    setAuctionBreakdownOpen(false);
 
     // Reset standings view to the default for this sport
     const viewOpts = STANDINGS_VIEW_OPTIONS[profile.sportLeagueId ?? ''] ?? [];
@@ -666,35 +707,64 @@ export function TeamProfileModal() {
 
                 {/* Global auction stats */}
                 {profile.draftPrice == null && (
-                  <div className="px-5 py-4 border-b border-line">
-                    <p className="text-xs font-semibold text-copy-3 uppercase tracking-wider mb-3">Auction History</p>
-                    {loadingStats ? (
-                      <div className="space-y-2 animate-pulse">
-                        <div className="h-4 bg-field-2 rounded w-32" />
-                        <div className="h-4 bg-field-2 rounded w-24" />
-                      </div>
-                    ) : auctionStats ? (
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="bg-field rounded-xl px-3 py-2.5">
-                          <p className="text-[10px] text-copy-3 mb-1">Avg. draft price</p>
-                          <p className="text-sm font-bold text-copy">{auctionStats.avgPrice != null ? `$${auctionStats.avgPrice}` : '—'}</p>
+                  <div className="border-b border-line">
+                    <div className="px-5 py-4">
+                      <p className="text-xs font-semibold text-copy-3 uppercase tracking-wider mb-3">Auction History</p>
+                      {loadingStats ? (
+                        <div className="space-y-2 animate-pulse">
+                          <div className="h-4 bg-field-2 rounded w-32" />
+                          <div className="h-4 bg-field-2 rounded w-24" />
                         </div>
-                        <div className="bg-field rounded-xl px-3 py-2.5">
-                          <p className="text-[10px] text-copy-3 mb-1">Draft Price</p>
-                          <p className="text-sm font-bold text-brand">{auctionStats.leaguePrice != null ? `$${auctionStats.leaguePrice}` : '—'}</p>
-                        </div>
-                      </div>
-                    ) : null}
+                      ) : auctionStats ? (
+                        <>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="bg-field rounded-xl px-3 py-2.5">
+                              <p className="text-[10px] text-copy-3 mb-1">Avg. draft price</p>
+                              <p className="text-sm font-bold text-copy">{auctionStats.avgPrice != null ? `$${auctionStats.avgPrice}` : '—'}</p>
+                            </div>
+                            <div className="bg-field rounded-xl px-3 py-2.5">
+                              <p className="text-[10px] text-copy-3 mb-1">Draft Price</p>
+                              <p className="text-sm font-bold text-brand">{auctionStats.leaguePrice != null ? `$${auctionStats.leaguePrice}` : '—'}</p>
+                            </div>
+                          </div>
+                          {auctionStats.breakdown.length > 0 && (
+                            <button
+                              onClick={() => setAuctionBreakdownOpen(o => !o)}
+                              className="mt-3 flex items-center gap-1.5 text-xs text-copy-3 hover:text-copy transition-colors"
+                            >
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className={`transition-transform ${auctionBreakdownOpen ? 'rotate-90' : ''}`}>
+                                <polyline points="9 18 15 12 9 6" />
+                              </svg>
+                              {auctionBreakdownOpen ? 'Hide' : 'Show'} breakdown ({auctionStats.breakdown.length} {auctionStats.breakdown.length === 1 ? 'league' : 'leagues'})
+                            </button>
+                          )}
+                        </>
+                      ) : null}
+                    </div>
+                    {auctionBreakdownOpen && auctionStats && auctionStats.breakdown.length > 0 && (
+                      <AuctionBreakdownList rows={auctionStats.breakdown} />
+                    )}
                   </div>
                 )}
 
-                {profile.draftPrice != null && auctionStats && !loadingStats && auctionStats.leaguesDrafted > 0 && (
-                  <div className="px-5 py-3 border-b border-line">
-                    <p className="text-xs text-copy-3">
-                      Drafted in <span className="text-copy font-medium">{auctionStats.leaguesDrafted}</span>{' '}
-                      {auctionStats.leaguesDrafted === 1 ? 'league' : 'leagues'} total
-                      {auctionStats.avgPrice != null && <> · avg <span className="text-copy font-medium">${auctionStats.avgPrice}</span></>}
-                    </p>
+                {profile.draftPrice != null && auctionStats && !loadingStats && (auctionStats.breakdown.length > 0) && (
+                  <div className="border-b border-line">
+                    <button
+                      onClick={() => setAuctionBreakdownOpen(o => !o)}
+                      className="w-full flex items-center justify-between px-5 py-3 hover:bg-field/30 transition-colors text-left"
+                    >
+                      <p className="text-xs text-copy-3">
+                        Drafted in <span className="text-copy font-medium">{auctionStats.leaguesDrafted}</span>{' '}
+                        {auctionStats.leaguesDrafted === 1 ? 'league' : 'leagues'} (included)
+                        {auctionStats.avgPrice != null && <> · avg <span className="text-copy font-medium">${auctionStats.avgPrice}</span></>}
+                      </p>
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className={`text-copy-3 transition-transform flex-shrink-0 ml-2 ${auctionBreakdownOpen ? 'rotate-90' : ''}`}>
+                        <polyline points="9 18 15 12 9 6" />
+                      </svg>
+                    </button>
+                    {auctionBreakdownOpen && (
+                      <AuctionBreakdownList rows={auctionStats.breakdown} />
+                    )}
                   </div>
                 )}
 
