@@ -403,6 +403,16 @@ export default function AdminPage() {
     }
   }
 
+  async function resetFaabBudgets(leagueId: string) {
+    setLeagueStatuses(s => ({ ...s, [leagueId]: { status: 'loading', message: '' } }));
+    try {
+      const res = await api.post<{ message: string; updated: number }>(`/admin/leagues/${leagueId}/reset-faab`);
+      setLeagueStatuses(s => ({ ...s, [leagueId]: { status: 'success', message: res.message } }));
+    } catch (e: unknown) {
+      setLeagueStatuses(s => ({ ...s, [leagueId]: { status: 'error', message: e instanceof Error ? e.message : 'Failed' } }));
+    }
+  }
+
   const STATE_TRANSITIONS: Record<AdminLeague['state'], AdminLeague['state'][]> = {
     draft:     ['auction', 'active', 'cancelled'],
     auction:   ['active', 'cancelled'],
@@ -1287,6 +1297,18 @@ export default function AdminPage() {
                           className="text-xs font-medium px-3 py-1.5 rounded-lg border bg-field hover:bg-field-2 border-line text-copy-2 disabled:opacity-50 transition-colors"
                         >
                           Rebuild Season Refs
+                        </button>
+                      </div>
+
+                      {/* Reset FAAB budgets */}
+                      <div>
+                        <p className="text-xs font-medium text-copy-2 mb-2">FAAB</p>
+                        <button
+                          onClick={() => resetFaabBudgets(league.id)}
+                          disabled={lStatus?.status === 'loading'}
+                          className="text-xs font-medium px-3 py-1.5 rounded-lg border bg-field hover:bg-field-2 border-line text-copy-2 disabled:opacity-50 transition-colors"
+                        >
+                          Seed FAAB Budgets
                         </button>
                       </div>
 
