@@ -2090,6 +2090,7 @@ function WaiversTab({
   const [pool, setPool] = useState<TeamWithRecord[]>([]);
   const [allLeagueTeams, setAllLeagueTeams] = useState<TeamWithRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [rosterStats, setRosterStats] = useState<Record<string, { rosteredPct: number | null; trend: 'up' | 'down' | null }>>({});
 
   // Team browser filters
   const [browseSport, setBrowseSport] = useState('all');
@@ -2121,13 +2122,17 @@ function WaiversTab({
     ]).then(([c, p, groups]) => {
       setClaims(c);
       setPool(p);
-      setAllLeagueTeams(
-        groups.flatMap(g => g.teams.map(t => ({
-          id: t.id, name: t.name, shortName: t.shortName,
-          sportLeagueId: t.sportLeagueId, logoUrl: t.logoUrl,
-          sport: g.sport, wins: 0, draws: 0, losses: 0, points: 0,
-        }))),
-      );
+      const teams = groups.flatMap(g => g.teams.map(t => ({
+        id: t.id, name: t.name, shortName: t.shortName,
+        sportLeagueId: t.sportLeagueId, logoUrl: t.logoUrl,
+        sport: g.sport, wins: 0, draws: 0, losses: 0, points: 0,
+      })));
+      setAllLeagueTeams(teams);
+      // Fetch % rostered + trend for all teams in one shot
+      const batchPayload = teams.map(t => ({ id: t.id, sportLeagueId: t.sportLeagueId }));
+      api.post<Record<string, { rosteredPct: number | null; trend: 'up' | 'down' | null }>>('/sports/roster-stats/batch', { teams: batchPayload })
+        .then(setRosterStats)
+        .catch(() => {});
     }).catch(() => {}).finally(() => setLoading(false));
   }, [leagueId]);
 
@@ -2628,7 +2633,15 @@ function WaiversTab({
 
               {/* Name + meta */}
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-copy truncate">{t.name}</p>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <p className="text-sm font-semibold text-copy truncate">{t.name}</p>
+                  {rosterStats[t.id]?.trend === 'up' && (
+                    <span className="text-[10px] font-semibold text-positive bg-positive/10 border border-positive/20 px-1.5 py-0.5 rounded-full leading-none flex-shrink-0">↑ Trending</span>
+                  )}
+                  {rosterStats[t.id]?.trend === 'down' && (
+                    <span className="text-[10px] font-semibold text-danger bg-danger/10 border border-danger/20 px-1.5 py-0.5 rounded-full leading-none flex-shrink-0">↓ Dropping</span>
+                  )}
+                </div>
                 <div className="flex items-center gap-2 mt-0.5">
                   <span className="text-[11px] text-copy-3 bg-field border border-line px-1.5 py-0.5 rounded-full leading-none">
                     {formatLeagueName(t.sportLeagueId)}
@@ -2637,6 +2650,9 @@ function WaiversTab({
                     <span className="text-[11px] text-copy-3">
                       {formatRecord(t.wins, t.draws, t.losses, t.sport)}
                     </span>
+                  )}
+                  {rosterStats[t.id]?.rosteredPct != null && (
+                    <span className="text-[11px] text-copy-3">{rosterStats[t.id].rosteredPct}% rostered</span>
                   )}
                 </div>
               </div>
