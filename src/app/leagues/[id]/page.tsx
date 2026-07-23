@@ -2836,11 +2836,18 @@ function TransactionCounterTab({
 
 // ─── Auction Summary Tab ───────────────────────────────────────────────────────
 
+interface AuctionLot {
+  teamId: string;
+  winnerId: string | null;
+  winningBid: number;
+  passed: boolean;
+}
+
 interface AuctionResultDoc {
   id: string;
   leagueId: string;
   completedAt: string;
-  lots: { teamId: string; winnerId: string | null; winningBid: number; passed: boolean }[];
+  lots: AuctionLot[];
 }
 
 function AuctionSummaryTab({
@@ -2852,6 +2859,11 @@ function AuctionSummaryTab({
   const [result, setResult] = useState<AuctionResultDoc | null>(null);
   const [sportTeams, setSportTeams] = useState<Map<string, SportTeam>>(new Map());
   const [loading, setLoading] = useState(true);
+
+  const [search, setSearch] = useState('');
+  const [sportFilter, setSportFilter] = useState('');
+  const [ownerFilter, setOwnerFilter] = useState('');
+  const [sortBy, setSortBy] = useState<'bid-desc' | 'bid-asc' | 'team' | 'owner'>('bid-desc');
 
   useEffect(() => {
     Promise.all([
@@ -2877,9 +2889,41 @@ function AuctionSummaryTab({
     );
   }
 
-  const sold = result.lots.filter(l => !l.passed && l.winnerId);
-  const passed = result.lots.filter(l => l.passed);
-  const totalSpent = sold.reduce((s, l) => s + l.winningBid, 0);
+  const sold: AuctionLot[] = result.lots.filter((l: AuctionLot) => !l.passed && l.winnerId);
+  const passed: AuctionLot[] = result.lots.filter((l: AuctionLot) => l.passed);
+  const totalSpent = sold.reduce((s: number, l: AuctionLot) => s + l.winningBid, 0);
+
+  // Derive unique sports and owners from the sold lots for filter options
+  const availableSports = [...new Set(
+    sold.map((l: AuctionLot) => sportTeams.get(l.teamId)?.sportLeagueId).filter(Boolean) as string[]
+  )].sort();
+  const availableOwners = [...new Set(
+    sold.map((l: AuctionLot) => l.winnerId ? (ownerByUserId.get(l.winnerId) ?? 'Unknown') : null).filter(Boolean) as string[]
+  )].sort();
+
+  const q = search.trim().toLowerCase();
+  const filtered: AuctionLot[] = sold
+    .filter((l: AuctionLot) => {
+      const st = sportTeams.get(l.teamId);
+      const ownerName = l.winnerId ? (ownerByUserId.get(l.winnerId) ?? 'Unknown') : '';
+      if (sportFilter && st?.sportLeagueId !== sportFilter) return false;
+      if (ownerFilter && ownerName !== ownerFilter) return false;
+      if (q && !st?.name.toLowerCase().includes(q) && !ownerName.toLowerCase().includes(q)) return false;
+      return true;
+    })
+    .sort((a: AuctionLot, b: AuctionLot) => {
+      if (sortBy === 'bid-desc') return b.winningBid - a.winningBid;
+      if (sortBy === 'bid-asc') return a.winningBid - b.winningBid;
+      if (sortBy === 'team') return (sportTeams.get(a.teamId)?.name ?? '').localeCompare(sportTeams.get(b.teamId)?.name ?? '');
+      if (sortBy === 'owner') {
+        const oa = a.winnerId ? (ownerByUserId.get(a.winnerId) ?? '') : '';
+        const ob = b.winnerId ? (ownerByUserId.get(b.winnerId) ?? '') : '';
+        return oa.localeCompare(ob);
+      }
+      return 0;
+    });
+
+  const isFiltered = q || sportFilter || ownerFilter;
 
   return (
     <div className="space-y-4">
@@ -2899,7 +2943,7 @@ function AuctionSummaryTab({
         </div>
       </div>
 
-      {/* Results by owner */}
+      {/* Results table */}
       <div className="bg-card border border-line rounded-2xl overflow-hidden">
         <div className="px-4 py-3 border-b border-line flex items-center justify-between">
           <p className="text-sm font-semibold text-copy">Auction Results</p>
@@ -2907,19 +2951,76 @@ function AuctionSummaryTab({
             {new Date(result.completedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
           </p>
         </div>
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-line bg-field/50">
-              <th className="text-left px-4 py-2.5 text-xs font-semibold text-copy-3 uppercase tracking-wider">Team</th>
-              <th className="text-left px-4 py-2.5 text-xs font-semibold text-copy-3 uppercase tracking-wider hidden sm:table-cell">Sport</th>
-              <th className="text-left px-4 py-2.5 text-xs font-semibold text-copy-3 uppercase tracking-wider">Owner</th>
-              <th className="text-right px-4 py-2.5 text-xs font-semibold text-copy-3 uppercase tracking-wider">Bid</th>
-            </tr>
-          </thead>
-          <tbody>
-            {[...sold]
-              .sort((a, b) => b.winningBid - a.winningBid)
-              .map(lot => {
+
+        {/* Search + filters */}
+        <div className="px-4 py-3 border-b border-line space-y-2.5 bg-field/20">
+          <input
+            type="text"
+            value={search}
+            onChange={(e: { target: HTMLInputElement }) => setSearch(e.target.value)}
+            placeholder="Search team or owner…"
+            className="w-full bg-field border border-line-2 rounded-xl px-3 py-2 text-sm text-copy placeholder-copy-3 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors"
+          />
+          <div className="flex gap-2 flex-wrap">
+            <select
+              value={sportFilter}
+              onChange={e => setSportFilter(e.target.value)}
+              className="bg-field border border-line-2 rounded-lg px-3 py-1.5 text-xs text-copy focus:outline-none focus:border-brand transition-colors"
+            >
+              <option value="">All Sports</option>
+              {availableSports.map(s => (
+                <option key={s} value={s}>{formatLeagueName(s)}</option>
+              ))}
+            </select>
+            <select
+              value={ownerFilter}
+              onChange={e => setOwnerFilter(e.target.value)}
+              className="bg-field border border-line-2 rounded-lg px-3 py-1.5 text-xs text-copy focus:outline-none focus:border-brand transition-colors"
+            >
+              <option value="">All Owners</option>
+              {availableOwners.map(o => (
+                <option key={o} value={o}>{o}</option>
+              ))}
+            </select>
+            <select
+              value={sortBy}
+              onChange={e => setSortBy(e.target.value as typeof sortBy)}
+              className="bg-field border border-line-2 rounded-lg px-3 py-1.5 text-xs text-copy focus:outline-none focus:border-brand transition-colors"
+            >
+              <option value="bid-desc">Bid: High → Low</option>
+              <option value="bid-asc">Bid: Low → High</option>
+              <option value="team">Team Name A–Z</option>
+              <option value="owner">Owner A–Z</option>
+            </select>
+            {isFiltered && (
+              <button
+                onClick={() => { setSearch(''); setSportFilter(''); setOwnerFilter(''); }}
+                className="text-xs text-copy-3 hover:text-copy px-2 py-1.5 rounded-lg hover:bg-field transition-colors"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-line bg-field/50">
+                <th className="text-left px-4 py-2.5 text-xs font-semibold text-copy-3 uppercase tracking-wider">Team</th>
+                <th className="text-left px-4 py-2.5 text-xs font-semibold text-copy-3 uppercase tracking-wider hidden sm:table-cell">Sport</th>
+                <th className="text-left px-4 py-2.5 text-xs font-semibold text-copy-3 uppercase tracking-wider">Owner</th>
+                <th className="text-right px-4 py-2.5 text-xs font-semibold text-copy-3 uppercase tracking-wider">Bid</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="px-4 py-8 text-center text-sm text-copy-3">
+                    No results match your filters.
+                  </td>
+                </tr>
+              ) : filtered.map(lot => {
                 const st = sportTeams.get(lot.teamId);
                 const ownerName = lot.winnerId ? (ownerByUserId.get(lot.winnerId) ?? 'Unknown') : '—';
                 return (
@@ -2948,8 +3049,10 @@ function AuctionSummaryTab({
                   </tr>
                 );
               })}
-          </tbody>
-        </table>
+            </tbody>
+          </table>
+        </div>
+
         {passed.length > 0 && (
           <div className="px-4 py-3 border-t border-line/50 bg-field/20">
             <p className="text-xs text-copy-3">
@@ -3789,7 +3892,7 @@ function CommissionerTab({
       </div>
 
       {/* League settings — waiver type, FAAB budget, sports (draft-only) */}
-      <div className="bg-card border border-line rounded-2xl p-5">
+      {league.state === 'draft' && <div className="bg-card border border-line rounded-2xl p-5">
         <div className="flex items-start justify-between gap-3 mb-4">
           <div>
             <h2 className="text-sm font-semibold text-copy">League Settings</h2>
@@ -3890,7 +3993,7 @@ function CommissionerTab({
             )}
           </div>
         </div>
-      </div>
+      </div>}
 
       {/* Delete modal */}
       {showDeleteModal && (
@@ -4080,7 +4183,7 @@ function CommissionerTab({
       </div>
 
       {/* Waiver Processing */}
-      <div className="bg-card border border-line rounded-2xl p-5">
+      {league.state === 'draft' && <div className="bg-card border border-line rounded-2xl p-5">
         <div className="flex items-start justify-between gap-3 mb-4">
           <div>
             <h2 className="text-sm font-semibold text-copy">Waiver Processing</h2>
@@ -4114,10 +4217,10 @@ function CommissionerTab({
             </select>
           </div>
         </div>
-      </div>
+      </div>}
 
       {/* Auction Settings */}
-      <div className="bg-card border border-line rounded-2xl p-5">
+      {league.state === 'draft' && <div className="bg-card border border-line rounded-2xl p-5">
         <h2 className="text-sm font-semibold text-copy mb-1">Auction Settings</h2>
         <p className="text-xs text-copy-3 mb-5">Must be configured before starting the auction.</p>
         <form onSubmit={saveAuctionConfig} className="space-y-4">
@@ -4184,10 +4287,10 @@ function CommissionerTab({
             {saving ? 'Saving...' : saved ? '✓ Saved' : 'Save Auction Settings'}
           </button>
         </form>
-      </div>
+      </div>}
 
       {/* Schedule */}
-      <div className="bg-card border border-line rounded-2xl p-5">
+      {league.state === 'draft' && <div className="bg-card border border-line rounded-2xl p-5">
         <h2 className="text-sm font-semibold text-copy mb-1">Schedule Draft</h2>
         <p className="text-xs text-copy-3 mb-4">Set a date and time for the draft to auto-start. The room opens to members 1 hour beforehand.</p>
         <div className="flex items-end gap-3 flex-wrap">
@@ -4222,7 +4325,7 @@ function CommissionerTab({
             Scheduled: <span className="text-copy font-medium">{new Date(league.auctionConfig.scheduledStartAt).toLocaleString(undefined, { dateStyle: 'full', timeStyle: 'short' })}</span>
           </p>
         )}
-      </div>
+      </div>}
 
       {/* Danger Zone */}
       <div className="bg-card border border-danger/20 rounded-2xl p-5">
