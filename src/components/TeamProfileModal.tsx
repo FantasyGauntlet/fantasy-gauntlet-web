@@ -693,9 +693,6 @@ export function TeamProfileModal() {
                           <p className="text-sm font-bold text-copy">
                             {rosterStats.rosteredPct != null ? `${rosterStats.rosteredPct}%` : '—'}
                           </p>
-                          {rosterStats.totalLeagues > 0 && (
-                            <p className="text-[10px] text-copy-3 mt-0.5">{rosterStats.rosteredLeagues} of {rosterStats.totalLeagues} leagues</p>
-                          )}
                         </div>
                         {(rosterStats.pickups7d > 0 || rosterStats.drops7d > 0) && (
                           <div className="bg-field rounded-xl px-3 py-2.5">
