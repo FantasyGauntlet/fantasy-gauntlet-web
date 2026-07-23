@@ -79,14 +79,29 @@ export default function AdminPage() {
   const [pricingLoading, setPricingLoading] = useState(false);
   const [pricingToggles, setPricingToggles] = useState<Record<string, boolean>>({});
   const [pricingFilter, setPricingFilter] = useState<'all' | 'included' | 'excluded'>('all');
+  const [pricingYear, setPricingYear] = useState<string | null>(null);
+  const [pricingYearSaving, setPricingYearSaving] = useState(false);
 
   async function loadPricing() {
     setPricingLoading(true);
     try {
-      const data = await api.get<AuctionPricingResult[]>('/admin/auction-pricing');
+      const [data, config] = await Promise.all([
+        api.get<AuctionPricingResult[]>('/admin/auction-pricing'),
+        api.get<{ pricingYear: string | null }>('/admin/auction-pricing/config'),
+      ]);
       setPricingResults(data);
+      setPricingYear(config.pricingYear);
     } catch (e: unknown) { console.error(e); }
     finally { setPricingLoading(false); }
+  }
+
+  async function savePricingYear(year: string | null) {
+    setPricingYearSaving(true);
+    try {
+      await api.patch('/admin/auction-pricing/config', { pricingYear: year });
+      setPricingYear(year);
+    } catch (e: unknown) { alert(e instanceof Error ? e.message : 'Failed'); }
+    finally { setPricingYearSaving(false); }
   }
 
   async function togglePricingExclusion(leagueId: string, currentlyExcluded: boolean) {
@@ -99,6 +114,13 @@ export default function AdminPage() {
     } catch (e: unknown) { alert(e instanceof Error ? e.message : 'Failed'); }
     finally { setPricingToggles(t => ({ ...t, [leagueId]: false })); }
   }
+
+  // Unique draft years derived from the loaded data, newest first
+  const availablePricingYears = [...new Set(
+    pricingResults
+      .filter(r => r.completedAt)
+      .map(r => new Date(r.completedAt!).getFullYear().toString())
+  )].sort((a, b) => b.localeCompare(a));
 
   useEffect(() => { if (tab === 'pricing') loadPricing(); }, [tab]);
 
@@ -1489,6 +1511,34 @@ export default function AdminPage() {
                 >
                   {pricingLoading ? 'Loading…' : 'Refresh'}
                 </button>
+              </div>
+
+              {/* Pricing season selector */}
+              <div className="mb-4 p-3 bg-field rounded-xl border border-line">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div>
+                    <p className="text-xs font-semibold text-copy">Pricing Season</p>
+                    <p className="text-[10px] text-copy-3 mt-0.5">
+                      {pricingYear
+                        ? `Avg prices use only ${pricingYear} drafts`
+                        : 'Avg prices use all-time draft history'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={pricingYear ?? ''}
+                      onChange={e => savePricingYear(e.target.value || null)}
+                      disabled={pricingYearSaving || pricingLoading}
+                      className="bg-card border border-line-2 rounded-lg px-3 py-1.5 text-xs text-copy focus:outline-none focus:border-brand transition-colors disabled:opacity-50"
+                    >
+                      <option value="">All time</option>
+                      {availablePricingYears.map(y => (
+                        <option key={y} value={y}>{y}</option>
+                      ))}
+                    </select>
+                    {pricingYearSaving && <Spinner size="sm" />}
+                  </div>
+                </div>
               </div>
 
               {/* Filter pills */}
