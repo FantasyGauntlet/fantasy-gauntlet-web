@@ -340,6 +340,7 @@ function WaiversTab({
   const history = isCommissioner
     ? claims.filter(c => c.status !== 'pending')
     : claims.filter(c => c.status === 'approved');
+  const myTeamUserId = myTeam?.userId;
   const canSubmit = !!myTeam;
 
   function openAddForm(teamId?: string) {
@@ -848,14 +849,14 @@ function WaiversTab({
         </div>
       </div>
 
-      {/* My pending claims — visible to the claimant */}
-      {!isCommissioner && userId && pending.filter(c => c.claimantUserId === userId).length > 0 && (
+      {/* My pending claims — visible to the claimant (primary owner or co-manager) */}
+      {!isCommissioner && myTeam && pending.filter(c => c.claimantUserId === myTeamUserId).length > 0 && (
         <div>
           <p className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-2">
-            Your Pending Claims · {pending.filter(c => c.claimantUserId === userId).length}
+            Your Pending Claims · {pending.filter(c => c.claimantUserId === myTeamUserId).length}
           </p>
           <div className="space-y-2">
-            {pending.filter(c => c.claimantUserId === userId).map(c => (
+            {pending.filter(c => c.claimantUserId === myTeamUserId).map(c => (
               <ClaimCard key={c.id} claim={c} {...claimCardProps} onWithdraw={withdraw} />
             ))}
           </div>
@@ -874,7 +875,7 @@ function WaiversTab({
                 key={c.id}
                 claim={c}
                 {...claimCardProps}
-                onWithdraw={c.claimantUserId === userId ? withdraw : undefined}
+                onWithdraw={c.claimantUserId === myTeam?.userId ? withdraw : undefined}
               />
             ))}
           </div>
