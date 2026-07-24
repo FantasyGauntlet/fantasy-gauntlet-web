@@ -2095,7 +2095,7 @@ function WaiversTab({
   // Team browser filters
   const [browseSport, setBrowseSport] = useState('all');
   const [browseSearch, setBrowseSearch] = useState('');
-  const [browseSort, setBrowseSort] = useState<'points' | 'alpha' | 'rostered'>('rostered');
+  const [browseSort, setBrowseSort] = useState<'points' | 'alpha' | 'rostered'>('points');
   const [browseAvailability, setBrowseAvailability] = useState<'available' | 'all'>('available');
 
   // Waiver claim form
