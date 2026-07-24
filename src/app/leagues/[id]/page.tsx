@@ -2090,12 +2090,12 @@ function WaiversTab({
   const [pool, setPool] = useState<TeamWithRecord[]>([]);
   const [allLeagueTeams, setAllLeagueTeams] = useState<TeamWithRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [rosterStats, setRosterStats] = useState<Record<string, { rosteredPct: number | null; trend: 'up' | 'down' | null }>>({});
+  const [rosterStats, setRosterStats] = useState<Record<string, { rosteredPct: number | null; trend: 'up' | 'down' | null; delta30d: number | null }>>({});
 
   // Team browser filters
   const [browseSport, setBrowseSport] = useState('all');
   const [browseSearch, setBrowseSearch] = useState('');
-  const [browseSort, setBrowseSort] = useState<'points' | 'alpha'>('points');
+  const [browseSort, setBrowseSort] = useState<'points' | 'alpha' | 'rostered'>('rostered');
   const [browseAvailability, setBrowseAvailability] = useState<'available' | 'all'>('available');
 
   // Waiver claim form
@@ -2130,7 +2130,7 @@ function WaiversTab({
       setAllLeagueTeams(teams);
       // Fetch % rostered + trend for all teams in one shot
       const batchPayload = teams.map(t => ({ id: t.id, sportLeagueId: t.sportLeagueId }));
-      api.post<Record<string, { rosteredPct: number | null; trend: 'up' | 'down' | null }>>('/sports/roster-stats/batch', { teams: batchPayload })
+      api.post<Record<string, { rosteredPct: number | null; trend: 'up' | 'down' | null; delta30d: number | null }>>('/sports/roster-stats/batch', { teams: batchPayload })
         .then(setRosterStats)
         .catch(() => {});
     }).catch(() => {}).finally(() => setLoading(false));
@@ -2178,10 +2178,14 @@ function WaiversTab({
       const q = browseSearch.trim().toLowerCase();
       list = list.filter(t => t.name.toLowerCase().includes(q) || t.shortName.toLowerCase().includes(q));
     }
-    return browseSort === 'points'
-      ? [...list].sort((a, b) => b.points - a.points)
-      : [...list].sort((a, b) => a.name.localeCompare(b.name));
-  }, [allDisplayTeams, browseAvailability, browseSport, browseSearch, browseSort]);
+    if (browseSort === 'points') return [...list].sort((a, b) => b.points - a.points);
+    if (browseSort === 'rostered') return [...list].sort((a, b) => {
+      const aP = rosterStats[a.id]?.rosteredPct ?? -1;
+      const bP = rosterStats[b.id]?.rosteredPct ?? -1;
+      return bP - aP;
+    });
+    return [...list].sort((a, b) => a.name.localeCompare(b.name));
+  }, [allDisplayTeams, browseAvailability, browseSport, browseSearch, browseSort, rosterStats]);
 
   const myRosterTeams = useMemo(() =>
     (myTeam?.ownedTeamIds ?? []).map(id => comprehensiveTeamMap.get(id)).filter(Boolean) as TeamWithRecord[],
@@ -2583,9 +2587,10 @@ function WaiversTab({
             </div>
             <select
               value={browseSort}
-              onChange={e => setBrowseSort(e.target.value as 'points' | 'alpha')}
+              onChange={e => setBrowseSort(e.target.value as 'points' | 'alpha' | 'rostered')}
               className="bg-field border border-line-2 text-xs text-copy rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-brand transition-colors"
             >
+              <option value="rostered">% Rostered</option>
               <option value="points">Most Points</option>
               <option value="alpha">A–Z</option>
             </select>
@@ -2652,7 +2657,14 @@ function WaiversTab({
                     </span>
                   )}
                   {rosterStats[t.id]?.rosteredPct != null && (
-                    <span className="text-[11px] text-copy-3">{rosterStats[t.id].rosteredPct}% rostered</span>
+                    <span className="text-[11px] text-copy-3">
+                      {rosterStats[t.id].rosteredPct}% rostered
+                      {rosterStats[t.id].delta30d != null && (
+                        <span className={`ml-1 font-semibold ${rosterStats[t.id].delta30d! >= 0 ? 'text-positive' : 'text-danger'}`}>
+                          {rosterStats[t.id].delta30d! >= 0 ? '+' : ''}{rosterStats[t.id].delta30d}%
+                        </span>
+                      )}
+                    </span>
                   )}
                 </div>
               </div>

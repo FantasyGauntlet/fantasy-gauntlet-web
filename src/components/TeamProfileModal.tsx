@@ -35,6 +35,7 @@ interface RosterStats {
   trend: 'up' | 'down' | null;
   pickups7d: number;
   drops7d: number;
+  delta30d: number | null;
 }
 
 interface TeamNews {
@@ -690,9 +691,16 @@ export function TeamProfileModal() {
                       <div className="grid grid-cols-2 gap-3">
                         <div className="bg-field rounded-xl px-3 py-2.5">
                           <p className="text-[10px] text-copy-3 mb-1">% Rostered</p>
-                          <p className="text-sm font-bold text-copy">
-                            {rosterStats.rosteredPct != null ? `${rosterStats.rosteredPct}%` : '—'}
-                          </p>
+                          <div className="flex items-baseline gap-1.5">
+                            <p className="text-sm font-bold text-copy">
+                              {rosterStats.rosteredPct != null ? `${rosterStats.rosteredPct}%` : '—'}
+                            </p>
+                            {rosterStats.delta30d != null && (
+                              <span className={`text-xs font-semibold ${rosterStats.delta30d >= 0 ? 'text-positive' : 'text-danger'}`}>
+                                {rosterStats.delta30d >= 0 ? '+' : ''}{rosterStats.delta30d}%
+                              </span>
+                            )}
+                          </div>
                         </div>
                         {(rosterStats.pickups7d > 0 || rosterStats.drops7d > 0) && (
                           <div className="bg-field rounded-xl px-3 py-2.5">
