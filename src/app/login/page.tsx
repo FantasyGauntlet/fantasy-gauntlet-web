@@ -6,6 +6,7 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   updateProfile,
+  sendPasswordResetEmail,
   GoogleAuthProvider,
   signInWithPopup,
 } from 'firebase/auth';
@@ -34,6 +35,8 @@ function LoginContent() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [forgotMode, setForgotMode] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -51,6 +54,21 @@ function LoginContent() {
       router.replace(redirect);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Authentication failed');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleForgotPassword(e: React.FormEvent) {
+    e.preventDefault();
+    if (!email.trim()) { setError('Enter your email address first.'); return; }
+    setError('');
+    setLoading(true);
+    try {
+      await sendPasswordResetEmail(auth, email.trim());
+      setResetSent(true);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to send reset email');
     } finally {
       setLoading(false);
     }
@@ -119,14 +137,66 @@ function LoginContent() {
           </div>
 
           <h2 className="text-2xl font-bold text-copy mb-1">
-            {mode === 'login' ? 'Welcome back' : 'Create account'}
+            {forgotMode ? 'Reset password' : mode === 'login' ? 'Welcome back' : 'Create account'}
           </h2>
           <p className="text-copy-3 text-sm mb-8">
-            {mode === 'login' ? "Sign in to your account." : 'Start your fantasy journey today.'}
+            {forgotMode ? "We'll send a reset link to your email." : mode === 'login' ? "Sign in to your account." : 'Start your fantasy journey today.'}
           </p>
 
+          {/* Forgot password flow */}
+          {forgotMode && (
+            <div>
+              {resetSent ? (
+                <div className="bg-brand-dim border border-brand/20 rounded-2xl p-5 text-center">
+                  <p className="text-brand font-semibold text-sm mb-1">Check your inbox</p>
+                  <p className="text-copy-2 text-sm">We sent a reset link to <strong>{email}</strong>.</p>
+                  <button
+                    onClick={() => { setForgotMode(false); setResetSent(false); setError(''); }}
+                    className="mt-4 text-sm text-brand hover:underline"
+                  >
+                    Back to sign in
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={handleForgotPassword} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-medium text-copy-2 mb-1.5">Email address</label>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={e => setEmail(e.target.value)}
+                      required
+                      className={inputCls}
+                      placeholder="you@example.com"
+                      autoFocus
+                    />
+                  </div>
+                  {error && (
+                    <div className="bg-danger-bg border border-danger/30 rounded-xl px-4 py-3">
+                      <p className="text-danger text-sm">{error}</p>
+                    </div>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full bg-brand hover:bg-brand-2 disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-colors text-sm"
+                  >
+                    {loading ? 'Sending…' : 'Send reset link'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setForgotMode(false); setError(''); }}
+                    className="w-full text-sm text-copy-3 hover:text-copy py-2 transition-colors"
+                  >
+                    Back to sign in
+                  </button>
+                </form>
+              )}
+            </div>
+          )}
+
           {/* Google */}
-          <button
+          {!forgotMode && <button
             onClick={handleGoogle}
             disabled={loading}
             className="w-full flex items-center justify-center gap-3 bg-card border border-line-2 hover:border-copy-3 hover:bg-field text-copy text-sm font-medium py-3 rounded-xl transition-colors disabled:opacity-50 mb-6"
@@ -193,7 +263,18 @@ function LoginContent() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-copy-2 mb-1.5">Password</label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-medium text-copy-2">Password</label>
+                {mode === 'login' && (
+                  <button
+                    type="button"
+                    onClick={() => { setForgotMode(true); setError(''); }}
+                    className="text-xs text-brand hover:text-brand-2 transition-colors"
+                  >
+                    Forgot password?
+                  </button>
+                )}
+              </div>
               <input
                 type="password"
                 value={password}
@@ -218,7 +299,7 @@ function LoginContent() {
             >
               {loading ? 'Loading...' : mode === 'login' ? 'Sign in' : 'Create account'}
             </button>
-          </form>
+          </form>}
         </div>
       </div>
     </div>

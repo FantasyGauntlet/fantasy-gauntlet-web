@@ -1,6 +1,7 @@
 import { initializeApp, getApps } from 'firebase/app';
 import { getAuth, type Auth } from 'firebase/auth';
 import { getStorage, type FirebaseStorage } from 'firebase/storage';
+import { getMessaging, type Messaging } from 'firebase/messaging';
 
 const firebaseConfig = {
   apiKey: 'AIzaSyA4_7e0VV_hb8Y3Y2DmliWibwc9rubR73k',
@@ -18,3 +19,7 @@ const app = typeof window !== 'undefined'
 
 export const auth: Auth = app ? getAuth(app) : (null as unknown as Auth);
 export const storage: FirebaseStorage = app ? getStorage(app) : (null as unknown as FirebaseStorage);
+
+let _messaging: Messaging | null = null;
+try { if (app) _messaging = getMessaging(app); } catch {}
+export const messaging: Messaging | null = _messaging;

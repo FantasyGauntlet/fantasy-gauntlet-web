@@ -89,6 +89,7 @@ export default function NavBar() {
 
   const staticLinks = [
     { href: '/dashboard', label: 'Dashboard' },
+    { href: '/settings',  label: 'Settings' },
   ];
 
   return (

@@ -2891,6 +2891,7 @@ function AuctionSummaryTab({
   const [sportTeams, setSportTeams] = useState<Map<string, SportTeam>>(new Map());
   const [loading, setLoading] = useState(true);
 
+  const [view, setView] = useState<'results' | 'managers'>('results');
   const [search, setSearch] = useState('');
   const [sportFilter, setSportFilter] = useState('');
   const [ownerFilter, setOwnerFilter] = useState('');
@@ -2923,6 +2924,29 @@ function AuctionSummaryTab({
   const sold: AuctionLot[] = result.lots.filter((l: AuctionLot) => !l.passed && l.winnerId);
   const passed: AuctionLot[] = result.lots.filter((l: AuctionLot) => l.passed);
   const totalSpent = sold.reduce((s: number, l: AuctionLot) => s + l.winningBid, 0);
+
+  const managerRows = fantasyTeams
+    .map(ft => {
+      const wins = sold.filter(l => l.winnerId === ft.userId);
+      const spent = wins.reduce((s, l) => s + l.winningBid, 0);
+      const bySport: Record<string, { count: number; spent: number }> = {};
+      for (const lot of wins) {
+        const sport = sportTeams.get(lot.teamId)?.sportLeagueId ?? 'other';
+        if (!bySport[sport]) bySport[sport] = { count: 0, spent: 0 };
+        bySport[sport].count++;
+        bySport[sport].spent += lot.winningBid;
+      }
+      const topLot = wins.length > 0 ? wins.reduce((a, b) => b.winningBid > a.winningBid ? b : a) : null;
+      return {
+        ft,
+        teamsBought: wins.length,
+        totalSpent: spent,
+        avgPrice: wins.length > 0 ? Math.round((spent / wins.length) * 10) / 10 : 0,
+        bySport,
+        topPick: topLot ? { name: sportTeams.get(topLot.teamId)?.name ?? topLot.teamId, bid: topLot.winningBid } : null,
+      };
+    })
+    .sort((a, b) => b.totalSpent - a.totalSpent);
 
   // Derive unique sports and owners from the sold lots for filter options
   const availableSports = [...new Set(
@@ -2974,7 +2998,75 @@ function AuctionSummaryTab({
         </div>
       </div>
 
+      {/* View toggle */}
+      <div className="flex bg-field border border-line rounded-xl p-1 w-fit">
+        {(['results', 'managers'] as const).map(v => (
+          <button
+            key={v}
+            onClick={() => setView(v)}
+            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              view === v ? 'bg-card text-copy shadow-sm border border-line' : 'text-copy-3 hover:text-copy-2'
+            }`}
+          >
+            {v === 'results' ? 'Results' : 'By Manager'}
+          </button>
+        ))}
+      </div>
+
+      {/* Manager breakdown */}
+      {view === 'managers' && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {managerRows.map(({ ft, teamsBought, totalSpent: spent, avgPrice, bySport, topPick }) => {
+            const initials = ft.displayName.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
+            return (
+              <div key={ft.id} className="bg-card border border-line rounded-2xl p-4 space-y-3">
+                {/* Header */}
+                <div className="flex items-center gap-3">
+                  {ft.logoUrl ? (
+                    <img src={ft.logoUrl} alt={ft.displayName} className="w-9 h-9 rounded-full object-cover flex-shrink-0" />
+                  ) : (
+                    <div className="w-9 h-9 rounded-full bg-brand-dim border border-brand/20 flex items-center justify-center flex-shrink-0">
+                      <span className="text-sm font-semibold text-brand">{initials}</span>
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-copy truncate">{ft.displayName}</p>
+                    <p className="text-xs text-copy-3">{teamsBought} team{teamsBought !== 1 ? 's' : ''} drafted</p>
+                  </div>
+                  <p className="ml-auto text-lg font-bold text-copy tabular-nums">${spent}</p>
+                </div>
+
+                {/* Stats row */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="bg-field rounded-xl px-3 py-2">
+                    <p className="text-[10px] uppercase tracking-wider text-copy-3 mb-0.5">Avg price</p>
+                    <p className="text-sm font-bold text-copy tabular-nums">${avgPrice}</p>
+                  </div>
+                  <div className="bg-field rounded-xl px-3 py-2">
+                    <p className="text-[10px] uppercase tracking-wider text-copy-3 mb-0.5">Top pick</p>
+                    <p className="text-sm font-bold text-copy truncate">{topPick ? `${topPick.name} ($${topPick.bid})` : '—'}</p>
+                  </div>
+                </div>
+
+                {/* Sport breakdown */}
+                {Object.keys(bySport).length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {Object.entries(bySport).map(([sport, { count, spent: s }]) => (
+                      <span key={sport} className="inline-flex items-center gap-1 bg-field border border-line rounded-lg px-2 py-1 text-xs text-copy-2">
+                        <span className="font-medium">{formatLeagueName(sport)}</span>
+                        <span className="text-copy-3">· {count} · ${s}</span>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {/* Results table */}
+      {view === 'results' && (
       <div className="bg-card border border-line rounded-2xl overflow-hidden">
         <div className="px-4 py-3 border-b border-line flex items-center justify-between">
           <p className="text-sm font-semibold text-copy">Auction Results</p>
@@ -3092,6 +3184,7 @@ function AuctionSummaryTab({
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }

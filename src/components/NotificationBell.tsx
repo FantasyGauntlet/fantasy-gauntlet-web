@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
+import { listenForeground } from '@/lib/push';
 
 interface AppNotification {
   id: string;
@@ -25,11 +26,15 @@ function timeAgo(dateStr: string): string {
 }
 
 const TYPE_ICON: Record<string, string> = {
-  tradeProposed: '🔄',
-  tradeUpdated:  '🤝',
-  waiverUpdated: '📋',
-  leagueInvite:  '✉️',
+  tradeProposed:   '🔄',
+  tradeUpdated:    '🤝',
+  waiverUpdated:   '📋',
+  leagueInvite:    '✉️',
   auctionStarting: '🏁',
+  auctionEnded:    '🏆',
+  auctionResults:  '📊',
+  rankChanged:     '📈',
+  finalStandings:  '🎯',
 };
 
 export default function NotificationBell() {
@@ -53,6 +58,23 @@ export default function NotificationBell() {
     const interval = setInterval(fetchNotifications, 30_000);
     return () => clearInterval(interval);
   }, [fetchNotifications]);
+
+  // Inject foreground push messages directly into the list without a re-fetch
+  useEffect(() => {
+    return listenForeground(({ title, body, data }) => {
+      const newNotif: AppNotification = {
+        id: `fg-${Date.now()}`,
+        type: data.type ?? 'general',
+        title,
+        body,
+        data,
+        readAt: null,
+        createdAt: new Date().toISOString(),
+        leagueId: data.leagueId,
+      };
+      setNotifications(prev => [newNotif, ...prev]);
+    });
+  }, []);
 
   useEffect(() => {
     if (!open) return;
