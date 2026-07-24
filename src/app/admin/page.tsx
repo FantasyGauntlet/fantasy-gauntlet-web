@@ -197,9 +197,14 @@ export default function AdminPage() {
   }
 
   async function removeManageTeam(teamId: string) {
+    const isPlaceholder = /_m\d+$/.test(teamId);
     setManageDeleteIds(prev => new Set([...prev, teamId]));
     try {
-      await api.delete(`/admin/ingestion/sports/${manualSport}/teams/${teamId}`);
+      if (isPlaceholder) {
+        await api.delete(`/admin/ingestion/sports/${manualSport}/teams/${teamId}`);
+      } else {
+        await api.delete(`/admin/ingestion/sports/${manualSport}/teams/${teamId}/from-season`);
+      }
       setManageTeams(prev => prev.filter(t => t.id !== teamId));
     } catch { /* ignore */ }
     setManageDeleteIds(prev => { const n = new Set(prev); n.delete(teamId); return n; });
@@ -772,7 +777,7 @@ export default function AdminPage() {
                             onClick={() => removeManageTeam(t.id)}
                             disabled={manageDeleteIds.has(t.id)}
                             className="flex-shrink-0 p-1 text-copy-3 hover:text-danger transition-colors disabled:opacity-40"
-                            title="Remove team"
+                            title={/_m\d+$/.test(t.id) ? 'Delete placeholder' : 'Hide from waiver pool'}
                           >
                             {manageDeleteIds.has(t.id) ? <Spinner size="sm" /> : (
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
