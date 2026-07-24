@@ -25,6 +25,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   function apply(t: Theme) {
     const root = document.documentElement;
+    root.classList.add('theme-switching');
     if (t === 'light') {
       root.classList.add('light');
       root.classList.remove('dark');
@@ -32,6 +33,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       root.classList.remove('light');
       root.classList.add('dark');
     }
+    // Remove after two frames so the theme paint is instant but hover transitions still work
+    requestAnimationFrame(() => requestAnimationFrame(() => root.classList.remove('theme-switching')));
   }
 
   function toggle() {

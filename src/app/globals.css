@@ -88,6 +88,13 @@ body {
   transition-property: all;
 }
 
+/* Suppress all transitions during theme switch to prevent paint jank on large pages */
+.theme-switching *,
+.theme-switching *::before,
+.theme-switching *::after {
+  transition: none !important;
+}
+
 /* ── Scrollbar styling ────────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
