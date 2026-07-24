@@ -224,18 +224,7 @@ export default function AdminPage() {
         const real = [...ts].filter(t => !/_m\d+$/.test(t.id)).sort((a, b) => a.name.localeCompare(b.name));
         setMigratePlaceholders(placeholders);
         setMigrateRealTeams(real);
-        // Auto-match by name similarity
-        const auto: Record<string, string> = {};
-        for (const p of placeholders) {
-          const pLow = p.name.toLowerCase();
-          const match = real.find(r => {
-            const rLow = r.name.toLowerCase();
-            return rLow === pLow || rLow.includes(pLow) || pLow.includes(rLow) ||
-              pLow.split(' ').filter(w => w.length > 3).some(w => rLow.includes(w));
-          });
-          if (match) auto[p.id] = match.id;
-        }
-        setMigrateMappings(auto);
+        setMigrateMappings({});
       })
       .catch(() => { setMigratePlaceholders([]); setMigrateRealTeams([]); })
       .finally(() => setMigrateLoadingTeams(false));
