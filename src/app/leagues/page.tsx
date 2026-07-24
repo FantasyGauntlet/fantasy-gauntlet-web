@@ -53,7 +53,7 @@ export default function BrowsePage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-copy">Browse Leagues</h1>
-        <p className="text-copy-3 text-sm mt-1">Find public leagues to request an invite from the commissioner.</p>
+        <p className="text-copy-3 text-sm mt-1">Public leagues open for viewing. Contact the commissioner if you want to join.</p>
       </div>
 
       {/* Filters */}
