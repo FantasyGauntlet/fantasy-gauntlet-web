@@ -18,6 +18,17 @@ interface League {
   endDate?: string;
 }
 
+interface PendingInvite {
+  id: string;
+  leagueId: string;
+  leagueName: string;
+  inviteCode: string;
+  fromUserId: string;
+  fromDisplayName: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const SPORT_ACRONYMS = new Set(['nhl', 'nba', 'nfl', 'mlb', 'ucl', 'ncaa', 'mls', 'fifa', 'ufc']);
@@ -142,12 +153,45 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
+  const [acceptingInvite, setAcceptingInvite] = useState<Record<string, boolean>>({});
+  const [decliningInvite, setDecliningInvite] = useState<Record<string, boolean>>({});
+
   useEffect(() => {
     api.get<League[]>('/leagues/mine')
       .then(setLeagues)
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
+    api.get<PendingInvite[]>('/leagues/invites/mine')
+      .then(setPendingInvites)
+      .catch(() => {});
   }, []);
+
+  async function acceptInvite(invite: PendingInvite) {
+    setAcceptingInvite(s => ({ ...s, [invite.id]: true }));
+    try {
+      await api.post(`/leagues/invites/${invite.inviteCode}/accept`, {});
+      setPendingInvites(p => p.filter(i => i.id !== invite.id));
+      const updated = await api.get<League[]>('/leagues/mine');
+      setLeagues(updated);
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Failed to accept invite');
+    } finally {
+      setAcceptingInvite(s => ({ ...s, [invite.id]: false }));
+    }
+  }
+
+  async function declineInvite(invite: PendingInvite) {
+    setDecliningInvite(s => ({ ...s, [invite.id]: true }));
+    try {
+      await api.post(`/leagues/invites/${invite.inviteCode}/decline`, {});
+      setPendingInvites(p => p.filter(i => i.id !== invite.id));
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Failed to decline invite');
+    } finally {
+      setDecliningInvite(s => ({ ...s, [invite.id]: false }));
+    }
+  }
 
   const firstName = user?.displayName?.split(' ')[0] ?? user?.email?.split('@')[0] ?? 'there';
   const hour = new Date().getHours();
@@ -216,6 +260,57 @@ export default function DashboardPage() {
       {/* Error */}
       {error && (
         <div className="bg-danger-bg border border-danger/20 rounded-xl p-4 text-danger text-sm">{error}</div>
+      )}
+
+      {/* Pending invites */}
+      {pendingInvites.length > 0 && (
+        <div>
+          <h2 className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-3">
+            Pending Invites · {pendingInvites.length}
+          </h2>
+          <div className="space-y-2">
+            {pendingInvites.map(invite => {
+              const accepting = acceptingInvite[invite.id];
+              const declining = decliningInvite[invite.id];
+              const busy = accepting || declining;
+              const daysLeft = Math.max(0, Math.ceil((new Date(invite.expiresAt).getTime() - Date.now()) / 86400000));
+              return (
+                <div key={invite.id} className="bg-card border border-brand/20 rounded-2xl px-5 py-4 flex items-center gap-4">
+                  <div className="w-9 h-9 rounded-full bg-brand-dim border border-brand/20 flex items-center justify-center flex-shrink-0">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-brand">
+                      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                      <polyline points="22,6 12,13 2,6" />
+                    </svg>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-copy truncate">{invite.leagueName}</p>
+                    <p className="text-xs text-copy-3 mt-0.5">
+                      Invited by {invite.fromDisplayName}
+                      <span className="mx-1.5 opacity-40">·</span>
+                      Expires in {daysLeft}d
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button
+                      onClick={() => declineInvite(invite)}
+                      disabled={busy}
+                      className="text-xs font-medium text-copy-3 hover:text-copy px-3 py-1.5 rounded-lg hover:bg-field disabled:opacity-50 transition-colors"
+                    >
+                      {declining ? 'Declining…' : 'Decline'}
+                    </button>
+                    <button
+                      onClick={() => acceptInvite(invite)}
+                      disabled={busy}
+                      className="text-xs font-semibold bg-brand hover:bg-brand-2 disabled:opacity-50 text-white px-4 py-1.5 rounded-lg transition-colors"
+                    >
+                      {accepting ? 'Joining…' : 'Accept'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       )}
 
       {/* League grid */}
