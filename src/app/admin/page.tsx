@@ -164,6 +164,9 @@ export default function AdminPage() {
   const SPORT_KEYS = ['premier-league','ucl','world-cup','nfl','ncaa-football','nba','ncaa-basketball','nhl','mlb'];
   const [manualSport, setManualSport] = useState('ucl');
   const [manageTeams, setManageTeams] = useState<Team[]>([]);
+  const [hiddenTeams, setHiddenTeams] = useState<Team[]>([]);
+  const [hiddenExpanded, setHiddenExpanded] = useState(false);
+  const [restoringIds, setRestoringIds] = useState<Set<string>>(new Set());
   const [manageLoading, setManageLoading] = useState(false);
   const [manageAddName, setManageAddName] = useState('');
   const [manageAddStatus, setManageAddStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
@@ -172,9 +175,15 @@ export default function AdminPage() {
   async function loadManageTeams(sport: string) {
     setManageLoading(true);
     try {
-      const ts = await fetch(`${BASE}/sports/leagues/${sport}/teams`).then(r => r.json()) as Team[];
-      setManageTeams([...ts].sort((a, b) => a.name.localeCompare(b.name)));
-    } catch { setManageTeams([]); }
+      const [ts, seasonData] = await Promise.all([
+        fetch(`${BASE}/sports/leagues/${sport}/teams`).then(r => r.json()) as Promise<Team[]>,
+        api.get<{ teamIds: string[] }>(`/admin/ingestion/sports/${sport}/season-team-ids`).catch(() => ({ teamIds: [] })),
+      ]);
+      const seasonIds = new Set(seasonData.teamIds);
+      const sorted = [...ts].sort((a, b) => a.name.localeCompare(b.name));
+      setManageTeams(sorted.filter(t => seasonIds.has(t.id)));
+      setHiddenTeams(sorted.filter(t => !seasonIds.has(t.id) && !/_m\d+$/.test(t.id)));
+    } catch { setManageTeams([]); setHiddenTeams([]); }
     setManageLoading(false);
   }
 
@@ -202,12 +211,26 @@ export default function AdminPage() {
     try {
       if (isPlaceholder) {
         await api.delete(`/admin/ingestion/sports/${manualSport}/teams/${teamId}`);
+        setManageTeams(prev => prev.filter(t => t.id !== teamId));
       } else {
         await api.delete(`/admin/ingestion/sports/${manualSport}/teams/${teamId}/from-season`);
+        const team = manageTeams.find(t => t.id === teamId);
+        setManageTeams(prev => prev.filter(t => t.id !== teamId));
+        if (team) setHiddenTeams(prev => [...prev, team].sort((a, b) => a.name.localeCompare(b.name)));
       }
-      setManageTeams(prev => prev.filter(t => t.id !== teamId));
     } catch { /* ignore */ }
     setManageDeleteIds(prev => { const n = new Set(prev); n.delete(teamId); return n; });
+  }
+
+  async function restoreManageTeam(teamId: string) {
+    setRestoringIds(prev => new Set([...prev, teamId]));
+    try {
+      await api.post(`/admin/ingestion/sports/${manualSport}/teams/${teamId}/restore-to-season`);
+      const team = hiddenTeams.find(t => t.id === teamId);
+      setHiddenTeams(prev => prev.filter(t => t.id !== teamId));
+      if (team) setManageTeams(prev => [...prev, team].sort((a, b) => a.name.localeCompare(b.name)));
+    } catch { /* ignore */ }
+    setRestoringIds(prev => { const n = new Set(prev); n.delete(teamId); return n; });
   }
 
   // ── Migrate Placeholders ──────────────────────────────────────────────────
@@ -790,6 +813,46 @@ export default function AdminPage() {
                     </div>
                   )}
                 </div>
+
+                {/* Hidden (excluded) real teams */}
+                {hiddenTeams.length > 0 && (
+                  <div className="border border-line rounded-xl overflow-hidden">
+                    <button
+                      onClick={() => setHiddenExpanded(p => !p)}
+                      className="w-full flex items-center justify-between px-3 py-2.5 bg-field hover:bg-field-2 transition-colors text-left"
+                    >
+                      <span className="text-xs font-medium text-copy-3">{hiddenTeams.length} hidden team{hiddenTeams.length !== 1 ? 's' : ''}</span>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`text-copy-3 transition-transform ${hiddenExpanded ? 'rotate-180' : ''}`}>
+                        <polyline points="6 9 12 15 18 9" />
+                      </svg>
+                    </button>
+                    {hiddenExpanded && (
+                      <div className="divide-y divide-line/60 max-h-48 overflow-y-auto border-t border-line">
+                        {hiddenTeams.map(t => (
+                          <div key={t.id} className="flex items-center justify-between px-3 py-2 gap-3 opacity-50 hover:opacity-100 transition-opacity">
+                            <div className="flex items-center gap-2 min-w-0">
+                              {t.logoUrl && <img src={t.logoUrl} alt={t.name} className="w-5 h-5 object-contain flex-shrink-0" />}
+                              <span className="text-sm text-copy truncate">{t.name}</span>
+                              <span className="text-xs text-copy-3 font-mono opacity-50">{t.id}</span>
+                            </div>
+                            <button
+                              onClick={() => restoreManageTeam(t.id)}
+                              disabled={restoringIds.has(t.id)}
+                              className="flex-shrink-0 p-1 text-copy-3 hover:text-positive transition-colors disabled:opacity-40"
+                              title="Restore to season"
+                            >
+                              {restoringIds.has(t.id) ? <Spinner size="sm" /> : (
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                                  <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+                                </svg>
+                              )}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Add team row */}
                 <div className="flex gap-2">
