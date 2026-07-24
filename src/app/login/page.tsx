@@ -195,8 +195,8 @@ function LoginContent() {
             </div>
           )}
 
-          {/* Google */}
-          {!forgotMode && <button
+          {/* Google + sign-in form */}
+          {!forgotMode && (<><button
             onClick={handleGoogle}
             disabled={loading}
             className="w-full flex items-center justify-center gap-3 bg-card border border-line-2 hover:border-copy-3 hover:bg-field text-copy text-sm font-medium py-3 rounded-xl transition-colors disabled:opacity-50 mb-6"
@@ -299,7 +299,7 @@ function LoginContent() {
             >
               {loading ? 'Loading...' : mode === 'login' ? 'Sign in' : 'Create account'}
             </button>
-          </form>}
+          </form></>)}
         </div>
       </div>
     </div>
