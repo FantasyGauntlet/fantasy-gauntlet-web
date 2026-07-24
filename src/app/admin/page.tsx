@@ -205,6 +205,60 @@ export default function AdminPage() {
     setManageDeleteIds(prev => { const n = new Set(prev); n.delete(teamId); return n; });
   }
 
+  // ── Migrate Placeholders ──────────────────────────────────────────────────
+  const [migrateSport, setMigrateSport] = useState('ucl');
+  const [migratePlaceholders, setMigratePlaceholders] = useState<Team[]>([]);
+  const [migrateRealTeams, setMigrateRealTeams] = useState<Team[]>([]);
+  const [migrateMappings, setMigrateMappings] = useState<Record<string, string>>({});
+  const [migrateLoadingTeams, setMigrateLoadingTeams] = useState(false);
+  const [migrateRunning, setMigrateRunning] = useState(false);
+  const [migrateResult, setMigrateResult] = useState<{ migrated: number; fantasyTeamsUpdated: number; auctionResultsUpdated: number; waiverClaimsUpdated: number } | null>(null);
+
+  useEffect(() => {
+    setMigrateResult(null);
+    setMigrateLoadingTeams(true);
+    fetch(`${BASE}/sports/leagues/${migrateSport}/teams`)
+      .then(r => r.json())
+      .then((ts: Team[]) => {
+        const placeholders = [...ts].filter(t => /_m\d+$/.test(t.id)).sort((a, b) => a.name.localeCompare(b.name));
+        const real = [...ts].filter(t => !/_m\d+$/.test(t.id)).sort((a, b) => a.name.localeCompare(b.name));
+        setMigratePlaceholders(placeholders);
+        setMigrateRealTeams(real);
+        // Auto-match by name similarity
+        const auto: Record<string, string> = {};
+        for (const p of placeholders) {
+          const pLow = p.name.toLowerCase();
+          const match = real.find(r => {
+            const rLow = r.name.toLowerCase();
+            return rLow === pLow || rLow.includes(pLow) || pLow.includes(rLow) ||
+              pLow.split(' ').filter(w => w.length > 3).some(w => rLow.includes(w));
+          });
+          if (match) auto[p.id] = match.id;
+        }
+        setMigrateMappings(auto);
+      })
+      .catch(() => { setMigratePlaceholders([]); setMigrateRealTeams([]); })
+      .finally(() => setMigrateLoadingTeams(false));
+  }, [migrateSport]);
+
+  async function runMigration() {
+    const mappings = Object.entries(migrateMappings)
+      .filter(([, realId]) => realId)
+      .map(([placeholderId, realTeamId]) => ({ placeholderId, realTeamId }));
+    if (!mappings.length) return;
+    setMigrateRunning(true);
+    try {
+      const result = await api.post<{ migrated: number; fantasyTeamsUpdated: number; auctionResultsUpdated: number; waiverClaimsUpdated: number }>(
+        `/admin/ingestion/sports/${migrateSport}/migrate-placeholders`,
+        { mappings },
+      );
+      setMigrateResult(result);
+      setMigratePlaceholders(prev => prev.filter(p => !migrateMappings[p.id]));
+      setMigrateMappings({});
+    } catch { /* ignore */ }
+    setMigrateRunning(false);
+  }
+
   // ── Bonus Points ───────────────────────────────────────────────────────────
   const [sports, setSports] = useState<SportLeague[]>([]);
   const [selectedSport, setSelectedSport] = useState('');
@@ -767,6 +821,101 @@ export default function AdminPage() {
                   </button>
                 </div>
                 <p className="text-xs text-copy-3">{manageTeams.length} team{manageTeams.length !== 1 ? 's' : ''} · press Enter or click Add Team</p>
+              </div>
+            </div>
+
+            {/* Migrate Placeholder Teams */}
+            <div className="bg-card border border-line rounded-2xl p-5">
+              <div className="mb-4">
+                <h2 className="text-sm font-semibold text-copy">Migrate Placeholder Teams</h2>
+                <p className="text-xs text-copy-3 mt-0.5">
+                  Match placeholder teams (added manually before API data was available) to their real counterparts from the API. Runs the replacement across all rosters, auction results, and waiver history.
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <select
+                  value={migrateSport}
+                  onChange={e => setMigrateSport(e.target.value)}
+                  className={inputCls}
+                >
+                  {SPORT_KEYS.map(id => (
+                    <option key={id} value={id}>{formatLeagueName(id)}</option>
+                  ))}
+                </select>
+
+                {migrateLoadingTeams ? (
+                  <div className="flex items-center justify-center gap-2 py-6 text-copy-3 text-sm">
+                    <Spinner /> Loading teams…
+                  </div>
+                ) : migratePlaceholders.length === 0 ? (
+                  <p className="text-xs text-copy-3 text-center py-4 border border-line rounded-xl">
+                    No placeholder teams found for {formatLeagueName(migrateSport)}.
+                  </p>
+                ) : migrateRealTeams.length === 0 ? (
+                  <div className="text-center py-4 border border-line rounded-xl space-y-1">
+                    <p className="text-xs text-copy-3">No real API teams found yet for {formatLeagueName(migrateSport)}.</p>
+                    <p className="text-xs text-copy-3">Run <span className="font-semibold">Sync Teams</span> first to pull the latest roster from the API.</p>
+                  </div>
+                ) : (
+                  <>
+                    {/* Mapping table */}
+                    <div className="border border-line rounded-xl overflow-hidden">
+                      <div className="grid grid-cols-2 gap-0 px-3 py-2 bg-field border-b border-line">
+                        <p className="text-[10px] font-semibold text-copy-3 uppercase tracking-wider">Placeholder</p>
+                        <p className="text-[10px] font-semibold text-copy-3 uppercase tracking-wider">Real Team (API)</p>
+                      </div>
+                      <div className="divide-y divide-line/60 max-h-80 overflow-y-auto">
+                        {migratePlaceholders.map(p => (
+                          <div key={p.id} className="grid grid-cols-2 gap-3 items-center px-3 py-2">
+                            <div className="min-w-0">
+                              <p className="text-sm text-copy truncate">{p.name}</p>
+                              <p className="text-[10px] text-copy-3 font-mono">{p.id}</p>
+                            </div>
+                            <select
+                              value={migrateMappings[p.id] ?? ''}
+                              onChange={e => setMigrateMappings(prev => ({ ...prev, [p.id]: e.target.value }))}
+                              className="bg-field border border-line-2 text-xs text-copy rounded-lg px-2 py-1.5 focus:outline-none focus:border-brand transition-colors w-full"
+                            >
+                              <option value="">— unmapped —</option>
+                              {migrateRealTeams.map(r => (
+                                <option key={r.id} value={r.id}>{r.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Summary + run button */}
+                    {(() => {
+                      const mapped = Object.values(migrateMappings).filter(Boolean).length;
+                      const unmapped = migratePlaceholders.length - mapped;
+                      return (
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="text-xs text-copy-3">
+                            <span className="text-positive font-medium">{mapped} mapped</span>
+                            {unmapped > 0 && <span className="ml-2 text-copy-3">{unmapped} unmapped (will be skipped)</span>}
+                          </div>
+                          <button
+                            onClick={runMigration}
+                            disabled={mapped === 0 || migrateRunning}
+                            className="flex items-center gap-1.5 text-xs font-semibold px-4 py-2 rounded-xl bg-brand hover:bg-brand-2 text-white disabled:opacity-50 transition-colors whitespace-nowrap"
+                          >
+                            {migrateRunning ? <><Spinner size="sm" /> Running…</> : 'Run Migration'}
+                          </button>
+                        </div>
+                      );
+                    })()}
+                  </>
+                )}
+
+                {migrateResult && (
+                  <div className="bg-positive/10 border border-positive/30 rounded-xl px-4 py-3 text-xs text-positive space-y-0.5">
+                    <p className="font-semibold">Migration complete — {migrateResult.migrated} team{migrateResult.migrated !== 1 ? 's' : ''} replaced</p>
+                    <p className="text-positive/80">{migrateResult.fantasyTeamsUpdated} rosters · {migrateResult.auctionResultsUpdated} auction docs · {migrateResult.waiverClaimsUpdated} waiver claims updated</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
