@@ -3223,6 +3223,21 @@ function LeagueHomeTab({
   const [msgImageProgress, setMsgImageProgress] = useState(0);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const [leaveLoading, setLeaveLoading] = useState(false);
+  const leaveRouter = useRouter();
+
+  async function handleLeaveLeague() {
+    setLeaveLoading(true);
+    try {
+      await api.delete(`/leagues/${leagueId}/members/me`);
+      leaveRouter.replace('/dashboard');
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Failed to leave league');
+      setLeaveLoading(false);
+    }
+  }
+
   function renderContent(content: string) {
     const imagePattern = /https?:\/\/\S+\.(?:gif|jpg|jpeg|png|webp)(?:[?#]\S*)?|https?:\/\/(?:media\.tenor\.com|media(?:\d+)?\.giphy\.com|i\.imgur\.com)\S*/gi;
     const parts: { type: 'text' | 'image'; value: string }[] = [];
@@ -3571,6 +3586,48 @@ function LeagueHomeTab({
           </div>
         </div>
       </div>
+
+      {/* Leave league — non-commissioners only */}
+      {!isCommissioner && (
+        <div className="bg-card border border-danger/20 rounded-2xl p-5">
+          <h2 className="text-sm font-semibold text-copy mb-1">Leave League</h2>
+          <p className="text-xs text-copy-3 mb-4">
+            You will lose access to this league and your roster will be cleared. This cannot be undone.
+          </p>
+          <button
+            onClick={() => setShowLeaveModal(true)}
+            className="text-sm font-semibold text-danger border border-danger/30 hover:bg-danger-bg px-4 py-2 rounded-xl transition-colors"
+          >
+            Leave League
+          </button>
+        </div>
+      )}
+
+      {/* Leave confirmation modal */}
+      {showLeaveModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowLeaveModal(false)} />
+          <div className="relative bg-card border border-line rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+            <h2 className="text-base font-semibold text-copy">Leave {league.name}?</h2>
+            <p className="text-sm text-copy-3">Your roster will be cleared and you will lose access. You can only re-join if the commissioner invites you again.</p>
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => setShowLeaveModal(false)}
+                className="flex-1 bg-field hover:bg-field-2 border border-line text-copy-2 font-medium py-2.5 rounded-xl transition-colors text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleLeaveLeague}
+                disabled={leaveLoading}
+                className="flex-1 bg-danger hover:bg-danger/90 disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl transition-colors text-sm"
+              >
+                {leaveLoading ? 'Leaving…' : 'Yes, leave'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <Lightbox url={lightboxUrl} onClose={() => setLightboxUrl(null)} />
 
