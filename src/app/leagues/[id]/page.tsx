@@ -2622,7 +2622,9 @@ function WaiversTab({
             <div className="text-center py-10">
               <p className="text-copy-3 text-sm">No teams found.</p>
             </div>
-          ) : filteredTeams.map(t => (
+          ) : filteredTeams.map(t => {
+            const stats = rosterStats[t.id];
+            return (
             <div
               key={t.id}
               className="flex items-center gap-3 px-4 py-3 hover:bg-field/40 transition-colors cursor-pointer"
@@ -2640,10 +2642,10 @@ function WaiversTab({
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <p className="text-sm font-semibold text-copy truncate">{t.name}</p>
-                  {rosterStats[t.id]?.trend === 'up' && (
+                  {stats?.trend === 'up' && (
                     <span className="text-[10px] font-semibold text-positive bg-positive/10 border border-positive/20 px-1.5 py-0.5 rounded-full leading-none flex-shrink-0">↑ Trending</span>
                   )}
-                  {rosterStats[t.id]?.trend === 'down' && (
+                  {stats?.trend === 'down' && (
                     <span className="text-[10px] font-semibold text-danger bg-danger/10 border border-danger/20 px-1.5 py-0.5 rounded-full leading-none flex-shrink-0">↓ Dropping</span>
                   )}
                 </div>
@@ -2656,12 +2658,12 @@ function WaiversTab({
                       {formatRecord(t.wins, t.draws, t.losses, t.sport)}
                     </span>
                   )}
-                  {rosterStats[t.id]?.rosteredPct != null && (
+                  {stats?.rosteredPct != null && (
                     <span className="text-[11px] text-copy-3">
-                      {rosterStats[t.id].rosteredPct}% rostered
-                      {rosterStats[t.id].delta30d != null && (
-                        <span className={`ml-1 font-semibold ${rosterStats[t.id].delta30d! >= 0 ? 'text-positive' : 'text-danger'}`}>
-                          {rosterStats[t.id].delta30d! >= 0 ? '+' : ''}{rosterStats[t.id].delta30d}%
+                      {stats.rosteredPct}% rostered
+                      {stats.delta30d != null && (
+                        <span className={`ml-1 font-semibold ${stats.delta30d >= 0 ? 'text-positive' : 'text-danger'}`}>
+                          {stats.delta30d >= 0 ? '+' : ''}{stats.delta30d}%
                         </span>
                       )}
                     </span>
@@ -2705,7 +2707,8 @@ function WaiversTab({
                 </div>
               </div>
             </div>
-          ))}
+          );
+          })}
         </div>
       </div>
 

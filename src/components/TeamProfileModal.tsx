@@ -30,8 +30,6 @@ interface AuctionStats {
 
 interface RosterStats {
   rosteredPct: number | null;
-  totalLeagues: number;
-  rosteredLeagues: number;
   trend: 'up' | 'down' | null;
   pickups7d: number;
   drops7d: number;
