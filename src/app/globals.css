@@ -81,12 +81,6 @@ body {
   transition-timing-function: ease;
 }
 
-/* Don't animate layout/transform properties */
-[class*="animate-"],
-[class*="transition-"],
-[class*="duration-"] {
-  transition-property: all;
-}
 
 /* Suppress all transitions during theme switch to prevent paint jank on large pages */
 .theme-switching *,

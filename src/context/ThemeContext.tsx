@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, ReactNode } from 'react';
 
 type Theme = 'dark' | 'light';
 
@@ -37,17 +37,19 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     requestAnimationFrame(() => requestAnimationFrame(() => root.classList.remove('theme-switching')));
   }
 
-  function toggle() {
+  const toggle = useCallback(() => {
     const next: Theme = theme === 'dark' ? 'light' : 'dark';
     apply(next);
     setTheme(next);
     localStorage.setItem('fg-theme', next);
-  }
+  }, [theme]);
+
+  const value = useMemo(() => ({ theme, toggle }), [theme, toggle]);
 
   if (!mounted) return <>{children}</>;
 
   return (
-    <ThemeContext.Provider value={{ theme, toggle }}>
+    <ThemeContext.Provider value={value}>
       {children}
     </ThemeContext.Provider>
   );

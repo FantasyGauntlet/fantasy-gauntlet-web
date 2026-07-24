@@ -1,13 +1,9 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { updateProfile } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
-import { api } from '@/lib/api';
 import NotificationBell from './NotificationBell';
 
 
@@ -40,52 +36,8 @@ export default function NavBar() {
   const { theme, toggle } = useTheme();
   const pathname = usePathname();
 
-  const [displayName, setDisplayName] = useState(user?.displayName ?? '');
-  const [showProfile, setShowProfile] = useState(false);
-  const [nameInput, setNameInput] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState('');
-  const nameRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (!user) return;
-    api.get<{ displayName: string }>('/users/me')
-      .then(u => setDisplayName(u.displayName))
-      .catch(() => {});
-  }, [user]);
-
-  useEffect(() => {
-    if (showProfile) {
-      setNameInput(displayName);
-      setSaveError('');
-      setTimeout(() => nameRef.current?.focus(), 50);
-    }
-  }, [showProfile]);
-
-  async function saveProfile(e: React.FormEvent) {
-    e.preventDefault();
-    const name = nameInput.trim();
-    if (!name) return;
-    setSaving(true);
-    setSaveError('');
-    try {
-      await api.patch('/users/me', { displayName: name });
-      if (auth?.currentUser) await updateProfile(auth.currentUser, { displayName: name });
-      setDisplayName(name);
-      setShowProfile(false);
-    } catch (err: unknown) {
-      setSaveError(err instanceof Error ? err.message : 'Failed to save');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  const initials = displayName
-    ? displayName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
-    : user?.email?.[0].toUpperCase() ?? '?';
-
-  const leagueMatch = pathname.match(/^\/leagues\/([^/]+)(?:\/|$)/);
-  const leagueId = leagueMatch?.[1] ?? null;
+  const initials = (user?.displayName ?? user?.email ?? '?')
+    .split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
 
   const staticLinks = [
     { href: '/dashboard', label: 'Dashboard' },
@@ -146,16 +98,16 @@ export default function NavBar() {
               <>
                 <div className="hidden sm:block w-px h-5 bg-line" />
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setShowProfile(true)}
+                  <Link
+                    href="/settings"
                     className="flex items-center gap-2 px-2 py-1 rounded-md hover:bg-field transition-colors group"
-                    title="Edit profile"
+                    title="Settings"
                   >
                     <div className="w-7 h-7 rounded-full bg-brand-dim border border-brand/30 flex items-center justify-center flex-shrink-0">
                       <span className="text-xs font-semibold text-brand">{initials}</span>
                     </div>
                     <span className="hidden md:block text-xs text-copy-3 group-hover:text-copy max-w-[140px] truncate transition-colors">{user?.email}</span>
-                  </button>
+                  </Link>
                   <button
                     onClick={signOut}
                     className="text-xs text-copy-3 hover:text-copy px-2.5 py-1.5 rounded-md hover:bg-field transition-colors"
@@ -169,75 +121,6 @@ export default function NavBar() {
         </div>
       </header>
 
-      {/* Profile edit modal */}
-      {showProfile && (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center p-4"
-          onClick={e => { if (e.target === e.currentTarget) setShowProfile(false); }}
-        >
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-          <div className="relative bg-card border border-line rounded-2xl shadow-2xl w-full max-w-sm p-6">
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="text-base font-semibold text-copy">Edit Profile</h2>
-              <button
-                onClick={() => setShowProfile(false)}
-                className="w-7 h-7 rounded-md flex items-center justify-center text-copy-3 hover:text-copy hover:bg-field transition-colors"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-              </button>
-            </div>
-
-            <form onSubmit={saveProfile} className="space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-copy-2 mb-1.5">Full name</label>
-                <input
-                  ref={nameRef}
-                  type="text"
-                  value={nameInput}
-                  onChange={e => setNameInput(e.target.value)}
-                  required
-                  className="w-full bg-field border border-line-2 rounded-xl px-4 py-3 text-copy text-sm placeholder-copy-3 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors"
-                  placeholder="Your full name"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-copy-2 mb-1.5">Email</label>
-                <input
-                  type="text"
-                  value={user?.email ?? ''}
-                  disabled
-                  className="w-full bg-field border border-line rounded-xl px-4 py-3 text-copy-3 text-sm cursor-not-allowed"
-                />
-                <p className="text-xs text-copy-3 mt-1">Email cannot be changed here</p>
-              </div>
-
-              {saveError && (
-                <p className="text-danger text-xs">{saveError}</p>
-              )}
-
-              <div className="flex gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={() => setShowProfile(false)}
-                  className="flex-1 bg-field hover:bg-field-2 border border-line text-copy-2 font-medium py-2.5 rounded-xl transition-colors text-sm"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving || !nameInput.trim()}
-                  className="flex-1 bg-brand hover:bg-brand-2 disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl transition-colors text-sm"
-                >
-                  {saving ? 'Saving...' : 'Save'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </>
   );
 }
