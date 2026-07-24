@@ -12,7 +12,7 @@ interface SportLeague { id: string; name: string; }
 interface Team { id: string; name: string; logoUrl?: string | null; }
 interface Season { id: string; label: string; regularSeasonStart: string; regularSeasonEnd: string; }
 interface BonusPoint { id: string; teamId: string; teamName: string; seasonId: string; seasonLabel: string; sportLeagueId: string; label: string; points: number; awardedAt: string; }
-interface AdminLeague { id: string; name: string; state: 'draft' | 'auction' | 'active' | 'completed' | 'cancelled'; selectedSports: string[]; commissionerId: string; memberCap: number | null; createdAt: string; }
+interface AdminLeague { id: string; name: string; state: 'draft' | 'auction' | 'active' | 'completed' | 'cancelled'; selectedSports: string[]; commissionerId: string; memberCap: number | null; createdAt: string; isPublic: boolean; hiddenFromPublic?: boolean; }
 
 const LEAGUE_ACRONYMS = new Set(['nhl', 'nba', 'nfl', 'mlb', 'ucl', 'ncaa', 'mls', 'fifa', 'ufc']);
 function formatLeagueName(id: string): string {
@@ -513,6 +513,17 @@ export default function AdminPage() {
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
+  }
+
+  async function toggleVisibility(leagueId: string, currentlyHidden: boolean) {
+    setLeagueStatuses(s => ({ ...s, [leagueId]: { status: 'loading', message: '' } }));
+    try {
+      await api.patch(`/admin/leagues/${leagueId}/visibility`, { hidden: !currentlyHidden });
+      setAllLeagues(ls => ls.map(l => l.id === leagueId ? { ...l, hiddenFromPublic: !currentlyHidden } : l));
+      setLeagueStatuses(s => ({ ...s, [leagueId]: { status: 'success', message: !currentlyHidden ? 'Hidden from public browse' : 'Visible on public browse' } }));
+    } catch (e: unknown) {
+      setLeagueStatuses(s => ({ ...s, [leagueId]: { status: 'error', message: e instanceof Error ? e.message : 'Failed' } }));
+    }
   }
 
   async function forceState(leagueId: string, state: AdminLeague['state']) {
@@ -1555,6 +1566,24 @@ export default function AdminPage() {
                               </button>
                             ))}
                           </div>
+                        </div>
+                      )}
+
+                      {/* Public visibility — only relevant for public leagues */}
+                      {league.isPublic && (
+                        <div>
+                          <p className="text-xs font-medium text-copy-2 mb-2">Public Browse</p>
+                          <button
+                            onClick={() => toggleVisibility(league.id, !!league.hiddenFromPublic)}
+                            disabled={lStatus?.status === 'loading'}
+                            className={`text-xs font-medium px-3 py-1.5 rounded-lg border disabled:opacity-50 transition-colors ${
+                              league.hiddenFromPublic
+                                ? 'bg-field hover:bg-field-2 border-line text-copy-2'
+                                : 'bg-danger-bg hover:bg-danger/20 border-danger/30 text-danger'
+                            }`}
+                          >
+                            {league.hiddenFromPublic ? 'Unhide from browse' : 'Hide from browse'}
+                          </button>
                         </div>
                       )}
 

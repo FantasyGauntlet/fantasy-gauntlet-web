@@ -41,6 +41,7 @@ export default function NavBar() {
 
   const staticLinks = [
     { href: '/dashboard', label: 'Dashboard' },
+    { href: '/leagues',   label: 'Browse' },
     { href: '/settings',  label: 'Settings' },
   ];
 
