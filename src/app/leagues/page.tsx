@@ -43,6 +43,7 @@ export default function BrowsePage() {
   const allSports = [...new Set(leagues.flatMap(l => l.selectedSports))].sort();
 
   const filtered = leagues.filter(l => {
+    if (l.state !== 'active') return false;
     if (search && !l.name.toLowerCase().includes(search.toLowerCase())) return false;
     if (sportFilter && !l.selectedSports.includes(sportFilter)) return false;
     return true;
