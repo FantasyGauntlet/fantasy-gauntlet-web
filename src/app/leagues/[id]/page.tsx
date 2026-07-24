@@ -3871,6 +3871,9 @@ function CommissionerTab({
   const [leagueName, setLeagueName] = useState(league.name ?? '');
   const [leagueNameSaving, setLeagueNameSaving] = useState(false);
 
+  const [isPublic, setIsPublic] = useState(league.isPublic);
+  const [visibilitySaving, setVisibilitySaving] = useState(false);
+
   const [leagueWaiverType, setLeagueWaiverType] = useState<'reserve-standings' | 'faab'>(league.waiverType ?? 'reserve-standings');
   const [leagueFaabBudget, setLeagueFaabBudget] = useState(league.faabStartingBudget ?? 100);
   const [leagueSports, setLeagueSports] = useState<string[]>(league.selectedSports ?? []);
@@ -3977,6 +3980,19 @@ function CommissionerTab({
     }
   }
 
+  async function saveVisibility(next: boolean) {
+    setVisibilitySaving(true);
+    try {
+      const updated = await api.patch<League>(`/leagues/${leagueId}/settings`, { isPublic: next });
+      setLeague(updated);
+      setIsPublic(next);
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Failed to save visibility');
+    } finally {
+      setVisibilitySaving(false);
+    }
+  }
+
   async function saveWaiverSettings() {
     setWaiverSettingsSaving(true);
     try {
@@ -4011,6 +4027,29 @@ function CommissionerTab({
             className="flex-shrink-0 bg-brand hover:bg-brand-2 disabled:opacity-40 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors"
           >
             {leagueNameSaving ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+      </div>
+
+      {/* Visibility */}
+      <div className="bg-card border border-line rounded-2xl p-5">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h2 className="text-sm font-semibold text-copy">League Visibility</h2>
+            <p className="text-xs text-copy-3 mt-0.5">
+              {isPublic
+                ? 'Public — anyone can find this league on the Browse page.'
+                : 'Private — only people with an invite link can join.'}
+            </p>
+          </div>
+          <button
+            onClick={() => saveVisibility(!isPublic)}
+            disabled={visibilitySaving}
+            className={`relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none disabled:opacity-50 ${isPublic ? 'bg-brand' : 'bg-field-2'}`}
+            role="switch"
+            aria-checked={isPublic}
+          >
+            <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transition-transform duration-200 ${isPublic ? 'translate-x-5' : 'translate-x-0'}`} />
           </button>
         </div>
       </div>
