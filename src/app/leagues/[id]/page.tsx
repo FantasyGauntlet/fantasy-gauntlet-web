@@ -18,6 +18,7 @@ import { HistoryTab } from './tabs/history';
 import { RulesTab } from './tabs/rules';
 import { RecentActivityTab } from './tabs/recent-activity';
 import { CommissionerTab } from './tabs/commissioner';
+import { UserManagementTab } from './tabs/user-management';
 
 export default function LeaguePage() {
   const { id } = useParams<{ id: string }>();
@@ -114,6 +115,7 @@ export default function LeaguePage() {
     { key: 'rules',       label: 'Rules' },
     { key: 'history',     label: 'History' },
     ...(isCommissioner ? [{ key: 'commissioner' as Tab, label: 'Commissioner Settings' }] : []),
+    ...(isCommissioner ? [{ key: 'user-management' as Tab, label: 'User Management' }] : []),
   ];
   const isLeagueTab = leagueSubTabs.some(t => t.key === tab);
   const activeLeagueLabel = leagueSubTabs.find(t => t.key === tab)?.label ?? 'League';
@@ -334,6 +336,11 @@ export default function LeaguePage() {
       {mountedTabs.has('activity') && (
         <div className={tab !== 'activity' ? 'hidden' : ''}>
           <RecentActivityTab leagueId={id} fantasyTeams={fantasyTeams} />
+        </div>
+      )}
+      {mountedTabs.has('user-management') && isCommissioner && (
+        <div className={tab !== 'user-management' ? 'hidden' : ''}>
+          <UserManagementTab leagueId={id} league={league} fantasyTeams={fantasyTeams} members={members} />
         </div>
       )}
       {mountedTabs.has('commissioner') && isCommissioner && (

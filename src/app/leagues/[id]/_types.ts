@@ -116,5 +116,5 @@ export type TxEvent =
   | { type: 'trade'; id: string; date: string; proposerFantasyTeamId: string; receiverFantasyTeamId: string; offeredSportTeamIds: string[]; requestedSportTeamIds: string[]; }
   | { type: 'waiver'; id: string; date: string; claimantUserId: string; claimantDisplayName: string; addTeamId: string; dropTeamId: string | null; };
 
-export type Tab = 'standings' | 'roster' | 'waivers' | 'transaction-counter' | 'auction-summary' | 'home' | 'history' | 'rules' | 'activity' | 'commissioner';
-export const VALID_TABS: Tab[] = ['standings', 'roster', 'waivers', 'transaction-counter', 'auction-summary', 'home', 'history', 'rules', 'activity', 'commissioner'];
+export type Tab = 'standings' | 'roster' | 'waivers' | 'transaction-counter' | 'auction-summary' | 'home' | 'history' | 'rules' | 'activity' | 'commissioner' | 'user-management';
+export const VALID_TABS: Tab[] = ['standings', 'roster', 'waivers', 'transaction-counter', 'auction-summary', 'home', 'history', 'rules', 'activity', 'commissioner', 'user-management'];
