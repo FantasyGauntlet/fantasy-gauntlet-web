@@ -23,6 +23,7 @@ function RosterTab({
   const [loadingTeams, setLoadingTeams] = useState(true);
   const [assigning, setAssigning] = useState<string | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [assignTeamsOpen, setAssignTeamsOpen] = useState(false);
   const [viewingId, setViewingId] = useState<string>('');
   const [standings, setStandings] = useState<Standing[]>([]);
   const [editName, setEditName] = useState('');
@@ -723,14 +724,28 @@ function RosterTab({
         <div className="space-y-4">
           {/* Assign teams */}
           <div>
-            <h2 className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-3">Assign Teams</h2>
-          {loadingTeams ? (
-            <div className="flex justify-center py-8"><Spinner /></div>
-          ) : sportGroups.every(g => g.teams.length === 0) ? (
-            <div className="bg-card border border-line rounded-2xl p-6 text-center">
-              <p className="text-copy-3 text-sm">No teams synced. Run <strong className="text-copy-2">Sync Teams</strong> in the admin panel first.</p>
-            </div>
-          ) : (
+            <button
+              type="button"
+              onClick={() => setAssignTeamsOpen(o => !o)}
+              className="w-full flex items-center justify-between mb-3 group"
+            >
+              <h2 className="text-xs font-semibold text-copy-3 uppercase tracking-widest">Assign Teams</h2>
+              <svg
+                width="12" height="12" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                className={`text-copy-3 transition-transform ${assignTeamsOpen ? 'rotate-180' : ''}`}
+              >
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </button>
+          {assignTeamsOpen && (
+            loadingTeams ? (
+              <div className="flex justify-center py-8"><Spinner /></div>
+            ) : sportGroups.every(g => g.teams.length === 0) ? (
+              <div className="bg-card border border-line rounded-2xl p-6 text-center">
+                <p className="text-copy-3 text-sm">No teams synced. Run <strong className="text-copy-2">Sync Teams</strong> in the admin panel first.</p>
+              </div>
+            ) : (
             <div className="space-y-2">
               {sportGroups.map(group => {
                 if (group.teams.length === 0) return null;
@@ -800,7 +815,7 @@ function RosterTab({
                 );
               })}
             </div>
-          )}
+          ))}
         </div>
         </div>
       )}
