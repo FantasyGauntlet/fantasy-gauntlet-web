@@ -237,7 +237,7 @@ function RulesTab({ league }: { league: League }) {
         <div className="space-y-2">
           {[
             { sport: 'NHL',            rules: ['10 pts — Top 2 in each division'] },
-            { sport: 'NBA',            rules: ['10 pts — Top 3 in each conference'] },
+            { sport: 'NBA',            rules: ['10 pts — Top 3 in each conference', '20 pts — NBA Cup'] },
             { sport: 'NFL',            rules: ['10 pts — Each Division Winner'] },
             { sport: 'MLB',            rules: ['10 pts — Each Division Winner + 4 seed (Top Wildcard team)'] },
             { sport: 'UCL',            rules: ['10 pts — Top 8 in the Final Table'] },
