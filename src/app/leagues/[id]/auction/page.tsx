@@ -1851,21 +1851,14 @@ export default function AuctionPage() {
             {/* Roster viewer */}
             {(() => {
               const maxWildcard = league?.auctionConfig?.maxWildcard ?? 0;
-              // Compute wildcard lots: teams that fill slots beyond each sport's per-sport max
-              const wildcardLots: typeof ownedLots = [];
-              const normalLotsByLot = new Set<string>();
-              if (maxWildcard > 0) {
-                const bySport: Record<string, typeof ownedLots> = {};
-                for (const l of ownedLots) {
-                  const sport = teamMapRef.current.get(l.teamId)?.sportLeagueId ?? '';
-                  (bySport[sport] ??= []).push(l);
-                }
-                for (const [sport, lots] of Object.entries(bySport)) {
-                  const max = getMaxForSport(sport);
-                  lots.slice(0, max).forEach(l => normalLotsByLot.add(l.teamId));
-                  lots.slice(max).forEach(l => wildcardLots.push(l));
-                }
-              }
+              // Wildcard budget = how many "second slots" across all sports are still available.
+              // Each sport with max≥2 where 2 teams are already owned has consumed 1 wildcard.
+              const wildcardsUsed = orderedLeagueSports.reduce((acc, sport) => {
+                if (getMaxForSport(sport) < 2) return acc;
+                const n = ownedLots.filter(l => teamMapRef.current.get(l.teamId)?.sportLeagueId === sport).length;
+                return acc + (n >= 2 ? 1 : 0);
+              }, 0);
+              const wildcardBudgetLeft = Math.max(0, maxWildcard - wildcardsUsed);
               return (
                 <div className="bg-card border border-line rounded-2xl p-4">
                   <div className="flex items-center justify-between mb-3">
@@ -1884,10 +1877,13 @@ export default function AuctionPage() {
                   <div className="space-y-3">
                     {orderedLeagueSports.map(sport => {
                       const max = getMaxForSport(sport);
-                      const allInSport = ownedLots.filter(l => teamMapRef.current.get(l.teamId)?.sportLeagueId === sport);
-                      const wonInSport = maxWildcard > 0 ? allInSport.slice(0, max) : allInSport;
-                      const emptyCount = Math.max(0, max - wonInSport.length);
+                      const wonInSport = ownedLots.filter(l => teamMapRef.current.get(l.teamId)?.sportLeagueId === sport);
                       const isFull = wonInSport.length >= max;
+                      // Slot 0 is the regular pick (gray). Slot 1+ are wildcard picks (warn/orange).
+                      const grayEmpty = Math.max(0, 1 - wonInSport.length);
+                      const orangeEmpty = max >= 2 && wildcardBudgetLeft > 0
+                        ? Math.max(0, max - Math.max(wonInSport.length, 1))
+                        : 0;
                       return (
                         <div key={sport}>
                           <div className="flex items-center justify-between mb-1.5">
@@ -1908,41 +1904,16 @@ export default function AuctionPage() {
                                 </div>
                               );
                             })}
-                            {Array.from({ length: emptyCount }).map((_, i) => (
+                            {Array.from({ length: grayEmpty }).map((_, i) => (
                               <div key={`empty-${i}`} className="w-8 h-8 rounded-lg border-2 border-dashed border-line flex-shrink-0" />
+                            ))}
+                            {Array.from({ length: orangeEmpty }).map((_, i) => (
+                              <div key={`wc-${i}`} className="w-8 h-8 rounded-lg border-2 border-dashed border-warn/60 flex-shrink-0" />
                             ))}
                           </div>
                         </div>
                       );
                     })}
-
-                    {maxWildcard > 0 && (
-                      <div>
-                        <div className="flex items-center justify-between mb-1.5">
-                          <p className="text-xs font-semibold text-warn">Wild Card</p>
-                          <span className={`text-[10px] font-medium ${wildcardLots.length >= maxWildcard ? 'text-positive' : 'text-copy-3'}`}>
-                            {wildcardLots.length}/{maxWildcard}
-                          </span>
-                        </div>
-                        <div className="flex flex-wrap gap-1.5">
-                          {wildcardLots.map(t => {
-                            const info = teamMapRef.current.get(t.teamId);
-                            return (
-                              <div key={t.teamId} title={t.teamName} className="flex flex-col items-center gap-0.5 w-10">
-                                <TeamLogo logoUrl={t.logoUrl} name={t.teamName} size={8} />
-                                <p className="text-[10px] text-copy-3 text-center leading-tight w-full truncate">
-                                  {info?.shortName ?? t.teamName.split(' ').pop() ?? ''}
-                                </p>
-                              </div>
-                            );
-                          })}
-                          {Array.from({ length: Math.max(0, maxWildcard - wildcardLots.length) }).map((_, i) => (
-                            <div key={`wc-empty-${i}`} className="w-8 h-8 rounded-lg border-2 border-dashed border-warn/50 flex-shrink-0" />
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
                   </div>
                 </div>
               );
