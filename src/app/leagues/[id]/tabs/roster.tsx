@@ -6,7 +6,7 @@ import { api } from '@/lib/api';
 import { storage } from '@/lib/firebase';
 import { useTeamProfile } from '@/context/TeamProfileContext';
 import { Spinner, Lightbox, formatLeagueName, formatRecord, SPORT_ORDER } from '../_components';
-import type { SportGroup, Standing, LeagueInvite, FantasyTeam, SportTeam, Trade, TeamBreakdown, BonusBreakdownItem } from '../_types';
+import type { SportGroup, Standing, FantasyTeam, SportTeam, Trade, TeamBreakdown, BonusBreakdownItem } from '../_types';
 
 function RosterTab({
   leagueId, leagueState, fantasyTeams, setFantasyTeams, isCommissioner, userId, ownerNameByUserId,
@@ -23,12 +23,6 @@ function RosterTab({
   const [loadingTeams, setLoadingTeams] = useState(true);
   const [assigning, setAssigning] = useState<string | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
-  const [placeholderName, setPlaceholderName] = useState('');
-  const [addingPlaceholder, setAddingPlaceholder] = useState(false);
-  const [inviteEmails, setInviteEmails] = useState<Record<string, string>>({});
-  const [inviteStatus, setInviteStatus] = useState<Record<string, { status: 'idle' | 'loading' | 'success' | 'error'; message: string }>>({});
-  const [invites, setInvites] = useState<LeagueInvite[]>([]);
-  const [inviteActions, setInviteActions] = useState<Record<string, 'cancelling' | 'resending' | null>>({});
   const [viewingId, setViewingId] = useState<string>('');
   const [standings, setStandings] = useState<Standing[]>([]);
   const [editName, setEditName] = useState('');
@@ -41,10 +35,6 @@ function RosterTab({
   const logoInputRef = useRef<HTMLInputElement>(null);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
-  const [coOwners, setCoOwners] = useState<{ uid: string; email: string }[]>([]);
-  const [coOwnerEmail, setCoOwnerEmail] = useState('');
-  const [coOwnerSaving, setCoOwnerSaving] = useState(false);
-  const [coOwnerMsg, setCoOwnerMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [removingTeam, setRemovingTeam] = useState(false);
   const [expandedRosterTeam, setExpandedRosterTeam] = useState<string | null>(null);
 
@@ -68,12 +58,6 @@ function RosterTab({
     api.get<Trade[]>(`/leagues/${leagueId}/trades`).then(setTrades).catch(() => {});
   }, [leagueId]);
 
-  useEffect(() => {
-    if (!isCommissioner) return;
-    api.get<LeagueInvite[]>(`/leagues/${leagueId}/invites`)
-      .then(data => setInvites(data.filter(i => i.status === 'pending')))
-      .catch(() => {});
-  }, [leagueId, isCommissioner]);
 
   const isMyTeam = (ft: FantasyTeam) =>
     !ft.isPlaceholder && (ft.userId === userId || (ft.coOwnerIds ?? []).includes(userId ?? ''));
@@ -95,22 +79,6 @@ function RosterTab({
     }
   }, [viewingId, fantasyTeams, userId]);
 
-  // Load co-owners when viewing a non-placeholder team (own team or commissioner viewing any team)
-  useEffect(() => {
-    setCoOwners([]);
-    setCoOwnerMsg(null);
-    setCoOwnerEmail('');
-    const t = fantasyTeams.find(ft => ft.id === viewingId);
-    if (!t || t.isPlaceholder) return;
-    const mine = !t.isPlaceholder && (t.userId === userId || (t.coOwnerIds ?? []).includes(userId ?? ''));
-    if (mine) {
-      api.get<{ uid: string; email: string }[]>(`/leagues/${leagueId}/teams/my/co-owners`)
-        .then(setCoOwners).catch(() => {});
-    } else if (isCommissioner) {
-      api.get<{ uid: string; email: string }[]>(`/leagues/${leagueId}/teams/${viewingId}/co-owners`)
-        .then(setCoOwners).catch(() => {});
-    }
-  }, [viewingId, leagueId, fantasyTeams, userId, isCommissioner]);
 
   const ownerMap: Record<string, FantasyTeam> = {};
   for (const ft of fantasyTeams) {
@@ -257,37 +225,6 @@ function RosterTab({
     finally { setAssigning(null); }
   }
 
-  async function addPlaceholder(e: React.FormEvent) {
-    e.preventDefault();
-    if (!placeholderName.trim()) return;
-    setAddingPlaceholder(true);
-    try {
-      const team = await api.post<FantasyTeam>(`/leagues/${leagueId}/members/placeholder`, { displayName: placeholderName.trim() });
-      setFantasyTeams(prev => [...prev, team]);
-      setPlaceholderName('');
-    } catch (err: unknown) { alert(err instanceof Error ? err.message : 'Failed to add player'); }
-    finally { setAddingPlaceholder(false); }
-  }
-
-  async function cancelInvite(inviteId: string) {
-    setInviteActions(a => ({ ...a, [inviteId]: 'cancelling' }));
-    try {
-      await api.delete(`/leagues/${leagueId}/invites/${inviteId}`);
-      setInvites(i => i.filter(x => x.id !== inviteId));
-    } catch (e: unknown) { alert(e instanceof Error ? e.message : 'Failed to cancel'); }
-    finally { setInviteActions(a => ({ ...a, [inviteId]: null })); }
-  }
-
-  async function resendInvite(inviteId: string) {
-    setInviteActions(a => ({ ...a, [inviteId]: 'resending' }));
-    try {
-      await api.post(`/leagues/${leagueId}/invites/${inviteId}/resend`);
-      setInviteActions(a => ({ ...a, [inviteId]: null }));
-    } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : 'Failed to resend');
-      setInviteActions(a => ({ ...a, [inviteId]: null }));
-    }
-  }
 
   async function saveTeam(e: React.FormEvent) {
     e.preventDefault();
@@ -305,37 +242,6 @@ function RosterTab({
     } finally { setEditSaving(false); }
   }
 
-  async function handleAddCoOwner(e: React.FormEvent) {
-    e.preventDefault();
-    if (!coOwnerEmail.trim()) return;
-    setCoOwnerSaving(true); setCoOwnerMsg(null);
-    try {
-      const endpoint = viewingIsPrimaryOwner
-        ? `/leagues/${leagueId}/teams/my/co-owners`
-        : `/leagues/${leagueId}/teams/${viewingId}/co-owners`;
-      const updated = await api.post<{ uid: string; email: string }[]>(
-        endpoint,
-        { email: coOwnerEmail.trim() },
-      );
-      setCoOwnerEmail('');
-      setCoOwnerMsg({ type: 'success', text: `Invite sent to ${coOwnerEmail.trim()}.` });
-      setTimeout(() => setCoOwnerMsg(null), 3000);
-    } catch (err: unknown) {
-      setCoOwnerMsg({ type: 'error', text: err instanceof Error ? err.message : 'Failed to add co-owner' });
-    } finally { setCoOwnerSaving(false); }
-  }
-
-  async function handleRemoveCoOwner(coOwnerUid: string) {
-    try {
-      const endpoint = viewingIsPrimaryOwner
-        ? `/leagues/${leagueId}/teams/my/co-owners/${coOwnerUid}`
-        : `/leagues/${leagueId}/teams/${viewingId}/co-owners/${coOwnerUid}`;
-      const updated = await api.delete<{ uid: string; email: string }[]>(endpoint);
-      setCoOwners(updated);
-    } catch (err: unknown) {
-      setCoOwnerMsg({ type: 'error', text: err instanceof Error ? err.message : 'Failed to remove co-owner' });
-    }
-  }
 
   async function handleRemoveTeam() {
     if (!viewingTeam) return;
@@ -400,19 +306,6 @@ function RosterTab({
     }
   }
 
-  async function sendInvite(fantasyTeamId: string) {
-    const email = (inviteEmails[fantasyTeamId] ?? '').trim();
-    if (!email) return;
-    setInviteStatus(s => ({ ...s, [fantasyTeamId]: { status: 'loading', message: 'Sending...' } }));
-    try {
-      const invite = await api.post<LeagueInvite>(`/leagues/${leagueId}/invites`, { email, placeholderTeamId: fantasyTeamId });
-      setInviteStatus(s => ({ ...s, [fantasyTeamId]: { status: 'success', message: `Invite sent to ${email}` } }));
-      setInviteEmails(e => ({ ...e, [fantasyTeamId]: '' }));
-      setInvites(i => [...i, invite]);
-    } catch (err: unknown) {
-      setInviteStatus(s => ({ ...s, [fantasyTeamId]: { status: 'error', message: err instanceof Error ? err.message : 'Failed' } }));
-    }
-  }
 
   return (
     <div className="space-y-6">
@@ -807,62 +700,6 @@ function RosterTab({
         </div>
       )}
 
-      {/* ── Co-owners ── */}
-      {viewingTeam && !viewingTeam.isPlaceholder && (viewingIsMe || isCommissioner) && (
-        <div className="bg-card border border-line rounded-2xl p-5">
-          <h2 className="text-sm font-semibold text-copy mb-1">Co-owners</h2>
-          <p className="text-xs text-copy-3 mb-4">
-            {viewingIsMe
-              ? 'Allow another account to manage this team alongside you.'
-              : `Co-owners linked to ${viewingTeam.displayName}.`}
-          </p>
-          {coOwners.length > 0 && (
-            <div className="space-y-2 mb-4">
-              {coOwners.map(co => (
-                <div key={co.uid} className="flex items-center justify-between bg-field border border-line rounded-xl px-4 py-2.5">
-                  <span className="text-sm text-copy">{co.email}</span>
-                  {(viewingIsPrimaryOwner || isCommissioner) && (
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveCoOwner(co.uid)}
-                      className="text-xs text-danger hover:text-danger/80 transition-colors font-medium ml-3"
-                    >
-                      Remove
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-          {coOwners.length === 0 && (
-            <p className="text-xs text-copy-3 mb-4">No co-owners.</p>
-          )}
-          {(viewingIsPrimaryOwner || (isCommissioner && viewingTeam && !viewingIsMe)) && (
-            <form onSubmit={handleAddCoOwner} className="flex gap-2">
-              <input
-                type="email"
-                value={coOwnerEmail}
-                onChange={e => setCoOwnerEmail(e.target.value)}
-                placeholder="Email address..."
-                className="flex-1 bg-field border border-line-2 rounded-xl px-4 py-2 text-copy text-sm placeholder-copy-3 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors"
-              />
-              <button
-                type="submit"
-                disabled={!coOwnerEmail.trim() || coOwnerSaving}
-                className="bg-field-2 hover:bg-line border border-line text-copy-2 text-sm font-medium px-4 py-2 rounded-xl transition-colors whitespace-nowrap disabled:opacity-50"
-              >
-                {coOwnerSaving ? '...' : 'Add'}
-              </button>
-            </form>
-          )}
-          {coOwnerMsg && (
-            <p className={`text-xs mt-2 ${coOwnerMsg.type === 'error' ? 'text-danger' : 'text-positive'}`}>
-              {coOwnerMsg.text}
-            </p>
-          )}
-        </div>
-      )}
-
       {/* ── Remove team (commissioner only, not own team) ── */}
       {isCommissioner && viewingTeam && viewingTeam.userId !== userId && (
         <div className="bg-card border border-danger/20 rounded-2xl p-5">
@@ -884,92 +721,6 @@ function RosterTab({
       {/* ── Commissioner tools ── */}
       {isCommissioner && (
         <div className="space-y-4">
-          {/* Add placeholder */}
-          {leagueState === 'draft' && (
-            <form onSubmit={addPlaceholder} className="flex gap-2">
-              <input
-                value={placeholderName}
-                onChange={e => setPlaceholderName(e.target.value)}
-                placeholder="Add placeholder player name..."
-                required
-                className="flex-1 bg-field border border-line-2 rounded-xl px-4 py-2.5 text-copy text-sm placeholder-copy-3 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors"
-              />
-              <button
-                type="submit"
-                disabled={addingPlaceholder || !placeholderName.trim()}
-                className="bg-brand hover:bg-brand-2 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors whitespace-nowrap"
-              >
-                {addingPlaceholder ? '...' : '+ Add Player'}
-              </button>
-            </form>
-          )}
-
-          {/* Invite placeholders */}
-          {fantasyTeams.filter(ft => ft.isPlaceholder).map(ft => (
-            <div key={ft.id} className="bg-card border border-line rounded-2xl px-4 py-3">
-              <p className="text-xs font-medium text-copy mb-2">{ft.displayName} — Send Invite</p>
-              <div className="flex gap-2">
-                <input
-                  type="email"
-                  value={inviteEmails[ft.id] ?? ''}
-                  onChange={e => setInviteEmails(s => ({ ...s, [ft.id]: e.target.value }))}
-                  placeholder="Email address..."
-                  className="flex-1 bg-field border border-line-2 rounded-lg px-3 py-1.5 text-copy text-xs placeholder-copy-3 focus:outline-none focus:border-brand transition-colors"
-                />
-                <button
-                  type="button"
-                  onClick={() => sendInvite(ft.id)}
-                  disabled={inviteStatus[ft.id]?.status === 'loading' || !inviteEmails[ft.id]?.trim()}
-                  className="bg-field-2 hover:bg-line border border-line text-copy-2 text-xs px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap disabled:opacity-50"
-                >
-                  {inviteStatus[ft.id]?.status === 'loading' ? '...' : 'Send Invite'}
-                </button>
-              </div>
-              {inviteStatus[ft.id] && inviteStatus[ft.id].status !== 'idle' && (
-                <p className={`text-xs mt-1.5 ${
-                  inviteStatus[ft.id].status === 'success' ? 'text-positive' :
-                  inviteStatus[ft.id].status === 'error' ? 'text-danger' : 'text-copy-3'
-                }`}>{inviteStatus[ft.id].message}</p>
-              )}
-            </div>
-          ))}
-
-          {/* Pending invites */}
-          {invites.length > 0 && (
-            <div>
-              <h2 className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-3">
-                Pending Invites · {invites.length}
-              </h2>
-              <div className="space-y-2">
-                {invites.map(invite => {
-                  const action = inviteActions[invite.id];
-                  return (
-                    <div key={invite.id} className="bg-card border border-line rounded-2xl px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
-                      <div>
-                        <p className="text-sm font-medium text-copy">{invite.toEmail}</p>
-                        <p className="text-xs text-copy-3 mt-0.5">
-                          Sent {new Date(invite.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                          <span className="mx-1.5">·</span>
-                          Expires {new Date(invite.expiresAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                        </p>
-                      </div>
-                      <div className="flex gap-2 flex-shrink-0">
-                        <button onClick={() => resendInvite(invite.id)} disabled={!!action}
-                          className="text-xs bg-field hover:bg-field-2 border border-line text-copy-2 hover:text-copy px-3 py-1.5 rounded-lg transition-colors font-medium disabled:opacity-50">
-                          {action === 'resending' ? 'Sending...' : 'Resend'}
-                        </button>
-                        <button onClick={() => cancelInvite(invite.id)} disabled={!!action}
-                          className="text-xs bg-danger-bg border border-danger/20 text-danger hover:bg-danger hover:text-white px-3 py-1.5 rounded-lg transition-colors font-medium disabled:opacity-50">
-                          {action === 'cancelling' ? 'Cancelling...' : 'Cancel'}
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
           {/* Assign teams */}
           <div>
             <h2 className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-3">Assign Teams</h2>
