@@ -18,6 +18,8 @@ interface League {
     startingBudget: number; minOpeningBid: number; minBidIncrement: number;
     nominationMode: string; countdownSeconds: number; maxWildcard?: number;
     scheduledStartAt?: string | null;
+    noBidPenaltyPct?: number;
+    nominationTimerSeconds?: number;
   } | null;
 }
 
@@ -223,6 +225,8 @@ export default function AuctionPage() {
   const [selectedNomination, setSelectedNomination] = useState('');
   const [nominatorUserId, setNominatorUserId] = useState<string | null>(null);
   const [nominationOrderState, setNominationOrderState] = useState<string[]>([]);
+  const [nominationTimerRemaining, setNominationTimerRemaining] = useState<number | null>(null);
+  const [nominationSearch, setNominationSearch] = useState('');
   const [auctionErrorMsg, setAuctionErrorMsg] = useState('');
   const [scheduledStartAt, setScheduledStartAt] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -695,6 +699,32 @@ export default function AuctionPage() {
         setNominatorUserId(data.nominatorUserId ?? null);
         setNominating(false);
         setSelectedNomination('');
+        setNominationTimerRemaining(null);
+        setNominationSearch('');
+      });
+
+      socket.on('nomination_timer_update', (data: any) => {
+        setNominationTimerRemaining(typeof data.remaining === 'number' ? data.remaining : null);
+      });
+
+      socket.on('nomination_turn_skipped', (data: any) => {
+        const name = fantasyTeamsRef.current.find(ft => ft.userId === data.nominatorUserId)?.displayName ?? data.nominatorUserId;
+        toast('info', `${data.nominatorUserId === userRef.current?.uid ? 'Your' : `${name}'s`} turn was skipped`);
+        setNominationTimerRemaining(null);
+      });
+
+      socket.on('no_bid_penalty', (data: any) => {
+        const isMe = data.userId === userRef.current?.uid;
+        toast(isMe ? 'warn' : 'info',
+          isMe
+            ? `No-bid penalty: -$${data.penalty} (won team uncontested)`
+            : `${fantasyTeamsRef.current.find(ft => ft.userId === data.userId)?.displayName ?? data.userId} penalized $${data.penalty} (won uncontested)`
+        );
+        setFantasyTeams((prev: FantasyTeam[]) => {
+          const updated = prev.map(ft => ft.userId === data.userId ? { ...ft, remainingBudget: data.newBudget } : ft);
+          fantasyTeamsRef.current = updated;
+          return updated;
+        });
       });
 
       socket.on('nomination_order_updated', (data: any) => {
@@ -841,6 +871,14 @@ export default function AuctionPage() {
   const nominationOptions = upcomingQueue
     .map(tid => teamMapRef.current.get(tid))
     .filter(Boolean) as SportTeam[];
+
+  const filteredNominationOptions = nominationSearch.trim()
+    ? nominationOptions.filter(t =>
+        t.name.toLowerCase().includes(nominationSearch.toLowerCase()) ||
+        t.shortName.toLowerCase().includes(nominationSearch.toLowerCase()) ||
+        fln(t.sportLeagueId).toLowerCase().includes(nominationSearch.toLowerCase())
+      )
+    : nominationOptions;
 
   const sortedParticipants = [...fantasyTeams]
     .filter(ft => !ft.isPlaceholder)
@@ -1068,6 +1106,47 @@ export default function AuctionPage() {
           );
         })()}
 
+        {/* ── Nomination order ticker — manual mode ────────────── */}
+        {nominationMode === 'manual' && nominationOrderState.length > 0 && status !== 'closed' && (() => {
+          const ftMap = new Map(fantasyTeams.map(ft => [ft.userId, ft]));
+          return (
+            <div className="bg-card border border-line rounded-2xl px-4 py-3 mb-4">
+              <div className="flex items-center gap-4">
+                <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide flex-shrink-0">Nominating</p>
+                <div className="flex gap-3 overflow-x-auto scrollbar-none flex-1">
+                  {nominationOrderState.map((uid, idx) => {
+                    const currentNomIdx = nominationOrderState.findIndex(id => id === nominatorUserId);
+                    const offset = currentNomIdx >= 0 ? (idx - currentNomIdx + nominationOrderState.length) % nominationOrderState.length : -1;
+                    const isCurrent = offset === 0 && nominatorUserId !== null;
+                    const isNext = offset === 1 && nominatorUserId !== null;
+                    const isMe = uid === user?.uid;
+                    const ft = ftMap.get(uid);
+                    const label = isMe ? 'You' : (ft?.displayName?.split(' ')[0] ?? uid.slice(0, 6));
+                    return (
+                      <div key={uid} className="flex flex-col items-center gap-0.5 flex-shrink-0 w-12">
+                        <span className={`text-[10px] tabular-nums font-semibold ${isCurrent ? 'text-brand' : isNext ? 'text-warn' : 'text-copy-3'}`}>
+                          #{idx + 1}
+                        </span>
+                        <div className={`rounded-lg p-0.5 ${isCurrent ? 'ring-2 ring-brand ring-offset-1 ring-offset-card' : isNext ? 'ring-1 ring-warn/60 ring-offset-1 ring-offset-card' : ''}`}>
+                          <TeamLogo logoUrl={ft?.logoUrl ?? null} name={ft?.displayName ?? uid} size={8} />
+                        </div>
+                        <p className={`text-[10px] text-center leading-tight w-full truncate font-medium ${isCurrent ? 'text-brand' : isNext ? 'text-warn' : isMe ? 'text-brand/70' : 'text-copy-3'}`}>
+                          {label}
+                        </p>
+                        {isCurrent && nominationTimerRemaining !== null && nominationTimerRemaining > 0 && (
+                          <span className={`text-[10px] font-bold tabular-nums ${nominationTimerRemaining <= 10 ? 'text-danger' : 'text-copy-3'}`}>
+                            {nominationTimerRemaining}s
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_272px] gap-4">
 
           {/* ── Left column ──────────────────────────────────────── */}
@@ -1120,6 +1199,11 @@ export default function AuctionPage() {
                 </p>
                 {nominationMode === 'manual' && nominatorUserId && nominatorUserId !== user?.uid && !isCommissioner && (
                   <p className="text-copy-3 text-xs mt-1">{participantName(nominatorUserId)} will pick the next team to auction.</p>
+                )}
+                {nominationMode === 'manual' && nominationTimerRemaining !== null && nominationTimerRemaining > 0 && nominatorUserId !== user?.uid && !isCommissioner && (
+                  <p className={`text-sm font-bold tabular-nums mt-2 ${nominationTimerRemaining <= 10 ? 'text-danger' : 'text-copy-3'}`}>
+                    {nominationTimerRemaining}s
+                  </p>
                 )}
               </div>
             )}
@@ -1475,28 +1559,45 @@ export default function AuctionPage() {
                   )}
                   {/* Manual mode: commissioner can always nominate (fallback for any turn) */}
                   {nominationMode === 'manual' && status === 'waiting' && league?.state === 'auction' && (
-                    <div className="flex gap-2 w-full">
-                      <select
-                        value={selectedNomination}
-                        onChange={e => setSelectedNomination(e.target.value)}
-                        className="flex-1 bg-field border border-line-2 rounded-xl px-3 py-2 text-copy text-sm focus:outline-none focus:border-brand"
-                      >
-                        <option value="">
+                    <div className="w-full space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-copy-3">
                           {nominatorUserId && nominatorUserId !== user?.uid
-                            ? `Nominate on behalf of ${participantName(nominatorUserId)}…`
-                            : 'Pick a team to nominate…'}
-                        </option>
-                        {nominationOptions.map(t => (
-                          <option key={t.id} value={t.id}>{t.name} ({fln(t.sportLeagueId)})</option>
-                        ))}
-                      </select>
-                      <button
-                        onClick={handleNominate}
-                        disabled={!selectedNomination || nominating}
-                        className="bg-brand hover:bg-brand-2 disabled:opacity-40 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors whitespace-nowrap"
-                      >
-                        {nominating ? 'Nominating…' : 'Nominate'}
-                      </button>
+                            ? `Nominating for ${participantName(nominatorUserId)}`
+                            : 'Nominate a team'}
+                        </span>
+                        {nominationTimerRemaining !== null && nominationTimerRemaining > 0 && (
+                          <span className={`text-xs font-bold tabular-nums ${nominationTimerRemaining <= 10 ? 'text-danger' : 'text-copy-3'}`}>
+                            {nominationTimerRemaining}s
+                          </span>
+                        )}
+                      </div>
+                      <input
+                        type="text"
+                        value={nominationSearch}
+                        onChange={e => setNominationSearch(e.target.value)}
+                        placeholder="Search teams…"
+                        className="w-full bg-field border border-line-2 rounded-xl px-3 py-2 text-copy text-sm placeholder-copy-3 focus:outline-none focus:border-brand"
+                      />
+                      <div className="flex gap-2">
+                        <select
+                          value={selectedNomination}
+                          onChange={e => setSelectedNomination(e.target.value)}
+                          className="flex-1 bg-field border border-line-2 rounded-xl px-3 py-2 text-copy text-sm focus:outline-none focus:border-brand"
+                        >
+                          <option value="">Pick a team…</option>
+                          {filteredNominationOptions.map(t => (
+                            <option key={t.id} value={t.id}>{t.name} ({fln(t.sportLeagueId)})</option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={handleNominate}
+                          disabled={!selectedNomination || nominating}
+                          className="bg-brand hover:bg-brand-2 disabled:opacity-40 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors whitespace-nowrap"
+                        >
+                          {nominating ? 'Nominating…' : 'Nominate'}
+                        </button>
+                      </div>
                     </div>
                   )}
                   {/* Force-advance if stuck between lots */}
@@ -1609,7 +1710,29 @@ export default function AuctionPage() {
             {/* Non-commissioner nomination UI: shown when it's the user's turn */}
             {nominationMode === 'manual' && !isCommissioner && nominatorUserId === user?.uid && status === 'waiting' && league?.state === 'auction' && (
               <div className="bg-card border border-brand/40 rounded-2xl p-4 space-y-3">
-                <p className="text-xs font-semibold text-brand uppercase tracking-wide">Your Turn to Nominate</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-brand uppercase tracking-wide">Your Turn to Nominate</p>
+                  <div className="flex items-center gap-2">
+                    {nominationTimerRemaining !== null && nominationTimerRemaining > 0 && (
+                      <span className={`text-sm font-bold tabular-nums ${nominationTimerRemaining <= 10 ? 'text-danger' : 'text-copy-3'}`}>
+                        {nominationTimerRemaining}s
+                      </span>
+                    )}
+                    <button
+                      onClick={() => socketRef.current?.emit('skip_nomination_turn')}
+                      className="text-xs text-copy-3 border border-line px-2.5 py-1 rounded-lg hover:bg-field transition-colors"
+                    >
+                      Skip Turn
+                    </button>
+                  </div>
+                </div>
+                <input
+                  type="text"
+                  value={nominationSearch}
+                  onChange={e => setNominationSearch(e.target.value)}
+                  placeholder="Search teams…"
+                  className="w-full bg-field border border-line-2 rounded-xl px-3 py-2 text-copy text-sm placeholder-copy-3 focus:outline-none focus:border-brand"
+                />
                 <div className="flex gap-2">
                   <select
                     value={selectedNomination}
@@ -1617,7 +1740,7 @@ export default function AuctionPage() {
                     className="flex-1 bg-field border border-line-2 rounded-xl px-3 py-2 text-copy text-sm focus:outline-none focus:border-brand"
                   >
                     <option value="">Pick a team to nominate…</option>
-                    {nominationOptions.map(t => (
+                    {filteredNominationOptions.map(t => (
                       <option key={t.id} value={t.id}>{t.name} ({fln(t.sportLeagueId)})</option>
                     ))}
                   </select>
@@ -1800,38 +1923,6 @@ export default function AuctionPage() {
 
           {/* ── Right sidebar ─────────────────────────────────────── */}
           <div className="space-y-4">
-
-            {/* Nomination order — manual mode only */}
-            {nominationMode === 'manual' && nominationOrderState.length > 0 && status !== 'closed' && (
-              <div className="bg-card border border-line rounded-2xl p-4">
-                <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide mb-3">Nomination Order</p>
-                <div className="space-y-0.5">
-                  {nominationOrderState.map((uid, idx) => {
-                    const currentIdx = nominationOrderState.findIndex(id => id === nominatorUserId);
-                    const offset = currentIdx >= 0 ? (idx - currentIdx + nominationOrderState.length) % nominationOrderState.length : -1;
-                    const isNow = offset === 0 && nominatorUserId !== null;
-                    const isNext = offset === 1 && nominatorUserId !== null;
-                    const isMe = uid === user?.uid;
-                    return (
-                      <div key={uid} className={`flex items-center gap-2.5 px-2 py-1.5 rounded-lg ${isNow ? 'bg-brand/10' : isNext ? 'bg-warn/8' : ''}`}>
-                        <span className={`text-xs tabular-nums w-4 text-right flex-shrink-0 ${isNow ? 'text-brand font-bold' : isNext ? 'text-warn font-semibold' : 'text-copy-3'}`}>
-                          {idx + 1}
-                        </span>
-                        <span className={`text-sm flex-1 truncate ${isNow ? 'text-brand font-semibold' : isNext ? (isMe ? 'text-brand font-semibold' : 'text-warn font-semibold') : isMe ? 'text-brand font-medium' : 'text-copy'}`}>
-                          {isMe ? 'You' : participantName(uid)}
-                        </span>
-                        {isNow && (
-                          <span className="text-[10px] font-bold bg-brand text-white px-1.5 py-0.5 rounded-full flex-shrink-0">NOW</span>
-                        )}
-                        {isNext && (
-                          <span className="text-[10px] font-bold bg-warn text-white px-1.5 py-0.5 rounded-full flex-shrink-0">NEXT</span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
 
             {/* My budget — auction mode only */}
             {!isSnake && (

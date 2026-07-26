@@ -18,6 +18,8 @@ export interface League {
     countdownSeconds: number;
     maxWildcard?: number;
     scheduledStartAt?: string | null;
+    noBidPenaltyPct?: number;
+    nominationTimerSeconds?: number;
   } | null;
   previousLeagueId?: string;
   topZone?: number | null;

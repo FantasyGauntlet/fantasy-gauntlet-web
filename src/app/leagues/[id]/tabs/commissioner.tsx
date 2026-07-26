@@ -15,12 +15,14 @@ function CommissionerTab({
   const router = useRouter();
 
   const [auctionForm, setAuctionForm] = useState({
-    startingBudget:   league.auctionConfig?.startingBudget   ?? 1000,
-    minOpeningBid:    league.auctionConfig?.minOpeningBid    ?? 1,
-    minBidIncrement:  league.auctionConfig?.minBidIncrement  ?? 1,
-    nominationMode:   league.auctionConfig?.nominationMode   ?? 'random-hidden',
-    countdownSeconds: league.auctionConfig?.countdownSeconds ?? 15,
-    maxWildcard:      league.auctionConfig?.maxWildcard      ?? league.maxWildcard ?? 0,
+    startingBudget:         league.auctionConfig?.startingBudget         ?? 1000,
+    minOpeningBid:          league.auctionConfig?.minOpeningBid          ?? 1,
+    minBidIncrement:        league.auctionConfig?.minBidIncrement        ?? 1,
+    nominationMode:         league.auctionConfig?.nominationMode         ?? 'random-hidden',
+    countdownSeconds:       league.auctionConfig?.countdownSeconds       ?? 15,
+    maxWildcard:            league.auctionConfig?.maxWildcard            ?? league.maxWildcard ?? 0,
+    noBidPenaltyPct:        league.auctionConfig?.noBidPenaltyPct        ?? 2.5,
+    nominationTimerSeconds: league.auctionConfig?.nominationTimerSeconds ?? 30,
   });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -623,6 +625,31 @@ function CommissionerTab({
               <option value="snake-defined">Snake Draft — commissioner sets order</option>
             </select>
           </div>
+          {auctionForm.nominationMode === 'manual' && (
+            <div className="col-span-2 border border-line rounded-xl p-3 space-y-3 bg-field/40">
+              <p className="text-xs font-semibold text-copy-2 uppercase tracking-wide">Nomination Auction</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-copy-2 mb-1.5">No-Bid Penalty (%)</label>
+                  <input type="number" min={0} max={50} step={0.5} value={auctionForm.noBidPenaltyPct}
+                    onFocus={e => e.target.select()}
+                    onChange={e => { const v = e.target.valueAsNumber; if (!isNaN(v)) setAuctionForm((f: typeof auctionForm) => ({ ...f, noBidPenaltyPct: v })); }}
+                    className={inputCls} />
+                  <p className="text-[11px] text-copy-3 mt-1">
+                    Charged when nominator wins uncontested. Default 2.5% = ${Math.round(auctionForm.startingBudget * auctionForm.noBidPenaltyPct / 100)} on ${auctionForm.startingBudget}.
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-copy-2 mb-1.5">Nomination Timer (sec)</label>
+                  <input type="number" min={0} max={300} value={auctionForm.nominationTimerSeconds}
+                    onFocus={e => e.target.select()}
+                    onChange={e => { const v = e.target.valueAsNumber; if (!isNaN(v)) setAuctionForm((f: typeof auctionForm) => ({ ...f, nominationTimerSeconds: v })); }}
+                    className={inputCls} />
+                  <p className="text-[11px] text-copy-3 mt-1">Seconds to pick before auto-skip. Set to 0 to disable.</p>
+                </div>
+              </div>
+            </div>
+          )}
           <button type="submit" disabled={saving}
             className="bg-brand hover:bg-brand-2 disabled:opacity-50 text-white font-semibold px-5 py-2.5 rounded-xl transition-colors text-sm">
             {saving ? 'Saving...' : saved ? '✓ Saved' : 'Save Auction Settings'}
