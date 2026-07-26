@@ -1439,15 +1439,15 @@ export default function AuctionPage() {
                       />
                       <button
                         type="submit"
-                        disabled={myBudget < minNextBid}
+                        disabled={myBudget < minNextBid || iAmHighBidder}
                         className="bg-brand hover:bg-brand-2 disabled:opacity-40 text-white font-semibold px-5 py-2.5 rounded-xl transition-colors text-sm whitespace-nowrap"
                       >
-                        {iAmHighBidder ? 'Raise Bid' : 'Place Bid'}
+                        {iAmHighBidder ? 'Winning' : 'Place Bid'}
                       </button>
                     </div>
                     {bidError && <p className="text-danger text-xs">{bidError}</p>}
                     {/* Quick bid buttons */}
-                    {myBudget >= minNextBid && (
+                    {myBudget >= minNextBid && !iAmHighBidder && (
                       <div className="flex gap-2">
                         {[minNextBid, minNextBid + minBidIncrement * 4, minNextBid + minBidIncrement * 9, minNextBid + minBidIncrement * 24]
                           .filter((a, i, arr) => a <= myBudget && arr.indexOf(a) === i)
