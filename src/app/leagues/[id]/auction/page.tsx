@@ -227,6 +227,8 @@ export default function AuctionPage() {
   const [nominationOrderState, setNominationOrderState] = useState<string[]>([]);
   const [nominationTimerRemaining, setNominationTimerRemaining] = useState<number | null>(null);
   const [nominationSearch, setNominationSearch] = useState('');
+  const [nominationDropdownOpen, setNominationDropdownOpen] = useState(false);
+  const [nominationQueue, setNominationQueue] = useState<string[]>([]);
   const [auctionErrorMsg, setAuctionErrorMsg] = useState('');
   const [scheduledStartAt, setScheduledStartAt] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -605,6 +607,7 @@ export default function AuctionPage() {
       });
 
       socket.on('team_sold', (data: any) => {
+        setNominationQueue(q => q.filter(id => id !== data.teamId));
         setLotFlash('sold');
         const info = teamInfo(data.teamId);
         const sold: SoldLot = {
@@ -646,6 +649,7 @@ export default function AuctionPage() {
       });
 
       socket.on('team_passed', (data: any) => {
+        setNominationQueue(q => q.filter(id => id !== data.teamId));
         setLotFlash('passed');
         const info = teamInfo(data.teamId);
         const passed: SoldLot = {
@@ -701,6 +705,7 @@ export default function AuctionPage() {
         setSelectedNomination('');
         setNominationTimerRemaining(null);
         setNominationSearch('');
+        setNominationDropdownOpen(false);
       });
 
       socket.on('nomination_timer_update', (data: any) => {
@@ -1559,37 +1564,62 @@ export default function AuctionPage() {
                   )}
                   {/* Manual mode: commissioner can always nominate (fallback for any turn) */}
                   {nominationMode === 'manual' && status === 'waiting' && league?.state === 'auction' && (
-                    <div className="w-full space-y-1.5">
+                    <div className="w-full space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-copy-3">
                           {nominatorUserId && nominatorUserId !== user?.uid
                             ? `Nominating for ${participantName(nominatorUserId)}`
                             : 'Nominate a team'}
                         </span>
-                        {nominationTimerRemaining !== null && nominationTimerRemaining > 0 && (
-                          <span className={`text-xs font-bold tabular-nums ${nominationTimerRemaining <= 10 ? 'text-danger' : 'text-copy-3'}`}>
-                            {nominationTimerRemaining}s
-                          </span>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {nominationTimerRemaining !== null && nominationTimerRemaining > 0 && (
+                            <span className={`text-xs font-bold tabular-nums ${nominationTimerRemaining <= 10 ? 'text-danger' : 'text-copy-3'}`}>
+                              {nominationTimerRemaining}s
+                            </span>
+                          )}
+                          <button
+                            onClick={() => socketRef.current?.emit('skip_nomination_turn')}
+                            className="text-xs text-copy-3 border border-line px-2.5 py-1 rounded-lg hover:bg-field transition-colors"
+                          >
+                            Skip Turn
+                          </button>
+                        </div>
                       </div>
-                      <input
-                        type="text"
-                        value={nominationSearch}
-                        onChange={e => setNominationSearch(e.target.value)}
-                        placeholder="Search teams…"
-                        className="w-full bg-field border border-line-2 rounded-xl px-3 py-2 text-copy text-sm placeholder-copy-3 focus:outline-none focus:border-brand"
-                      />
+                      {/* Combobox */}
                       <div className="flex gap-2">
-                        <select
-                          value={selectedNomination}
-                          onChange={e => setSelectedNomination(e.target.value)}
-                          className="flex-1 bg-field border border-line-2 rounded-xl px-3 py-2 text-copy text-sm focus:outline-none focus:border-brand"
-                        >
-                          <option value="">Pick a team…</option>
-                          {filteredNominationOptions.map(t => (
-                            <option key={t.id} value={t.id}>{t.name} ({fln(t.sportLeagueId)})</option>
-                          ))}
-                        </select>
+                        <div className="relative flex-1">
+                          <input
+                            type="text"
+                            value={nominationSearch}
+                            onChange={e => { setNominationSearch(e.target.value); setSelectedNomination(''); }}
+                            onFocus={() => setNominationDropdownOpen(true)}
+                            onBlur={() => setTimeout(() => setNominationDropdownOpen(false), 150)}
+                            placeholder="Search teams…"
+                            className="w-full bg-field border border-line-2 rounded-xl px-3 py-2 pr-7 text-copy text-sm placeholder-copy-3 focus:outline-none focus:border-brand"
+                          />
+                          {selectedNomination && (
+                            <button onMouseDown={e => { e.preventDefault(); setSelectedNomination(''); setNominationSearch(''); }}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 text-copy-3 hover:text-copy text-base leading-none">×</button>
+                          )}
+                          {nominationDropdownOpen && nominationSearch.trim() && !selectedNomination && filteredNominationOptions.length > 0 && (
+                            <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-card border border-line rounded-xl shadow-xl max-h-52 overflow-y-auto">
+                              {filteredNominationOptions.slice(0, 15).map(t => (
+                                <div key={t.id} className="flex items-center gap-2 px-3 py-2 hover:bg-field cursor-pointer group">
+                                  <button onMouseDown={e => { e.preventDefault(); setSelectedNomination(t.id); setNominationSearch(t.name); setNominationDropdownOpen(false); }}
+                                    className="flex-1 flex items-center gap-2 text-sm text-copy text-left min-w-0">
+                                    <TeamLogo logoUrl={t.logoUrl} name={t.name} size={6} />
+                                    <span className="flex-1 truncate">{t.name}</span>
+                                    <span className="text-copy-3 text-xs flex-shrink-0">{fln(t.sportLeagueId)}</span>
+                                  </button>
+                                  <button onMouseDown={e => { e.preventDefault(); setNominationQueue(q => q.includes(t.id) ? q : [...q, t.id]); }}
+                                    className="text-[10px] text-copy-3 hover:text-brand border border-line rounded px-1.5 py-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                                    +Q
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                         <button
                           onClick={handleNominate}
                           disabled={!selectedNomination || nominating}
@@ -1598,6 +1628,26 @@ export default function AuctionPage() {
                           {nominating ? 'Nominating…' : 'Nominate'}
                         </button>
                       </div>
+                      {/* My Queue */}
+                      {nominationQueue.filter(tid => upcomingQueue.includes(tid)).length > 0 && (
+                        <div className="space-y-1">
+                          <p className="text-[10px] font-semibold text-copy-3 uppercase tracking-wide">My Queue</p>
+                          {nominationQueue.filter(tid => upcomingQueue.includes(tid)).map(tid => {
+                            const t = teamMapRef.current.get(tid);
+                            if (!t) return null;
+                            return (
+                              <div key={tid} className="flex items-center gap-2 bg-field rounded-lg px-2 py-1.5 cursor-pointer group hover:bg-field-2 transition-colors"
+                                onClick={() => { setSelectedNomination(tid); setNominationSearch(t.name); }}>
+                                <TeamLogo logoUrl={t.logoUrl} name={t.name} size={5} />
+                                <span className="flex-1 text-xs text-copy truncate">{t.name}</span>
+                                <span className="text-[10px] text-copy-3">{fln(t.sportLeagueId)}</span>
+                                <button onClick={e => { e.stopPropagation(); setNominationQueue(q => q.filter(id => id !== tid)); }}
+                                  className="text-copy-3 hover:text-danger opacity-0 group-hover:opacity-100 transition-opacity ml-1 text-sm leading-none">×</button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   )}
                   {/* Force-advance if stuck between lots */}
@@ -1726,24 +1776,41 @@ export default function AuctionPage() {
                     </button>
                   </div>
                 </div>
-                <input
-                  type="text"
-                  value={nominationSearch}
-                  onChange={e => setNominationSearch(e.target.value)}
-                  placeholder="Search teams…"
-                  className="w-full bg-field border border-line-2 rounded-xl px-3 py-2 text-copy text-sm placeholder-copy-3 focus:outline-none focus:border-brand"
-                />
+                {/* Combobox */}
                 <div className="flex gap-2">
-                  <select
-                    value={selectedNomination}
-                    onChange={e => setSelectedNomination(e.target.value)}
-                    className="flex-1 bg-field border border-line-2 rounded-xl px-3 py-2 text-copy text-sm focus:outline-none focus:border-brand"
-                  >
-                    <option value="">Pick a team to nominate…</option>
-                    {filteredNominationOptions.map(t => (
-                      <option key={t.id} value={t.id}>{t.name} ({fln(t.sportLeagueId)})</option>
-                    ))}
-                  </select>
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      value={nominationSearch}
+                      onChange={e => { setNominationSearch(e.target.value); setSelectedNomination(''); }}
+                      onFocus={() => setNominationDropdownOpen(true)}
+                      onBlur={() => setTimeout(() => setNominationDropdownOpen(false), 150)}
+                      placeholder="Search teams…"
+                      className="w-full bg-field border border-line-2 rounded-xl px-3 py-2 pr-7 text-copy text-sm placeholder-copy-3 focus:outline-none focus:border-brand"
+                    />
+                    {selectedNomination && (
+                      <button onMouseDown={e => { e.preventDefault(); setSelectedNomination(''); setNominationSearch(''); }}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-copy-3 hover:text-copy text-base leading-none">×</button>
+                    )}
+                    {nominationDropdownOpen && nominationSearch.trim() && !selectedNomination && filteredNominationOptions.length > 0 && (
+                      <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-card border border-line rounded-xl shadow-xl max-h-52 overflow-y-auto">
+                        {filteredNominationOptions.slice(0, 15).map(t => (
+                          <div key={t.id} className="flex items-center gap-2 px-3 py-2 hover:bg-field cursor-pointer group">
+                            <button onMouseDown={e => { e.preventDefault(); setSelectedNomination(t.id); setNominationSearch(t.name); setNominationDropdownOpen(false); }}
+                              className="flex-1 flex items-center gap-2 text-sm text-copy text-left min-w-0">
+                              <TeamLogo logoUrl={t.logoUrl} name={t.name} size={6} />
+                              <span className="flex-1 truncate">{t.name}</span>
+                              <span className="text-copy-3 text-xs flex-shrink-0">{fln(t.sportLeagueId)}</span>
+                            </button>
+                            <button onMouseDown={e => { e.preventDefault(); setNominationQueue(q => q.includes(t.id) ? q : [...q, t.id]); }}
+                              className="text-[10px] text-copy-3 hover:text-brand border border-line rounded px-1.5 py-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                              +Q
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   <button
                     onClick={handleNominate}
                     disabled={!selectedNomination || nominating}
@@ -1752,6 +1819,26 @@ export default function AuctionPage() {
                     {nominating ? 'Nominating…' : 'Nominate'}
                   </button>
                 </div>
+                {/* My Queue */}
+                {nominationQueue.filter(tid => upcomingQueue.includes(tid)).length > 0 && (
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-semibold text-copy-3 uppercase tracking-wide">My Queue</p>
+                    {nominationQueue.filter(tid => upcomingQueue.includes(tid)).map(tid => {
+                      const t = teamMapRef.current.get(tid);
+                      if (!t) return null;
+                      return (
+                        <div key={tid} className="flex items-center gap-2 bg-field rounded-lg px-2 py-1.5 cursor-pointer group hover:bg-field-2 transition-colors"
+                          onClick={() => { setSelectedNomination(tid); setNominationSearch(t.name); }}>
+                          <TeamLogo logoUrl={t.logoUrl} name={t.name} size={5} />
+                          <span className="flex-1 text-xs text-copy truncate">{t.name}</span>
+                          <span className="text-[10px] text-copy-3">{fln(t.sportLeagueId)}</span>
+                          <button onClick={e => { e.stopPropagation(); setNominationQueue(q => q.filter(id => id !== tid)); }}
+                            className="text-copy-3 hover:text-danger opacity-0 group-hover:opacity-100 transition-opacity ml-1 text-sm leading-none">×</button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
 
@@ -1765,8 +1852,8 @@ export default function AuctionPage() {
               </div>
             )}
 
-            {/* Up Next queue — auction mode, non-hidden */}
-            {!isSnake && upcomingQueue.length > 0 && nominationMode !== 'random-hidden' && (
+            {/* Up Next queue — auction mode, non-hidden, non-manual */}
+            {!isSnake && upcomingQueue.length > 0 && nominationMode !== 'random-hidden' && nominationMode !== 'manual' && (
               <div className="bg-card border border-line rounded-2xl p-4">
                 <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide mb-3">
                   Up Next — {upcomingQueue.length} remaining
