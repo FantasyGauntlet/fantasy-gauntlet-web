@@ -1984,15 +1984,27 @@ export default function AuctionPage() {
                   <div className="grid gap-1.5 max-h-72 overflow-y-auto" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(56px, 1fr))' }}>
                     {teamPanelList.map(team => {
                       const greyed = greyedIds.has(team.id);
+                      const inQueue = nominationQueue.includes(team.id);
                       return (
-                        <div
-                          key={team.id}
-                          onClick={() => openProfile({ teamId: team.id, leagueId: id, name: team.name, logoUrl: team.logoUrl, sportLeagueId: team.sportLeagueId })}
-                          className={`flex flex-col items-center gap-1 p-1.5 rounded-lg cursor-pointer hover:bg-field transition-colors ${greyed ? 'opacity-40 grayscale' : ''}`}
-                          title={team.name}
-                        >
-                          <TeamLogo logoUrl={team.logoUrl} name={team.name} size={8} />
-                          <p className="text-[10px] text-copy-3 text-center leading-tight w-full truncate">{team.shortName}</p>
+                        <div key={team.id} className="relative group">
+                          <div
+                            onClick={() => openProfile({ teamId: team.id, leagueId: id, name: team.name, logoUrl: team.logoUrl, sportLeagueId: team.sportLeagueId })}
+                            className={`flex flex-col items-center gap-1 p-1.5 rounded-lg cursor-pointer hover:bg-field transition-colors ${greyed ? 'opacity-40 grayscale' : ''}`}
+                            title={team.name}
+                          >
+                            <TeamLogo logoUrl={team.logoUrl} name={team.name} size={8} />
+                            <p className="text-[10px] text-copy-3 text-center leading-tight w-full truncate">{team.shortName}</p>
+                          </div>
+                          {nominationMode === 'manual' && !greyed && (
+                            <button
+                              onClick={e => { e.stopPropagation(); setNominationQueue(q => inQueue ? q.filter(id => id !== team.id) : [...q, team.id]); }}
+                              title={inQueue ? 'Remove from queue' : 'Add to queue'}
+                              className={`absolute top-0.5 right-0.5 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold transition-all leading-none
+                                ${inQueue ? 'bg-brand text-white opacity-100' : 'bg-field-2 text-copy-3 opacity-0 group-hover:opacity-100 hover:bg-brand hover:text-white'}`}
+                            >
+                              {inQueue ? '✓' : '+'}
+                            </button>
+                          )}
                         </div>
                       );
                     })}
