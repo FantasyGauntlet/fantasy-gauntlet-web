@@ -59,6 +59,10 @@ function CommissionerTab({
   const [leagueSports, setLeagueSports] = useState<string[]>(league.selectedSports ?? []);
   const [leagueSettingsSaving, setLeagueSettingsSaving] = useState(false);
 
+  const [leagueStartDate, setLeagueStartDate] = useState(league.startDate ?? '');
+  const [leagueEndDate, setLeagueEndDate] = useState(league.endDate ?? '');
+  const [dateSaving, setDateSaving] = useState(false);
+
   const inputCls = 'w-full bg-field border border-line-2 rounded-xl px-4 py-2.5 text-copy text-sm focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors';
 
   async function saveAuctionConfig(e: React.FormEvent) {
@@ -146,6 +150,21 @@ function CommissionerTab({
     }
   }
 
+  async function saveDates() {
+    setDateSaving(true);
+    try {
+      const updated = await api.patch<League>(`/leagues/${leagueId}/settings`, {
+        startDate: leagueStartDate || undefined,
+        endDate: leagueEndDate || undefined,
+      });
+      setLeague(updated);
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Failed to save dates');
+    } finally {
+      setDateSaving(false);
+    }
+  }
+
   async function saveLeagueName() {
     const trimmed = leagueName.trim();
     if (!trimmed) return;
@@ -209,6 +228,38 @@ function CommissionerTab({
             {leagueNameSaving ? 'Saving…' : 'Save'}
           </button>
         </div>
+      </div>
+
+      {/* Season dates */}
+      <div className="bg-card border border-line rounded-2xl p-5">
+        <h2 className="text-sm font-semibold text-copy mb-4">Season Dates</h2>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs text-copy-3 mb-1">Start Date</label>
+            <input
+              type="date"
+              value={leagueStartDate}
+              onChange={e => setLeagueStartDate(e.target.value)}
+              className={inputCls}
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-copy-3 mb-1">End Date</label>
+            <input
+              type="date"
+              value={leagueEndDate}
+              onChange={e => setLeagueEndDate(e.target.value)}
+              className={inputCls}
+            />
+          </div>
+        </div>
+        <button
+          onClick={saveDates}
+          disabled={dateSaving}
+          className="mt-3 bg-brand hover:bg-brand-2 disabled:opacity-40 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors"
+        >
+          {dateSaving ? 'Saving…' : 'Save Dates'}
+        </button>
       </div>
 
       {/* Visibility */}
