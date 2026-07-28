@@ -3,6 +3,18 @@
 import { SPORT_ORDER, formatLeagueName } from '../_components';
 import type { ScoreboardGame } from '../_types';
 
+function formatLocalTime(scheduledAt: string): string {
+  if (!scheduledAt) return '—';
+  const d = new Date(scheduledAt);
+  const now = new Date();
+  const todayStr = now.toDateString();
+  const tomorrowStr = new Date(now.getTime() + 86_400_000).toDateString();
+  const time = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  if (d.toDateString() === todayStr) return time;
+  if (d.toDateString() === tomorrowStr) return `Tomorrow · ${time}`;
+  return d.toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' }) + ` · ${time}`;
+}
+
 function TeamRow({ logo, name, shortName, score, isOwned }: {
   logo: string | null; name: string; shortName: string;
   score: string | null; isOwned: boolean;
@@ -39,7 +51,7 @@ function GameCard({ game, isMyHome, isMyAway }: { game: ScoreboardGame; isMyHome
             </span>
           )}
           <span className={`text-xs font-medium ${game.isLive ? 'text-positive' : 'text-copy-3'}`}>
-            {game.statusDisplay || '—'}
+            {game.isLive || game.isFinished ? (game.statusDisplay || '—') : formatLocalTime(game.scheduledAt)}
           </span>
         </div>
         {isOwned && (
