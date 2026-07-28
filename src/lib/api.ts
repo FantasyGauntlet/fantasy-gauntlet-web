@@ -1,7 +1,7 @@
 import { auth } from './firebase';
 
-const BASE = 'https://fantasy-gauntlet-backend-production.up.railway.app/api/v1';
-export const WS_URL = 'https://fantasy-gauntlet-backend-production.up.railway.app';
+const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'https://fantasy-gauntlet-backend-production.up.railway.app/api/v1';
+export const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? 'https://fantasy-gauntlet-backend-production.up.railway.app';
 
 let _tokenPromise: Promise<string> | null = null;
 async function getToken(): Promise<string> {
