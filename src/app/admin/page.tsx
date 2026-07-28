@@ -30,7 +30,7 @@ const SYNCS = [
   { key: 'records',      label: 'Sync Records',             endpoint: '/admin/ingestion/records' },
 ];
 
-type Tab = 'sync' | 'bonus' | 'scoring' | 'preset' | 'deadlines' | 'leagues' | 'elimination' | 'users' | 'season-dates' | 'pricing';
+type Tab = 'sync' | 'bonus' | 'preset' | 'deadlines' | 'leagues' | 'elimination' | 'users' | 'season-dates' | 'pricing' | 'odds';
 
 interface AdminUser { id: string; email: string; displayName: string; roles: string[]; isPremium: boolean; createdAt: string; }
 
@@ -46,6 +46,9 @@ interface AuctionPricingResult {
   startingBudget: number | null;
   hasResults: boolean;
 }
+
+interface RankedTeam { teamId: string; sportKey: string; teamName: string; probability: number; bookmakerCount: number; }
+interface OddsRankings { ranked: RankedTeam[]; bookmakers: string[]; updatedAt: string; }
 
 function Spinner({ size = 'sm' }: { size?: 'sm' | 'md' }) {
   const s = size === 'sm' ? 'w-4 h-4 border-[1.5px]' : 'w-6 h-6 border-2';
@@ -361,19 +364,6 @@ export default function AdminPage() {
     });
   }
 
-  // ── League Scoring ─────────────────────────────────────────────────────────
-  const [scoringResult, setScoringResult] = useState<{ status: 'idle' | 'loading' | 'success' | 'error'; message: string }>({ status: 'idle', message: '' });
-
-  async function recalculateScoring() {
-    setScoringResult({ status: 'loading', message: 'Recalculating...' });
-    try {
-      const res = await api.post<{ leagues: number; refs: number }>('/admin/ingestion/recalculate-scoring');
-      setScoringResult({ status: 'success', message: `Done — patched ${res.refs} season refs across ${res.leagues} leagues.` });
-    } catch (e: unknown) {
-      setScoringResult({ status: 'error', message: e instanceof Error ? e.message : 'Failed' });
-    }
-  }
-
   // ── Auction Preset ─────────────────────────────────────────────────────────
   const [presetTeams, setPresetTeams] = useState<Record<string, Team[]>>({});
   const [presetLoading, setPresetLoading] = useState(false);
@@ -662,10 +652,41 @@ export default function AdminPage() {
     }
   }
 
+  // ── Odds Rankings ──────────────────────────────────────────────────────────
+  const ALL_ODDS_SPORTS = ['nfl', 'nba', 'mlb', 'nhl', 'ncaa-football', 'ncaa-basketball', 'premier-league', 'ucl', 'world-cup'];
+  const [oddsRankings, setOddsRankings] = useState<OddsRankings | null>(null);
+  const [oddsLoading, setOddsLoading] = useState(false);
+  const [oddsRefreshing, setOddsRefreshing] = useState(false);
+  const [oddsError, setOddsError] = useState<string | null>(null);
+  const [oddsRefreshMsg, setOddsRefreshMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [oddsSportFilter, setOddsSportFilter] = useState('');
+
+  useEffect(() => {
+    if (tab !== 'odds' || oddsLoading || oddsRankings) return;
+    setOddsLoading(true);
+    setOddsError(null);
+    api.get<OddsRankings | null>('/admin/odds/rankings')
+      .then(d => setOddsRankings(d))
+      .catch(e => setOddsError(e instanceof Error ? e.message : 'Failed to load'))
+      .finally(() => setOddsLoading(false));
+  }, [tab, oddsLoading, oddsRankings]);
+
+  async function refreshOdds() {
+    setOddsRefreshing(true);
+    setOddsRefreshMsg(null);
+    try {
+      const result = await api.post<OddsRankings>('/admin/odds/refresh', { sports: ALL_ODDS_SPORTS });
+      setOddsRankings(result);
+      setOddsRefreshMsg({ ok: true, text: `Ranked ${result.ranked.length} teams from ${result.bookmakers.length} bookmaker(s).` });
+    } catch (e: unknown) {
+      setOddsRefreshMsg({ ok: false, text: e instanceof Error ? e.message : 'Refresh failed' });
+    }
+    setOddsRefreshing(false);
+  }
+
   const tabs: { key: Tab; label: string }[] = [
     { key: 'sync',         label: 'Data Sync' },
     { key: 'bonus',        label: 'Bonus Points' },
-    { key: 'scoring',      label: 'League Scoring' },
     { key: 'preset',       label: 'Auction Preset' },
     { key: 'deadlines',    label: 'Deadlines' },
     { key: 'season-dates', label: 'Season Dates' },
@@ -673,6 +694,7 @@ export default function AdminPage() {
     { key: 'elimination',  label: 'Elimination' },
     { key: 'pricing',      label: 'Auction Pricing' },
     { key: 'users',        label: 'Users' },
+    { key: 'odds',         label: 'Odds Rankings' },
   ];
 
   return (
@@ -1164,30 +1186,6 @@ export default function AdminPage() {
                 </div>
               )}
             </div>
-          </div>
-        )}
-
-        {/* ── League Scoring ── */}
-        {tab === 'scoring' && (
-          <div className="bg-card border border-line rounded-2xl p-5">
-            <h2 className="text-sm font-semibold text-copy mb-1">Recalculate All League Scoring</h2>
-            <p className="text-xs text-copy-3 mb-5">
-              Re-derives winValue / drawValue / scalingValue for every league from the current season docs and patches Firestore. Use this to fix leagues created before the NFL 17-game correction.
-            </p>
-            <button
-              onClick={recalculateScoring}
-              disabled={scoringResult.status === 'loading'}
-              className="flex items-center gap-1.5 bg-field hover:bg-field-2 border border-line disabled:opacity-50 text-copy-2 text-sm px-4 py-2.5 rounded-xl transition-colors"
-            >
-              {scoringResult.status === 'loading' ? <Spinner /> : null}
-              {scoringResult.status === 'loading' ? 'Running...' : 'Recalculate Scoring'}
-            </button>
-            {scoringResult.status !== 'idle' && (
-              <p className={`text-xs mt-3 ${
-                scoringResult.status === 'success' ? 'text-positive' :
-                scoringResult.status === 'error' ? 'text-danger' : 'text-copy-3'
-              }`}>{scoringResult.message}</p>
-            )}
           </div>
         )}
 
@@ -1947,6 +1945,107 @@ export default function AdminPage() {
                           <span className="text-xs text-copy-3 whitespace-nowrap">
                             {u.createdAt ? new Date(u.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
                           </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        )}
+        {/* ── Odds Rankings ── */}
+        {tab === 'odds' && (
+          <div className="space-y-4">
+            {/* Header + refresh */}
+            <div className="bg-card border border-line rounded-2xl p-5">
+              <div className="flex items-start justify-between gap-4 flex-wrap">
+                <div>
+                  <h2 className="text-sm font-semibold text-copy">Championship Odds Rankings</h2>
+                  <p className="text-xs text-copy-3 mt-1">
+                    Pulls outrights from The Odds API across US bookmakers and averages implied probabilities.
+                    Run this before the draft so auto-pick has current data.
+                  </p>
+                  {oddsRankings && (
+                    <p className="text-xs text-copy-3 mt-1.5">
+                      Last updated: {new Date(oddsRankings.updatedAt).toLocaleString()} ·{' '}
+                      {oddsRankings.ranked.length} teams ·{' '}
+                      {oddsRankings.bookmakers.length} bookmaker{oddsRankings.bookmakers.length !== 1 ? 's' : ''}
+                    </p>
+                  )}
+                </div>
+                <button
+                  onClick={refreshOdds}
+                  disabled={oddsRefreshing}
+                  className="flex-shrink-0 flex items-center gap-1.5 bg-brand hover:bg-brand-2 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors"
+                >
+                  {oddsRefreshing ? <><Spinner /> Refreshing…</> : 'Refresh Odds'}
+                </button>
+              </div>
+
+              {oddsRefreshMsg && (
+                <p className={`text-xs mt-3 ${oddsRefreshMsg.ok ? 'text-positive' : 'text-danger'}`}>
+                  {oddsRefreshMsg.text}
+                </p>
+              )}
+            </div>
+
+            {/* Bookmakers */}
+            {oddsRankings && oddsRankings.bookmakers.length > 0 && (
+              <div className="bg-card border border-line rounded-2xl p-5">
+                <h3 className="text-xs font-semibold text-copy-2 mb-3">Contributing Bookmakers</h3>
+                <div className="flex flex-wrap gap-1.5">
+                  {oddsRankings.bookmakers.map(b => (
+                    <span key={b} className="text-xs bg-field border border-line px-2 py-0.5 rounded-full text-copy-2 font-mono">{b}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Rankings table */}
+            <div className="bg-card border border-line rounded-2xl overflow-hidden">
+              <div className="px-5 py-4 border-b border-line flex items-center justify-between gap-3">
+                <h3 className="text-sm font-semibold text-copy">Ranked Teams</h3>
+                <select
+                  value={oddsSportFilter}
+                  onChange={e => setOddsSportFilter(e.target.value)}
+                  className="bg-field border border-line-2 rounded-lg px-3 py-1.5 text-xs text-copy focus:outline-none focus:border-brand transition-colors"
+                >
+                  <option value="">All sports</option>
+                  {ALL_ODDS_SPORTS.map(s => (
+                    <option key={s} value={s}>{formatLeagueName(s)}</option>
+                  ))}
+                </select>
+              </div>
+
+              {oddsLoading ? (
+                <div className="flex items-center justify-center gap-2 py-12 text-copy-3 text-sm">
+                  <Spinner size="md" /> Loading…
+                </div>
+              ) : oddsError ? (
+                <p className="text-danger text-sm text-center py-8">{oddsError}</p>
+              ) : !oddsRankings ? (
+                <p className="text-copy-3 text-sm text-center py-8">No odds data yet. Click Refresh Odds to fetch from The Odds API.</p>
+              ) : (() => {
+                const list = oddsSportFilter
+                  ? oddsRankings.ranked.filter(t => t.sportKey === oddsSportFilter)
+                  : oddsRankings.ranked;
+                return list.length === 0 ? (
+                  <p className="text-copy-3 text-sm text-center py-8">No teams for this sport.</p>
+                ) : (
+                  <div className="divide-y divide-line/50 max-h-[560px] overflow-y-auto">
+                    {list.map((team, i) => (
+                      <div key={team.teamId} className="flex items-center gap-3 px-5 py-2.5">
+                        <span className="text-xs text-copy-3 font-mono w-6 text-right flex-shrink-0">{i + 1}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-copy truncate">{team.teamName}</p>
+                          <p className="text-[10px] text-copy-3">{formatLeagueName(team.sportKey)}</p>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <p className="text-sm font-semibold text-copy tabular-nums">
+                            {(team.probability * 100).toFixed(1)}%
+                          </p>
+                          <p className="text-[10px] text-copy-3">{team.bookmakerCount} book{team.bookmakerCount !== 1 ? 's' : ''}</p>
                         </div>
                       </div>
                     ))}
