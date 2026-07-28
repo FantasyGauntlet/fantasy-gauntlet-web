@@ -6,9 +6,9 @@ import { useTeamProfile } from '@/context/TeamProfileContext';
 import { Spinner, Lightbox, formatLeagueName, formatRecord, SPORT_ORDER } from '../_components';
 import type { Standing, FantasyTeam } from '../_types';
 
-function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone, ownerNameByUserId, liveTeamIds }: { leagueId: string; userId?: string; fantasyTeams: FantasyTeam[]; topZone?: number | null; bottomZone?: number | null; ownerNameByUserId: Record<string, string>; liveTeamIds?: Set<string>; }) {
-  const [standings, setStandings] = useState<Standing[]>([]);
-  const [loading, setLoading] = useState(true);
+function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone, ownerNameByUserId, liveTeamIds, initialStandings }: { leagueId: string; userId?: string; fantasyTeams: FantasyTeam[]; topZone?: number | null; bottomZone?: number | null; ownerNameByUserId: Record<string, string>; liveTeamIds?: Set<string>; initialStandings?: Standing[]; }) {
+  const [standings, setStandings] = useState<Standing[]>(() => initialStandings ?? []);
+  const [loading, setLoading] = useState(!initialStandings?.length);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const { openProfile } = useTeamProfile();
@@ -24,6 +24,7 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone, own
   );
 
   useEffect(() => {
+    if (initialStandings?.length) return;
     setLoading(true);
     api.get<Standing[]>(`/leagues/${leagueId}/standings`)
       .then(setStandings).catch(() => {}).finally(() => setLoading(false));

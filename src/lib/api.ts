@@ -3,10 +3,14 @@ import { auth } from './firebase';
 const BASE = 'https://fantasy-gauntlet-backend-production.up.railway.app/api/v1';
 export const WS_URL = 'https://fantasy-gauntlet-backend-production.up.railway.app';
 
+let _tokenPromise: Promise<string> | null = null;
 async function getToken(): Promise<string> {
   const user = auth.currentUser;
   if (!user) throw new Error('Not authenticated');
-  return user.getIdToken();
+  if (!_tokenPromise) {
+    _tokenPromise = user.getIdToken().finally(() => { _tokenPromise = null; });
+  }
+  return _tokenPromise;
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {

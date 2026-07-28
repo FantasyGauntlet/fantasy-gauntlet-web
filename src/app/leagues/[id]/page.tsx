@@ -7,7 +7,7 @@ import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
 import { STATE_META, Spinner } from './_components';
 import { VALID_TABS } from './_types';
-import type { League, Member, FantasyTeam, Tab, ScoreboardGame } from './_types';
+import type { League, Member, FantasyTeam, Tab, ScoreboardGame, Standing } from './_types';
 import { StandingsTab } from './tabs/standings';
 import { RosterTab } from './tabs/roster';
 import { WaiversTab } from './tabs/waivers';
@@ -33,6 +33,7 @@ export default function LeaguePage() {
   const [loading, setLoading] = useState(true);
   const [openDropdown, setOpenDropdown] = useState<'teams' | 'league' | null>(null);
   const [scoreboard, setScoreboard] = useState<ScoreboardGame[]>([]);
+  const [standings, setStandings] = useState<Standing[]>([]);
   const tabBarRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -60,8 +61,9 @@ export default function LeaguePage() {
       api.get<League>(`/leagues/${id}`),
       api.get<Member[]>(`/leagues/${id}/members`),
       api.get<FantasyTeam[]>(`/leagues/${id}/teams`),
-    ]).then(([l, m, ft]) => {
-      setLeague(l); setMembers(m); setFantasyTeams(ft);
+      api.get<Standing[]>(`/leagues/${id}/standings`),
+    ]).then(([l, m, ft, st]) => {
+      setLeague(l); setMembers(m); setFantasyTeams(ft); setStandings(st);
     }).catch(() => router.replace('/dashboard'))
       .finally(() => setLoading(false));
   }, [id, router]);
@@ -322,7 +324,7 @@ export default function LeaguePage() {
 
       {mountedTabs.has('standings') && (
         <div className={tab !== 'standings' ? 'hidden' : ''}>
-          <StandingsTab leagueId={id} userId={user?.uid} fantasyTeams={fantasyTeams} topZone={league.topZone} bottomZone={league.bottomZone} ownerNameByUserId={Object.fromEntries(members.filter((m: Member) => m.displayName).map((m: Member) => [m.userId, m.displayName!]))} liveTeamIds={liveTeamIds} />
+          <StandingsTab leagueId={id} userId={user?.uid} fantasyTeams={fantasyTeams} topZone={league.topZone} bottomZone={league.bottomZone} ownerNameByUserId={Object.fromEntries(members.filter((m: Member) => m.displayName).map((m: Member) => [m.userId, m.displayName!]))} liveTeamIds={liveTeamIds} initialStandings={standings} />
         </div>
       )}
       {mountedTabs.has('roster') && (
