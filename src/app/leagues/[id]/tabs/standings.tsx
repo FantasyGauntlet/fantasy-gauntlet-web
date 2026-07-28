@@ -6,7 +6,7 @@ import { useTeamProfile } from '@/context/TeamProfileContext';
 import { Spinner, Lightbox, formatLeagueName, formatRecord, SPORT_ORDER } from '../_components';
 import type { Standing, FantasyTeam } from '../_types';
 
-function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone, ownerNameByUserId }: { leagueId: string; userId?: string; fantasyTeams: FantasyTeam[]; topZone?: number | null; bottomZone?: number | null; ownerNameByUserId: Record<string, string>; }) {
+function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone, ownerNameByUserId, liveTeamIds }: { leagueId: string; userId?: string; fantasyTeams: FantasyTeam[]; topZone?: number | null; bottomZone?: number | null; ownerNameByUserId: Record<string, string>; liveTeamIds?: Set<string>; }) {
   const [standings, setStandings] = useState<Standing[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -150,6 +150,12 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone, own
                                     <div className="flex items-center gap-1">
                                       <p className="text-xs font-medium truncate text-copy">{t.teamName}</p>
                                       {isWildCard && <span className="text-xs bg-warn-bg text-warn border border-warn/20 px-1.5 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">Wild Card</span>}
+                                      {liveTeamIds?.has(t.teamId) && (
+                                        <span className="relative flex h-2 w-2 flex-shrink-0">
+                                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-positive opacity-75" />
+                                          <span className="relative inline-flex rounded-full h-2 w-2 bg-positive" />
+                                        </span>
+                                      )}
                                     </div>
                                     <p className="text-xs text-copy-3 mt-0.5">{formatLeagueName(t.sportLeagueId)}</p>
                                   </div>

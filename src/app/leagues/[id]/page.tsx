@@ -1,13 +1,13 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
 import { STATE_META, Spinner } from './_components';
 import { VALID_TABS } from './_types';
-import type { League, Member, FantasyTeam, Tab } from './_types';
+import type { League, Member, FantasyTeam, Tab, ScoreboardGame } from './_types';
 import { StandingsTab } from './tabs/standings';
 import { RosterTab } from './tabs/roster';
 import { WaiversTab } from './tabs/waivers';
@@ -19,6 +19,7 @@ import { RulesTab } from './tabs/rules';
 import { RecentActivityTab } from './tabs/recent-activity';
 import { CommissionerTab } from './tabs/commissioner';
 import { UserManagementTab } from './tabs/user-management';
+import { GameCenterTab } from './tabs/game-center';
 
 export default function LeaguePage() {
   const { id } = useParams<{ id: string }>();
@@ -31,6 +32,7 @@ export default function LeaguePage() {
   const [mountedTabs, setMountedTabs] = useState<Set<Tab>>(() => new Set<Tab>(['standings']));
   const [loading, setLoading] = useState(true);
   const [openDropdown, setOpenDropdown] = useState<'teams' | 'league' | null>(null);
+  const [scoreboard, setScoreboard] = useState<ScoreboardGame[]>([]);
   const tabBarRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -70,6 +72,34 @@ export default function LeaguePage() {
     if (t && VALID_TABS.includes(t)) switchTab(t);
   }, [switchTab]);
 
+
+  useEffect(() => {
+    if (league?.state !== 'active' || !league.selectedSports.length) return;
+    const sports = league.selectedSports.join(',');
+    function fetch() {
+      api.get<ScoreboardGame[]>(`/sports/scoreboard?sports=${sports}`)
+        .then(setScoreboard).catch(() => {});
+    }
+    fetch();
+    const interval = setInterval(fetch, 60_000);
+    return () => clearInterval(interval);
+  }, [league?.state, league?.selectedSports]);
+
+  const liveTeamIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const g of scoreboard) {
+      if (g.isLive) { ids.add(g.homeTeamId); ids.add(g.awayTeamId); }
+    }
+    return ids;
+  }, [scoreboard]);
+
+  const myOwnedTeamIds = useMemo(() => new Set(
+    fantasyTeams
+      .filter(ft => ft.userId === user?.uid || (ft.coOwnerIds ?? []).includes(user?.uid ?? ''))
+      .flatMap(ft => ft.ownedTeamIds)
+  ), [fantasyTeams, user?.uid]);
+
+  const hasLiveGames = scoreboard.some(g => g.isLive);
 
   async function startAuction() {
     try {
@@ -185,6 +215,27 @@ export default function LeaguePage() {
           </button>
         ))}
 
+        {league.state === 'active' && (
+          <button
+            onClick={() => switchTab('games')}
+            className={`px-4 py-2.5 text-sm font-medium transition-colors -mb-px border-b-2 relative ${
+              tab === 'games'
+                ? 'border-brand text-brand'
+                : 'border-transparent text-copy-3 hover:text-copy-2 hover:border-line-2'
+            }`}
+          >
+            Games
+            {hasLiveGames && (
+              <span className="absolute top-1.5 right-0.5">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-positive opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-positive" />
+                </span>
+              </span>
+            )}
+          </button>
+        )}
+
         {/* Teams dropdown */}
         {(() => {
           const teamsSubTabs: { key: Tab; label: string }[] = [
@@ -271,7 +322,7 @@ export default function LeaguePage() {
 
       {mountedTabs.has('standings') && (
         <div className={tab !== 'standings' ? 'hidden' : ''}>
-          <StandingsTab leagueId={id} userId={user?.uid} fantasyTeams={fantasyTeams} topZone={league.topZone} bottomZone={league.bottomZone} ownerNameByUserId={Object.fromEntries(members.filter((m: Member) => m.displayName).map((m: Member) => [m.userId, m.displayName!]))} />
+          <StandingsTab leagueId={id} userId={user?.uid} fantasyTeams={fantasyTeams} topZone={league.topZone} bottomZone={league.bottomZone} ownerNameByUserId={Object.fromEntries(members.filter((m: Member) => m.displayName).map((m: Member) => [m.userId, m.displayName!]))} liveTeamIds={liveTeamIds} />
         </div>
       )}
       {mountedTabs.has('roster') && (
@@ -284,6 +335,7 @@ export default function LeaguePage() {
             isCommissioner={isCommissioner}
             userId={user?.uid}
             ownerNameByUserId={Object.fromEntries(members.filter((m: Member) => m.displayName).map((m: Member) => [m.userId, m.displayName!]))}
+            liveTeamIds={liveTeamIds}
           />
         </div>
       )}
@@ -316,6 +368,11 @@ export default function LeaguePage() {
       {mountedTabs.has('auction-summary') && (
         <div className={tab !== 'auction-summary' ? 'hidden' : ''}>
           <AuctionSummaryTab leagueId={id} fantasyTeams={fantasyTeams} />
+        </div>
+      )}
+      {mountedTabs.has('games') && (
+        <div className={tab !== 'games' ? 'hidden' : ''}>
+          <GameCenterTab games={scoreboard} myOwnedTeamIds={myOwnedTeamIds} />
         </div>
       )}
       {mountedTabs.has('home') && (

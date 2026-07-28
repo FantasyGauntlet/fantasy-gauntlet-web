@@ -118,5 +118,12 @@ export type TxEvent =
   | { type: 'trade'; id: string; date: string; proposerFantasyTeamId: string; receiverFantasyTeamId: string; offeredSportTeamIds: string[]; requestedSportTeamIds: string[]; }
   | { type: 'waiver'; id: string; date: string; claimantUserId: string; claimantDisplayName: string; addTeamId: string; dropTeamId: string | null; };
 
-export type Tab = 'standings' | 'roster' | 'waivers' | 'transaction-counter' | 'auction-summary' | 'home' | 'history' | 'rules' | 'activity' | 'commissioner' | 'user-management';
-export const VALID_TABS: Tab[] = ['standings', 'roster', 'waivers', 'transaction-counter', 'auction-summary', 'home', 'history', 'rules', 'activity', 'commissioner', 'user-management'];
+export interface ScoreboardGame {
+  eventId: string; sportLeagueId: string; scheduledAt: string;
+  statusDisplay: string; isLive: boolean; isFinished: boolean;
+  homeTeamId: string; homeName: string; homeShortName: string; homeLogo: string | null; homeScore: string | null;
+  awayTeamId: string; awayName: string; awayShortName: string; awayLogo: string | null; awayScore: string | null;
+}
+
+export type Tab = 'standings' | 'roster' | 'waivers' | 'transaction-counter' | 'auction-summary' | 'home' | 'history' | 'rules' | 'activity' | 'commissioner' | 'user-management' | 'games';
+export const VALID_TABS: Tab[] = ['standings', 'roster', 'waivers', 'transaction-counter', 'auction-summary', 'home', 'history', 'rules', 'activity', 'commissioner', 'user-management', 'games'];

@@ -9,7 +9,7 @@ import { Spinner, Lightbox, formatLeagueName, formatRecord, SPORT_ORDER } from '
 import type { SportGroup, Standing, FantasyTeam, SportTeam, Trade, TeamBreakdown, BonusBreakdownItem } from '../_types';
 
 function RosterTab({
-  leagueId, leagueState, fantasyTeams, setFantasyTeams, isCommissioner, userId, ownerNameByUserId,
+  leagueId, leagueState, fantasyTeams, setFantasyTeams, isCommissioner, userId, ownerNameByUserId, liveTeamIds,
 }: {
   leagueId: string;
   leagueState: string;
@@ -18,6 +18,7 @@ function RosterTab({
   isCommissioner: boolean;
   userId?: string;
   ownerNameByUserId: Record<string, string>;
+  liveTeamIds?: Set<string>;
 }) {
   const [sportGroups, setSportGroups] = useState<SportGroup[]>([]);
   const [loadingTeams, setLoadingTeams] = useState(true);
@@ -555,6 +556,12 @@ function RosterTab({
                         <p className="text-sm font-medium text-copy truncate">{t.name}</p>
                         {isWildCard && (
                           <span className="text-xs bg-warn-bg text-warn border border-warn/20 px-1.5 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">Wild Card</span>
+                        )}
+                        {liveTeamIds?.has(t.id) && (
+                          <span className="relative flex h-2 w-2 flex-shrink-0">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-positive opacity-75" />
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-positive" />
+                          </span>
                         )}
                       </div>
                       <p className="text-xs text-copy-3 mt-0.5">{formatLeagueName(t.sportLeagueId)}</p>
