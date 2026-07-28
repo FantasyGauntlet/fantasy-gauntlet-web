@@ -148,7 +148,7 @@ function LeagueCard({ league, muted = false, starred = false, onToggleStar }: { 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [leagues, setLeagues] = useState<League[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -157,7 +157,12 @@ export default function DashboardPage() {
   const [acceptingInvite, setAcceptingInvite] = useState<Record<string, boolean>>({});
   const [decliningInvite, setDecliningInvite] = useState<Record<string, boolean>>({});
 
+  const [fetchKey, setFetchKey] = useState(0);
+
   useEffect(() => {
+    if (authLoading || !user) return;
+    setLoading(true);
+    setError('');
     api.get<League[]>('/leagues/mine')
       .then(setLeagues)
       .catch(e => setError(e.message))
@@ -165,7 +170,7 @@ export default function DashboardPage() {
     api.get<PendingInvite[]>('/leagues/invites/mine')
       .then(setPendingInvites)
       .catch(() => {});
-  }, []);
+  }, [authLoading, user, fetchKey]);
 
   async function acceptInvite(invite: PendingInvite) {
     setAcceptingInvite(s => ({ ...s, [invite.id]: true }));
@@ -259,7 +264,15 @@ export default function DashboardPage() {
 
       {/* Error */}
       {error && (
-        <div className="bg-danger-bg border border-danger/20 rounded-xl p-4 text-danger text-sm">{error}</div>
+        <div className="bg-danger-bg border border-danger/20 rounded-xl p-4 flex items-center justify-between gap-4">
+          <p className="text-danger text-sm">Could not load your leagues. Check your connection and try again.</p>
+          <button
+            onClick={() => setFetchKey(k => k + 1)}
+            className="text-xs font-semibold text-danger border border-danger/30 hover:bg-danger hover:text-white px-3 py-1.5 rounded-lg transition-colors flex-shrink-0"
+          >
+            Retry
+          </button>
+        </div>
       )}
 
       {/* Pending invites */}
@@ -314,14 +327,14 @@ export default function DashboardPage() {
       )}
 
       {/* League grid */}
-      {loading ? (
+      {!error && loading ? (
         <div>
           <div className="h-3.5 bg-field-2 rounded w-20 mb-3 animate-pulse" />
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {[...Array(3)].map((_, i) => <SkeletonCard key={i} />)}
           </div>
         </div>
-      ) : leagues.length === 0 ? (
+      ) : !error && leagues.length === 0 ? (
         <div className="text-center py-20 border border-dashed border-line rounded-2xl">
           <div className="w-14 h-14 rounded-2xl bg-brand-dim border border-brand/20 flex items-center justify-center mx-auto mb-4">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-brand">
@@ -341,7 +354,7 @@ export default function DashboardPage() {
             Create a League
           </Link>
         </div>
-      ) : (
+      ) : !error ? (
         <div className="space-y-8">
           {/* Active leagues */}
           {activeLeagues.length > 0 && (
@@ -387,7 +400,7 @@ export default function DashboardPage() {
           {/* Fallback: only past leagues (no active ones) */}
           {activeLeagues.length === 0 && pastLeagues.length === 0 && null}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
