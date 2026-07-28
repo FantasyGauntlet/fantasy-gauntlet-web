@@ -661,6 +661,20 @@ export default function AdminPage() {
   const [oddsError, setOddsError] = useState<string | null>(null);
   const [oddsRefreshMsg, setOddsRefreshMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [oddsSportFilter, setOddsSportFilter] = useState('');
+  const [availableSports, setAvailableSports] = useState<{ key: string; title: string; active: boolean }[] | null>(null);
+  const [availableSportsLoading, setAvailableSportsLoading] = useState(false);
+  const [availableSportsFilter, setAvailableSportsFilter] = useState('');
+
+  async function loadAvailableSports() {
+    setAvailableSportsLoading(true);
+    try {
+      const data = await api.get<{ key: string; title: string; active: boolean }[]>('/admin/odds/bookmakers');
+      setAvailableSports(data);
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Failed to load sports');
+    }
+    setAvailableSportsLoading(false);
+  }
 
   useEffect(() => {
     if (tab !== 'odds' || oddsLoading || oddsRankings) return;
@@ -2045,6 +2059,46 @@ export default function AdminPage() {
                 </div>
               </div>
             )}
+
+            {/* Available sports from The Odds API */}
+            <div className="bg-card border border-line rounded-2xl p-5">
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <div>
+                  <h3 className="text-xs font-semibold text-copy-2">Available Sports on The Odds API</h3>
+                  <p className="text-[10px] text-copy-3 mt-0.5">Use this to find the correct sport keys for championship futures.</p>
+                </div>
+                <button
+                  onClick={loadAvailableSports}
+                  disabled={availableSportsLoading}
+                  className="flex-shrink-0 flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border bg-field hover:bg-field-2 border-line text-copy-2 disabled:opacity-50 transition-colors"
+                >
+                  {availableSportsLoading ? <><Spinner /> Loading…</> : 'List Sports'}
+                </button>
+              </div>
+
+              {availableSports && (
+                <>
+                  <input
+                    value={availableSportsFilter}
+                    onChange={e => setAvailableSportsFilter(e.target.value)}
+                    placeholder="Filter by key or title…"
+                    className="w-full bg-field border border-line-2 rounded-lg px-3 py-1.5 text-xs text-copy placeholder-copy-3 focus:outline-none focus:border-brand transition-colors mb-2"
+                  />
+                  <div className="max-h-64 overflow-y-auto border border-line rounded-xl divide-y divide-line/50">
+                    {availableSports
+                      .filter(s => !availableSportsFilter || s.key.includes(availableSportsFilter) || s.title.toLowerCase().includes(availableSportsFilter.toLowerCase()))
+                      .map(s => (
+                        <div key={s.key} className="flex items-center gap-3 px-3 py-2">
+                          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${s.active ? 'bg-positive' : 'bg-copy-3'}`} />
+                          <span className="text-[10px] font-mono text-copy-2 w-72 flex-shrink-0 truncate">{s.key}</span>
+                          <span className="text-[10px] text-copy-3 truncate">{s.title}</span>
+                        </div>
+                      ))}
+                  </div>
+                  <p className="text-[10px] text-copy-3 mt-2">{availableSports.length} sports · green = active outrights available</p>
+                </>
+              )}
+            </div>
 
             {/* Rankings table */}
             <div className="bg-card border border-line rounded-2xl overflow-hidden">
