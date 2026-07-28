@@ -48,7 +48,8 @@ interface AuctionPricingResult {
 }
 
 interface RankedTeam { teamId: string; sportKey: string; teamName: string; probability: number; bookmakerCount: number; }
-interface OddsRankings { ranked: RankedTeam[]; bookmakers: string[]; updatedAt: string; }
+interface SportResult { sport: string; status: 'ok' | 'error' | 'no_data' | 'no_mapping'; eventCount?: number; teamCount?: number; unmatchedCount?: number; error?: string; }
+interface OddsRankings { ranked: RankedTeam[]; bookmakers: string[]; updatedAt: string; sportResults?: SportResult[]; unmatched?: string[]; }
 
 function Spinner({ size = 'sm' }: { size?: 'sm' | 'md' }) {
   const s = size === 'sm' ? 'w-4 h-4 border-[1.5px]' : 'w-6 h-6 border-2';
@@ -1989,6 +1990,49 @@ export default function AdminPage() {
                 </p>
               )}
             </div>
+
+            {/* Per-sport diagnostics */}
+            {oddsRankings?.sportResults && oddsRankings.sportResults.length > 0 && (
+              <div className="bg-card border border-line rounded-2xl p-5">
+                <h3 className="text-xs font-semibold text-copy-2 mb-3">Per-Sport Status</h3>
+                <div className="space-y-1.5">
+                  {oddsRankings.sportResults.map(r => (
+                    <div key={r.sport} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-field">
+                      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                        r.status === 'ok'         ? 'bg-positive' :
+                        r.status === 'no_data'    ? 'bg-amber-400' :
+                        r.status === 'error'      ? 'bg-danger' : 'bg-copy-3'
+                      }`} />
+                      <span className="text-xs font-medium text-copy w-36 flex-shrink-0">{formatLeagueName(r.sport)}</span>
+                      {r.status === 'ok' && (
+                        <span className="text-xs text-positive">{r.teamCount} teams matched · {r.unmatchedCount ?? 0} unmatched</span>
+                      )}
+                      {r.status === 'no_data' && (
+                        <span className="text-xs text-amber-600">No outrights available right now</span>
+                      )}
+                      {r.status === 'error' && (
+                        <span className="text-xs text-danger truncate">{r.error}</span>
+                      )}
+                      {r.status === 'no_mapping' && (
+                        <span className="text-xs text-copy-3">No Odds API mapping</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {oddsRankings.unmatched && oddsRankings.unmatched.length > 0 && (
+                  <details className="mt-3">
+                    <summary className="text-xs text-copy-3 cursor-pointer hover:text-copy transition-colors">
+                      {oddsRankings.unmatched.length} unmatched team name{oddsRankings.unmatched.length !== 1 ? 's' : ''} (click to expand)
+                    </summary>
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {oddsRankings.unmatched.map(u => (
+                        <span key={u} className="text-[10px] bg-field border border-line px-1.5 py-0.5 rounded font-mono text-copy-3">{u}</span>
+                      ))}
+                    </div>
+                  </details>
+                )}
+              </div>
+            )}
 
             {/* Bookmakers */}
             {oddsRankings && oddsRankings.bookmakers.length > 0 && (
