@@ -433,9 +433,17 @@ function WaiversTab({
     const hour = waiverSettings?.processingHour ?? 11;
     const dayLabel = day.charAt(0).toUpperCase() + day.slice(1);
     const timeLabel = hour === 0 ? '12:00 AM' : hour < 12 ? `${hour}:00 AM` : hour === 12 ? '12:00 PM' : `${hour - 12}:00 PM`;
+    // Convert ET processing hour to viewer's local time
+    const etHourToLocal = (h: number) => {
+      const now = new Date();
+      const etNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+      const etTarget = new Date(etNow); etTarget.setHours(h, 0, 0, 0);
+      return new Date(etTarget.getTime() + (now.getTime() - etNow.getTime()))
+        .toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' });
+    };
     // Compute how many days until next occurrence
     const dayIndex = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'].indexOf(day);
-    if (dayIndex === -1) return `${dayLabel} at ${timeLabel} EST`;
+    if (dayIndex === -1) return `${dayLabel} at ${etHourToLocal(hour)}`;
     const now = new Date();
     const etNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
     const todayIdx = etNow.getDay();
@@ -445,7 +453,7 @@ function WaiversTab({
     const isToday = daysUntil === 0;
     const isTomorrow = daysUntil === 1;
     const when = isToday ? 'today' : isTomorrow ? 'tomorrow' : `${dayLabel}`;
-    return `${when} at ${timeLabel} EST`;
+    return `${when} at ${etHourToLocal(hour)}`;
   })();
 
   return (

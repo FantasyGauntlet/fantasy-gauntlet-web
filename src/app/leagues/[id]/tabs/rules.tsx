@@ -5,6 +5,14 @@ import { api } from '@/lib/api';
 import { formatLeagueName } from '../_components';
 import type { League } from '../_types';
 
+function etHourToLocal(h: number): string {
+  const now = new Date();
+  const etNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const etTarget = new Date(etNow); etTarget.setHours(h, 0, 0, 0);
+  return new Date(etTarget.getTime() + (now.getTime() - etNow.getTime()))
+    .toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' });
+}
+
 function RulesTab({ league }: { league: League }) {
   const [deadlines, setDeadlines] = useState<Record<string, string>>({});
 
@@ -64,7 +72,7 @@ function RulesTab({ league }: { league: League }) {
               const wTimeLabel = wHour === 0 ? '12:00 AM' : wHour < 12 ? `${wHour}:00 AM` : wHour === 12 ? '12:00 PM' : `${wHour - 12}:00 PM`;
               return [
                 'Teams are added and removed by submitting a waiver request on the "Waivers" tab.',
-                `Waivers are processed every ${wDayLabel} morning at ${wTimeLabel} EST by standard rule sets.`,
+                `Waivers are processed every ${wDayLabel} at ${etHourToLocal(wHour)} by standard rule sets.`,
                 'Tiebreaker order is reverse current standings (Lowest in the standings is #1 priority.)',
                 'Trades are allowed to be made as long as both teams are upholding roster limits.',
               ];

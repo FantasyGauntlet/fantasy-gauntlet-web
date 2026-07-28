@@ -601,7 +601,7 @@ function CommissionerTab({
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-copy-2 mb-1.5">Processing Time (EST)</label>
+            <label className="block text-xs font-medium text-copy-2 mb-1.5">Processing Time (ET)</label>
             <select value={waiverHour} onChange={e => setWaiverHour(Number(e.target.value))} className={inputCls}>
               {Array.from({ length: 24 }, (_, i) => (
                 <option key={i} value={i}>
