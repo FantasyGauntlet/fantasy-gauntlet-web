@@ -215,27 +215,6 @@ export default function LeaguePage() {
           </button>
         ))}
 
-        {league.state === 'active' && (
-          <button
-            onClick={() => switchTab('games')}
-            className={`px-4 py-2.5 text-sm font-medium transition-colors -mb-px border-b-2 relative ${
-              tab === 'games'
-                ? 'border-brand text-brand'
-                : 'border-transparent text-copy-3 hover:text-copy-2 hover:border-line-2'
-            }`}
-          >
-            Games
-            {hasLiveGames && (
-              <span className="absolute top-1.5 right-0.5">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-positive opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-positive" />
-                </span>
-              </span>
-            )}
-          </button>
-        )}
-
         {/* Teams dropdown */}
         {(() => {
           const teamsSubTabs: { key: Tab; label: string }[] = [
@@ -282,6 +261,27 @@ export default function LeaguePage() {
             </div>
           );
         })()}
+
+        {league.state === 'active' && (
+          <button
+            onClick={() => switchTab('games')}
+            className={`px-4 py-2.5 text-sm font-medium transition-colors -mb-px border-b-2 relative ${
+              tab === 'games'
+                ? 'border-brand text-brand'
+                : 'border-transparent text-copy-3 hover:text-copy-2 hover:border-line-2'
+            }`}
+          >
+            Game Center
+            {hasLiveGames && (
+              <span className="absolute top-1.5 right-0.5">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-positive opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-positive" />
+                </span>
+              </span>
+            )}
+          </button>
+        )}
 
         {/* League dropdown tab */}
         <div className="relative -mb-px">
