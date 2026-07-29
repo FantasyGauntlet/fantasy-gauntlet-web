@@ -636,10 +636,11 @@ function WaiversTab({
                 <input
                   type="number"
                   min={0}
+                  step={1}
                   max={myTeam?.faabRemaining ?? 0}
                   value={faabBid}
                   onFocus={e => e.target.select()}
-                  onChange={e => { const v = e.target.valueAsNumber; setFaabBid(isNaN(v) ? 0 : Math.max(0, v)); }}
+                  onChange={e => { const v = e.target.valueAsNumber; setFaabBid(isNaN(v) ? 0 : Math.max(0, Math.floor(v))); }}
                   className="w-full bg-field border border-line-2 rounded-xl px-4 py-2.5 text-sm text-copy focus:outline-none focus:border-brand transition-colors"
                   placeholder="0"
                 />
