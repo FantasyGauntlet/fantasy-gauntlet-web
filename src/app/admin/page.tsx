@@ -175,15 +175,18 @@ export default function AdminPage() {
   const [manageAddName, setManageAddName] = useState('');
   const [manageAddStatus, setManageAddStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [manageDeleteIds, setManageDeleteIds] = useState<Set<string>>(new Set());
+  const [excludedCount, setExcludedCount] = useState(0);
+  const [lockingToManual, setLockingToManual] = useState(false);
 
   async function loadManageTeams(sport: string) {
     setManageLoading(true);
     try {
       const [ts, seasonData] = await Promise.all([
         fetch(`${BASE}/sports/leagues/${sport}/teams`).then(r => r.json()) as Promise<Team[]>,
-        api.get<{ teamIds: string[] }>(`/admin/ingestion/sports/${sport}/season-team-ids`).catch(() => ({ teamIds: [] })),
+        api.get<{ teamIds: string[]; excludedTeamIds: string[] }>(`/admin/ingestion/sports/${sport}/season-team-ids`).catch(() => ({ teamIds: [], excludedTeamIds: [] })),
       ]);
       const seasonIds = new Set(seasonData.teamIds);
+      setExcludedCount((seasonData.excludedTeamIds ?? []).length);
       const sorted = [...ts].sort((a, b) => a.name.localeCompare(b.name));
       setManageTeams(sorted.filter(t => seasonIds.has(t.id)));
       setHiddenTeams(sorted.filter(t => !seasonIds.has(t.id)));
@@ -191,7 +194,19 @@ export default function AdminPage() {
     setManageLoading(false);
   }
 
-  useEffect(() => { loadManageTeams(manualSport); }, [manualSport]);
+  async function lockToManual() {
+    setLockingToManual(true);
+    try {
+      const res = await api.post<{ kept: number; excluded: number }>(`/admin/ingestion/sports/${manualSport}/lock-to-manual`);
+      await loadManageTeams(manualSport);
+      alert(`Locked to manual: kept ${res.kept} placeholder teams, excluded ${res.excluded} API teams. Syncs will no longer restore them.`);
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Failed to lock');
+    }
+    setLockingToManual(false);
+  }
+
+  useEffect(() => { setExcludedCount(0); loadManageTeams(manualSport); }, [manualSport]);
 
   async function addManageTeam() {
     const name = manageAddName.trim();
@@ -815,6 +830,12 @@ export default function AdminPage() {
               <div className="mb-4">
                 <h2 className="text-sm font-semibold text-copy">Manage Teams</h2>
                 <p className="text-xs text-copy-3 mt-0.5">Add or remove individual teams for a sport without replacing the whole roster.</p>
+                {excludedCount > 0 && (
+                  <p className="text-xs text-positive mt-1 font-medium">✓ {excludedCount} team{excludedCount !== 1 ? 's' : ''} excluded — syncs will not restore them</p>
+                )}
+                {excludedCount === 0 && manageTeams.some(t => !/_m\d+$/.test(t.id)) && (
+                  <p className="text-xs text-amber-500 mt-1">⚠ No exclusions recorded — syncs may restore hidden teams</p>
+                )}
               </div>
               <div className="space-y-3">
                 <select
@@ -927,6 +948,23 @@ export default function AdminPage() {
                 </div>
                 <p className="text-xs text-copy-3">{manageTeams.length} team{manageTeams.length !== 1 ? 's' : ''} · press Enter or click Add Team</p>
               </div>
+
+              {/* Lock to manual teams */}
+              {manageTeams.some(t => !/_m\d+$/.test(t.id)) && (
+                <div className="mt-4 pt-4 border-t border-line">
+                  <p className="text-xs text-copy-3 mb-2">
+                    Remove all API teams from this season and lock to placeholder teams only. Future syncs will not add them back.
+                  </p>
+                  <button
+                    onClick={lockToManual}
+                    disabled={lockingToManual}
+                    className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-danger-bg text-danger border border-danger/30 hover:bg-danger/20 transition-colors disabled:opacity-50"
+                  >
+                    {lockingToManual ? <Spinner size="sm" /> : null}
+                    Lock to placeholder teams only
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Migrate Placeholder Teams */}
