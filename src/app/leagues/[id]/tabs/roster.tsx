@@ -10,6 +10,7 @@ import type { SportGroup, Standing, FantasyTeam, SportTeam, Trade, TeamBreakdown
 
 function RosterTab({
   leagueId, leagueState, fantasyTeams, setFantasyTeams, isCommissioner, userId, ownerNameByUserId, liveTeamIds,
+  selectedSports, maxWildcard, onGoToWaivers,
 }: {
   leagueId: string;
   leagueState: string;
@@ -19,6 +20,9 @@ function RosterTab({
   userId?: string;
   ownerNameByUserId: Record<string, string>;
   liveTeamIds?: Set<string>;
+  selectedSports?: string[];
+  maxWildcard?: number;
+  onGoToWaivers?: (sport: string | null) => void;
 }) {
   const [sportGroups, setSportGroups] = useState<SportGroup[]>([]);
   const [loadingTeams, setLoadingTeams] = useState(true);
@@ -124,6 +128,37 @@ function RosterTab({
       else seen.add(t.sportLeagueId);
     }
   }
+
+  // Compute missing roster slots
+  type RosterRenderItem = { kind: 'team'; team: SportTeam } | { kind: 'missing'; sportLeagueId: string; isWildcard: boolean };
+  const rosterRenderItems: RosterRenderItem[] = (() => {
+    if (!selectedSports?.length) return viewingOwnedTeams.map(t => ({ kind: 'team' as const, team: t }));
+    const countBySport = new Map<string, number>();
+    for (const t of viewingOwnedTeams) countBySport.set(t.sportLeagueId, (countBySport.get(t.sportLeagueId) ?? 0) + 1);
+    const totalExpected = selectedSports.length + (maxWildcard ?? 0);
+    const totalMissing = Math.max(0, totalExpected - viewingOwnedTeams.length);
+    const missingSportIds = selectedSports.filter(s => !countBySport.has(s));
+    const missingWcCount = Math.max(0, totalMissing - missingSportIds.length);
+    const items: RosterRenderItem[] = [
+      ...viewingOwnedTeams.map(t => ({ kind: 'team' as const, team: t })),
+      ...missingSportIds.map(s => ({ kind: 'missing' as const, sportLeagueId: s, isWildcard: false })),
+      ...Array.from({ length: missingWcCount }, () => ({ kind: 'missing' as const, sportLeagueId: 'wildcard', isWildcard: true })),
+    ];
+    items.sort((a, b) => {
+      const as_ = a.kind === 'team' ? a.team.sportLeagueId : a.sportLeagueId;
+      const bs_ = b.kind === 'team' ? b.team.sportLeagueId : b.sportLeagueId;
+      const ai = as_ === 'wildcard' ? 9999 : SPORT_ORDER.indexOf(as_);
+      const bi = bs_ === 'wildcard' ? 9999 : SPORT_ORDER.indexOf(bs_);
+      const ao = ai === -1 ? 998 : ai;
+      const bo = bi === -1 ? 998 : bi;
+      if (ao !== bo) return ao - bo;
+      if (a.kind === 'team' && b.kind === 'missing') return -1;
+      if (a.kind === 'missing' && b.kind === 'team') return 1;
+      if (a.kind === 'team' && b.kind === 'team') return a.team.name.localeCompare(b.team.name);
+      return 0;
+    });
+    return items;
+  })();
 
   const myFantasyTeam = fantasyTeams.find(ft => isMyTeam(ft));
   const myOwnedTeams = (myFantasyTeam?.ownedTeamIds ?? [])
@@ -519,12 +554,40 @@ function RosterTab({
               ))}
             </div>
           )}
-          {!loadingTeams && viewingOwnedTeams.length === 0 && (
+          {!loadingTeams && rosterRenderItems.length === 0 && (
             <div className="px-5 py-8 text-center">
               <p className="text-copy-3 text-sm">No teams yet</p>
             </div>
           )}
-          {viewingOwnedTeams.map(t => {
+          {rosterRenderItems.map((item, idx) => {
+            if (item.kind === 'missing') {
+              return (
+                <div key={`missing-${item.sportLeagueId}-${idx}`} className="flex items-center justify-between px-5 py-3.5 gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-9 h-9 rounded-lg border-2 border-dashed border-line-2 flex items-center justify-center flex-shrink-0">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="text-copy-3">
+                        <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+                      </svg>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-copy-3">Missing team</p>
+                      <p className="text-xs text-copy-3/70 mt-0.5">
+                        {item.isWildcard ? 'Wild Card slot' : formatLeagueName(item.sportLeagueId)}
+                      </p>
+                    </div>
+                  </div>
+                  {viewingIsMe && onGoToWaivers && (
+                    <button
+                      onClick={() => onGoToWaivers(item.isWildcard ? null : item.sportLeagueId)}
+                      className="text-xs bg-brand/10 hover:bg-brand/20 border border-brand/30 text-brand font-semibold px-3 py-1.5 rounded-xl transition-colors whitespace-nowrap flex-shrink-0"
+                    >
+                      Find on Waivers →
+                    </button>
+                  )}
+                </div>
+              );
+            }
+            const t = item.team;
             const stats = teamStatsMap.get(t.id);
             const bonus = teamBonusMap.get(t.id) ?? 0;
             const total = (stats?.points ?? 0) + bonus;

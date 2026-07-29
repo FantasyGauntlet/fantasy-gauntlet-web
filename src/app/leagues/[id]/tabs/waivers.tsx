@@ -210,7 +210,7 @@ function ClaimCard({
 }
 
 function WaiversTab({
-  leagueId, isCommissioner, userId, fantasyTeams, selectedSports, waiverType, faabStartingBudget, rosterSize, waiverSettings,
+  leagueId, isCommissioner, userId, fantasyTeams, selectedSports, waiverType, faabStartingBudget, rosterSize, waiverSettings, filterPush,
 }: {
   leagueId: string;
   isCommissioner: boolean;
@@ -221,6 +221,7 @@ function WaiversTab({
   faabStartingBudget: number;
   rosterSize: number;
   waiverSettings?: { processingDay: string; processingHour: number } | null;
+  filterPush?: { sport: string | null; v: number };
 }) {
   const [claims, setClaims] = useState<WaiverClaim[]>([]);
   const [pool, setPool] = useState<TeamWithRecord[]>([]);
@@ -248,6 +249,10 @@ function WaiversTab({
   const [denyingId, setDenyingId] = useState<string | null>(null);
   const [denyReason, setDenyReason] = useState('');
   const [reviewing, setReviewing] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (filterPush) setBrowseSport(filterPush.sport ?? 'all');
+  }, [filterPush?.v]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     Promise.all([

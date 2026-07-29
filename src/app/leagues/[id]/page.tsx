@@ -34,6 +34,7 @@ export default function LeaguePage() {
   const [openDropdown, setOpenDropdown] = useState<'teams' | 'league' | null>(null);
   const [scoreboard, setScoreboard] = useState<ScoreboardGame[]>([]);
   const [standings, setStandings] = useState<Standing[]>([]);
+  const [waiverFilterPush, setWaiverFilterPush] = useState<{ sport: string | null; v: number }>({ sport: null, v: 0 });
   const tabBarRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -324,7 +325,7 @@ export default function LeaguePage() {
 
       {mountedTabs.has('standings') && (
         <div className={tab !== 'standings' ? 'hidden' : ''}>
-          <StandingsTab leagueId={id} userId={user?.uid} fantasyTeams={fantasyTeams} topZone={league.topZone} bottomZone={league.bottomZone} ownerNameByUserId={Object.fromEntries(members.filter((m: Member) => m.displayName).map((m: Member) => [m.userId, m.displayName!]))} liveTeamIds={liveTeamIds} initialStandings={standings} />
+          <StandingsTab leagueId={id} userId={user?.uid} fantasyTeams={fantasyTeams} topZone={league.topZone} bottomZone={league.bottomZone} ownerNameByUserId={Object.fromEntries(members.filter((m: Member) => m.displayName).map((m: Member) => [m.userId, m.displayName!]))} liveTeamIds={liveTeamIds} initialStandings={standings} selectedSports={league.selectedSports} maxWildcard={league.maxWildcard ?? 0} />
         </div>
       )}
       {mountedTabs.has('roster') && (
@@ -338,6 +339,12 @@ export default function LeaguePage() {
             userId={user?.uid}
             ownerNameByUserId={Object.fromEntries(members.filter((m: Member) => m.displayName).map((m: Member) => [m.userId, m.displayName!]))}
             liveTeamIds={liveTeamIds}
+            selectedSports={league.selectedSports}
+            maxWildcard={league.maxWildcard ?? 0}
+            onGoToWaivers={(sport) => {
+              setWaiverFilterPush(prev => ({ sport, v: prev.v + 1 }));
+              switchTab('waivers');
+            }}
           />
         </div>
       )}
@@ -353,6 +360,7 @@ export default function LeaguePage() {
             faabStartingBudget={league.faabStartingBudget ?? 100}
             rosterSize={league.selectedSports.length + (league.maxWildcard ?? 0)}
             waiverSettings={league.waiverSettings}
+            filterPush={waiverFilterPush}
           />
         </div>
       )}

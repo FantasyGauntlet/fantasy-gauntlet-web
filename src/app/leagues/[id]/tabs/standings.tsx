@@ -6,7 +6,7 @@ import { useTeamProfile } from '@/context/TeamProfileContext';
 import { Spinner, Lightbox, formatLeagueName, formatRecord, SPORT_ORDER } from '../_components';
 import type { Standing, FantasyTeam } from '../_types';
 
-function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone, ownerNameByUserId, liveTeamIds, initialStandings }: { leagueId: string; userId?: string; fantasyTeams: FantasyTeam[]; topZone?: number | null; bottomZone?: number | null; ownerNameByUserId: Record<string, string>; liveTeamIds?: Set<string>; initialStandings?: Standing[]; }) {
+function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone, ownerNameByUserId, liveTeamIds, initialStandings, selectedSports, maxWildcard }: { leagueId: string; userId?: string; fantasyTeams: FantasyTeam[]; topZone?: number | null; bottomZone?: number | null; ownerNameByUserId: Record<string, string>; liveTeamIds?: Set<string>; initialStandings?: Standing[]; selectedSports?: string[]; maxWildcard?: number; }) {
   const [standings, setStandings] = useState<Standing[]>(() => initialStandings ?? []);
   const [loading, setLoading] = useState(!initialStandings?.length);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -120,6 +120,16 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone, own
                     if (seen.has(t.sportLeagueId)) wcIds.add(t.teamId);
                     else seen.add(t.sportLeagueId);
                   }
+                  const missingSportSlots: string[] = [];
+                  let missingWcCount = 0;
+                  if (selectedSports?.length) {
+                    const countBySport = new Map<string, number>();
+                    for (const t of s.teamBreakdown) countBySport.set(t.sportLeagueId, (countBySport.get(t.sportLeagueId) ?? 0) + 1);
+                    const totalExpected = selectedSports.length + (maxWildcard ?? 0);
+                    const totalMissing = Math.max(0, totalExpected - s.teamBreakdown.length);
+                    for (const sp of selectedSports) { if (!countBySport.has(sp)) missingSportSlots.push(sp); }
+                    missingWcCount = Math.max(0, totalMissing - missingSportSlots.length);
+                  }
                   return (
                   <tr key={`${s.userId}-bd`} className="border-b border-line/50 bg-field/20">
                     <td colSpan={5} className="px-3 sm:px-6 py-4 space-y-3">
@@ -169,6 +179,40 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone, own
                             </div>
                           );
                         })}
+                        {missingSportSlots.map(sp => (
+                          <div key={`missing-${sp}`} className="bg-card border border-dashed border-line-2 rounded-lg overflow-hidden opacity-60">
+                            <div className="flex items-center justify-between px-3 py-2 gap-2">
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <div className="w-7 h-7 rounded bg-field border border-dashed border-line-2 flex items-center justify-center flex-shrink-0">
+                                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="text-copy-3">
+                                    <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+                                  </svg>
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-xs font-medium text-copy-3">Missing team</p>
+                                  <p className="text-xs text-copy-3/60">{formatLeagueName(sp)}</p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                        {Array.from({ length: missingWcCount }, (_, i) => (
+                          <div key={`missing-wc-${i}`} className="bg-card border border-dashed border-line-2 rounded-lg overflow-hidden opacity-60">
+                            <div className="flex items-center justify-between px-3 py-2 gap-2">
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <div className="w-7 h-7 rounded bg-field border border-dashed border-line-2 flex items-center justify-center flex-shrink-0">
+                                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="text-copy-3">
+                                    <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+                                  </svg>
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-xs font-medium text-copy-3">Missing team</p>
+                                  <p className="text-xs text-copy-3/60">Wild Card slot</p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                       <div className="flex items-center gap-4 text-xs text-copy-3 pt-1 border-t border-line/50">
                         <span>Season: <span className="text-copy font-medium">{(s.totalPoints - s.bonusPoints).toFixed(1)}</span></span>
