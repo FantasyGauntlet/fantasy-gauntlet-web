@@ -90,6 +90,9 @@ function RecentActivityTab({ leagueId, fantasyTeams }: { leagueId: string; fanta
                         <span className="font-semibold">{tx.claimantDisplayName}</span>
                         <span className="text-copy-3"> added </span>
                         <span className="text-positive font-medium">{addTeamName}</span>
+                        {tx.faabBid != null && (
+                          <span className="inline-block text-xs font-bold text-copy-3 bg-field border border-line rounded px-1.5 py-0.5 ml-1.5 align-middle">${tx.faabBid}</span>
+                        )}
                         {dropTeamName && (
                           <>
                             <span className="text-copy-3"> and dropped </span>

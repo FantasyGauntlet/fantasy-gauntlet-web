@@ -116,7 +116,7 @@ export interface LeagueMessage {
 
 export type TxEvent =
   | { type: 'trade'; id: string; date: string; proposerFantasyTeamId: string; receiverFantasyTeamId: string; offeredSportTeamIds: string[]; requestedSportTeamIds: string[]; }
-  | { type: 'waiver'; id: string; date: string; claimantUserId: string; claimantDisplayName: string; addTeamId: string; dropTeamId: string | null; };
+  | { type: 'waiver'; id: string; date: string; claimantUserId: string; claimantDisplayName: string; addTeamId: string; dropTeamId: string | null; faabBid?: number; };
 
 export interface ScoreboardGame {
   eventId: string; sportLeagueId: string; scheduledAt: string;
