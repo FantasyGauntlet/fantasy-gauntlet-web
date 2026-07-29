@@ -186,7 +186,7 @@ export default function AdminPage() {
       const seasonIds = new Set(seasonData.teamIds);
       const sorted = [...ts].sort((a, b) => a.name.localeCompare(b.name));
       setManageTeams(sorted.filter(t => seasonIds.has(t.id)));
-      setHiddenTeams(sorted.filter(t => !seasonIds.has(t.id) && !/_m\d+$/.test(t.id)));
+      setHiddenTeams(sorted.filter(t => !seasonIds.has(t.id)));
     } catch { setManageTeams([]); setHiddenTeams([]); }
     setManageLoading(false);
   }
