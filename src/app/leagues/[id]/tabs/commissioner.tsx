@@ -47,6 +47,7 @@ function CommissionerTab({
   const [waiverDay, setWaiverDay] = useState(league.waiverSettings?.processingDay ?? 'tuesday');
   const [waiverHour, setWaiverHour] = useState(league.waiverSettings?.processingHour ?? 11);
   const [waiverSettingsSaving, setWaiverSettingsSaving] = useState(false);
+  const [processingWaivers, setProcessingWaivers] = useState(false);
 
   const [leagueName, setLeagueName] = useState(league.name ?? '');
   const [leagueNameSaving, setLeagueNameSaving] = useState(false);
@@ -189,6 +190,18 @@ function CommissionerTab({
       alert(e instanceof Error ? e.message : 'Failed to save visibility');
     } finally {
       setVisibilitySaving(false);
+    }
+  }
+
+  async function processWaivers() {
+    setProcessingWaivers(true);
+    try {
+      const result = await api.post<{ approved: number; denied: number }>(`/leagues/${leagueId}/waivers/process`);
+      alert(`Processing complete: ${result.approved} approved, ${result.denied} denied.`);
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Failed to process waivers');
+    } finally {
+      setProcessingWaivers(false);
     }
   }
 
@@ -577,19 +590,30 @@ function CommissionerTab({
       </div>
 
       {/* Waiver Processing */}
-      {league.state === 'draft' && <div className="bg-card border border-line rounded-2xl p-5">
+      {(league.state === 'draft' || league.state === 'active') && <div className="bg-card border border-line rounded-2xl p-5">
         <div className="flex items-start justify-between gap-3 mb-4">
           <div>
             <h2 className="text-sm font-semibold text-copy">Waiver Processing</h2>
             <p className="text-xs text-copy-3 mt-0.5">Configure when pending claims are automatically processed.</p>
           </div>
-          <button
-            onClick={saveWaiverSettings}
-            disabled={waiverSettingsSaving}
-            className="flex-shrink-0 bg-brand hover:bg-brand-2 disabled:opacity-50 text-white text-xs font-semibold px-3 py-2 rounded-xl transition-colors whitespace-nowrap"
-          >
-            {waiverSettingsSaving ? 'Saving...' : 'Save'}
-          </button>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {league.state === 'active' && (
+              <button
+                onClick={processWaivers}
+                disabled={processingWaivers}
+                className="bg-positive hover:bg-positive/90 disabled:opacity-50 text-white text-xs font-semibold px-3 py-2 rounded-xl transition-colors whitespace-nowrap"
+              >
+                {processingWaivers ? 'Processing...' : 'Process Now'}
+              </button>
+            )}
+            <button
+              onClick={saveWaiverSettings}
+              disabled={waiverSettingsSaving}
+              className="bg-brand hover:bg-brand-2 disabled:opacity-50 text-white text-xs font-semibold px-3 py-2 rounded-xl transition-colors whitespace-nowrap"
+            >
+              {waiverSettingsSaving ? 'Saving...' : 'Save Schedule'}
+            </button>
+          </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>

@@ -248,7 +248,6 @@ function WaiversTab({
   const [denyingId, setDenyingId] = useState<string | null>(null);
   const [denyReason, setDenyReason] = useState('');
   const [reviewing, setReviewing] = useState<string | null>(null);
-  const [processing, setProcessing] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -401,17 +400,6 @@ function WaiversTab({
     finally { setReviewing(null); }
   }
 
-  async function processWaivers() {
-    setProcessing(true);
-    try {
-      const result = await api.post<{ approved: number; denied: number }>(`/leagues/${leagueId}/waivers/process`);
-      const fresh = await api.get<WaiverClaim[]>(`/leagues/${leagueId}/waivers`);
-      setClaims(fresh);
-      alert(`Processing complete: ${result.approved} approved, ${result.denied} denied.`);
-    } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : 'Failed to process waivers');
-    } finally { setProcessing(false); }
-  }
 
   if (loading) return <div className="flex justify-center py-12"><Spinner /></div>;
 
@@ -475,15 +463,6 @@ function WaiversTab({
           <h2 className="text-sm font-semibold text-copy">Waivers</h2>
         </div>
         <div className="flex items-center gap-2">
-          {isCommissioner && pending.length > 0 && (
-            <button
-              onClick={processWaivers}
-              disabled={processing}
-              className="bg-positive hover:bg-positive/90 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors"
-            >
-              {processing ? 'Processing...' : 'Process Waivers'}
-            </button>
-          )}
           {canSubmit && !showForm && (
             <button
               onClick={() => openAddForm()}
