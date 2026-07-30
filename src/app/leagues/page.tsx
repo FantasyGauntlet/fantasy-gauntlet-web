@@ -120,7 +120,7 @@ export default function BrowsePage() {
             {/* Footer */}
             <div className="flex items-center justify-between gap-2 mt-auto pt-2 border-t border-line/50">
               <span className="text-xs text-copy-3">
-                {league.memberCap ? `${league.memberCap} members max` : 'Open roster'}
+                {league.memberCap ? `${league.memberCap} members max` : ''}
               </span>
               <Link
                 href={`/leagues/${league.id}`}
