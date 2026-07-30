@@ -227,7 +227,7 @@ function WaiversTab({
   const [pool, setPool] = useState<TeamWithRecord[]>([]);
   const [allLeagueTeams, setAllLeagueTeams] = useState<TeamWithRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [rosterStats, setRosterStats] = useState<Record<string, { rosteredPct: number | null; trend: 'up' | 'down' | null; delta30d: number | null }>>({});
+  const [rosterStats, setRosterStats] = useState<Record<string, { rosteredPct: number | null; trend: 'up' | 'down' | null; pickups30d: number; drops30d: number; delta30d: number | null }>>({});
 
   // Team browser filters
   const [browseSport, setBrowseSport] = useState('all');

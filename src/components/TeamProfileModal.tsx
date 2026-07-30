@@ -31,8 +31,8 @@ interface AuctionStats {
 interface RosterStats {
   rosteredPct: number | null;
   trend: 'up' | 'down' | null;
-  pickups7d: number;
-  drops7d: number;
+  pickups30d: number;
+  drops30d: number;
   delta30d: number | null;
 }
 
@@ -700,15 +700,15 @@ export function TeamProfileModal() {
                             )}
                           </div>
                         </div>
-                        {(rosterStats.pickups7d > 0 || rosterStats.drops7d > 0) && (
+                        {(rosterStats.pickups30d > 0 || rosterStats.drops30d > 0) && (
                           <div className="bg-field rounded-xl px-3 py-2.5">
-                            <p className="text-[10px] text-copy-3 mb-1">Last 7 days</p>
+                            <p className="text-[10px] text-copy-3 mb-1">Last 30 days</p>
                             <div className="flex items-center gap-2">
-                              {rosterStats.pickups7d > 0 && (
-                                <span className="text-xs font-semibold text-positive">+{rosterStats.pickups7d}</span>
+                              {rosterStats.pickups30d > 0 && (
+                                <span className="text-xs font-semibold text-positive">+{rosterStats.pickups30d}</span>
                               )}
-                              {rosterStats.drops7d > 0 && (
-                                <span className="text-xs font-semibold text-danger">−{rosterStats.drops7d}</span>
+                              {rosterStats.drops30d > 0 && (
+                                <span className="text-xs font-semibold text-danger">−{rosterStats.drops30d}</span>
                               )}
                             </div>
                             <p className="text-[10px] text-copy-3 mt-0.5">adds / drops</p>
