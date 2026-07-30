@@ -5,6 +5,15 @@ import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
 
+function prefetchLeague(id: string) {
+  api.prefetch([
+    `/leagues/${id}`,
+    `/leagues/${id}/members`,
+    `/leagues/${id}/teams`,
+    `/leagues/${id}/standings`,
+  ]);
+}
+
 interface League {
   id: string;
   name: string;
@@ -88,6 +97,7 @@ function LeagueCard({ league, muted = false, starred = false, onToggleStar }: { 
   return (
     <Link
       href={`/leagues/${league.id}`}
+      onMouseEnter={() => prefetchLeague(league.id)}
       className={`group border rounded-2xl p-5 transition-all block ${
         muted
           ? 'bg-field border-line hover:border-line-2 hover:bg-card'
