@@ -270,7 +270,7 @@ function WaiversTab({
       setAllLeagueTeams(teams);
       // Fetch % rostered + trend for all teams in one shot
       const batchPayload = teams.map(t => ({ id: t.id, sportLeagueId: t.sportLeagueId }));
-      api.post<Record<string, { rosteredPct: number | null; trend: 'up' | 'down' | null; delta30d: number | null }>>('/sports/roster-stats/batch', { teams: batchPayload })
+      api.post<Record<string, { rosteredPct: number | null; trend: 'up' | 'down' | null; pickups30d: number; drops30d: number; delta30d: number | null }>>('/sports/roster-stats/batch', { teams: batchPayload })
         .then(setRosterStats)
         .catch(() => {});
     }).catch(() => {}).finally(() => setLoading(false));
