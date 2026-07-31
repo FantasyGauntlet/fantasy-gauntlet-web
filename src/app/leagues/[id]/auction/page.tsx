@@ -23,7 +23,7 @@ interface League {
   } | null;
 }
 
-interface FantasyTeam { id: string; userId: string; displayName: string; remainingBudget: number; isPlaceholder: boolean; logoUrl?: string | null; }
+interface FantasyTeam { id: string; userId: string; displayName: string; remainingBudget: number; isPlaceholder: boolean; logoUrl?: string | null; coOwnerIds?: string[]; }
 interface SportTeam { id: string; name: string; shortName: string; sportLeagueId: string; logoUrl: string | null; }
 interface SportGroup { sport: string; teams: SportTeam[]; }
 
@@ -237,7 +237,8 @@ export default function AuctionPage() {
   const [bidFlash, setBidFlash] = useState(false);
   const [pendingBidAmt, setPendingBidAmt] = useState<number | null>(null);
   const [availableFilter, setAvailableFilter] = useState('');
-  const [teamViewMode, setTeamViewMode] = useState<'available' | 'all' | 'drafted'>('available');
+  const [teamViewMode, setTeamViewMode] = useState<'available' | 'all' | 'drafted' | 'passed'>('available');
+  const [historySearch, setHistorySearch] = useState('');
   // Snake draft state
   const [snakeDraftOrder, setSnakeDraftOrder] = useState<string[]>([]);
   const [snakePickerUserId, setSnakePickerUserId] = useState<string | null>(null);
@@ -253,19 +254,27 @@ export default function AuctionPage() {
 
   const socketRef = useRef<Socket | null>(null);
   const toastId = useRef(0);
+  // Tracks the primary-owner userId for the current user's team (same as user.uid for primary
+  // owners, but the primary owner's uid for co-owners — needed in stale-closure-safe handlers)
+  const myTeamUserIdRef = useRef<string>('');
   const lotFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Tracks the last server-sent timer value and when we received it, so we can
   // interpolate the countdown between server ticks (prevents timer drift/jumpiness)
   const timerSyncRef = useRef<{ remaining: number; receivedAt: number } | null>(null);
   const pausedRef = useRef(false);
   useEffect(() => { pausedRef.current = paused; }, [paused]);
+  useEffect(() => { myTeamUserIdRef.current = myTeamUserId; }, [myTeamUserId]);
 
   // ── Derived ───────────────────────────────────────────────────────────────
   const isCommissioner = league?.commissionerId === user?.uid;
-  const myFt = fantasyTeams.find(ft => ft.userId === user?.uid && !ft.isPlaceholder);
+  // For co-owners: find the team that lists this user in coOwnerIds, not just by primary userId
+  const myFt = fantasyTeams.find(ft => !ft.isPlaceholder &&
+    (ft.userId === user?.uid || (ft.coOwnerIds ?? []).includes(user?.uid ?? '')));
+  // The userId that the server resolves bids to (primary owner's uid, even for co-owners)
+  const myTeamUserId = myFt?.userId ?? user?.uid ?? '';
   const myBudget = myFt?.remainingBudget ?? 0;
   const startingBudget = league?.auctionConfig?.startingBudget ?? 100;
-  const iAmHighBidder = currentLot?.currentBidderId === user?.uid;
+  const iAmHighBidder = !!myTeamUserId && currentLot?.currentBidderId === myTeamUserId;
   const minNextBid = currentLot
     ? (currentLot.currentBidderId === null ? minOpeningBid : currentLot.currentBid + minBidIncrement)
     : minOpeningBid;
@@ -400,11 +409,17 @@ export default function AuctionPage() {
           const initRemaining = timerRemaining ?? session.countdownSeconds ?? 30;
           timerSyncRef.current = { remaining: initRemaining, receivedAt: Date.now() };
           setTimerRemaining(initRemaining);
+          // Avg price for the current lot was pre-fetched server-side and included in the response
+          setLotAvgPrice(typeof data.currentLotAvgPrice === 'number' ? data.currentLotAvgPrice : null);
         }
 
         // Reconstruct completed lots / snake pick history
         if (data.completedLots?.length) {
-          const lots: SoldLot[] = (data.completedLots as any[]).map((l: any) => {
+          // Sort by startedAt ascending so .reverse() gives newest-first chronological order
+          const sorted = [...(data.completedLots as any[])].sort(
+            (a: any, b: any) => (a.startedAt ?? '').localeCompare(b.startedAt ?? ''),
+          );
+          const lots: SoldLot[] = sorted.map((l: any) => {
             const info = teamInfo(l.teamId);
             return {
               teamId: l.teamId,
@@ -523,6 +538,10 @@ export default function AuctionPage() {
       });
       // ──────────────────────────────────────────────────────────────────
 
+      socket.on('lot_avg_price', (data: any) => {
+        setLotAvgPrice(typeof data.avgPrice === 'number' ? data.avgPrice : null);
+      });
+
       socket.on('lot_opened', (data: any) => {
         if (justWonRef.current) {
           justWonRef.current = false;
@@ -553,6 +572,7 @@ export default function AuctionPage() {
         setBidInput('');
         setBidError('');
         setPendingBidAmt(null);
+        setLotAvgPrice(null);
         setNominatorUserId(null);
         setUpcomingQueue(q => q.filter(tid => tid !== data.teamId));
       });
@@ -576,8 +596,9 @@ export default function AuctionPage() {
       socket.on('new_high_bid', (data: any) => {
         setCurrentLot(prev => {
           if (!prev) return prev;
-          const wasMe = prev.currentBidderId === userRef.current?.uid;
-          const isNowMe = data.bidderId === userRef.current?.uid;
+          const myId = myTeamUserIdRef.current || userRef.current?.uid;
+          const wasMe = prev.currentBidderId === myId;
+          const isNowMe = data.bidderId === myId;
           if (wasMe && !isNowMe) toast('warn', `Outbid! New high bid: $${data.amount}`);
           return { ...prev, currentBid: data.amount, currentBidderId: data.bidderId };
         });
@@ -636,7 +657,7 @@ export default function AuctionPage() {
           fantasyTeamsRef.current = updated;
           return updated;
         });
-        if (data.winnerId === userRef.current?.uid) {
+        if (data.winnerId === (myTeamUserIdRef.current || userRef.current?.uid)) {
           toast('success', `You won ${info?.name ?? data.teamId} for $${data.winningBid}!`);
           justWonRef.current = true;
           playSound('win', soundMutedRef.current);
@@ -780,16 +801,9 @@ export default function AuctionPage() {
     return () => clearInterval(interval);
   }, [scheduledStartAt]);
 
-  // ── Fetch avg price whenever the active lot changes ───────────────────────
-  useEffect(() => {
-    const teamId = currentLot?.teamId;
-    if (!teamId) { setLotAvgPrice(null); return; }
-    let cancelled = false;
-    api.get<{ avgPrice: number | null }>(`/sports/teams/${teamId}/auction-stats`)
-      .then(r => { if (!cancelled) setLotAvgPrice(r.avgPrice); })
-      .catch(() => { if (!cancelled) setLotAvgPrice(null); });
-    return () => { cancelled = true; };
-  }, [currentLot?.teamId]);
+  // lotAvgPrice is now set via the lot_avg_price socket event (emitted by the backend
+  // right after lot_opened, and included in auction_state on reconnect). This ensures
+  // all clients see the same value at the same time rather than each racing to an HTTP endpoint.
 
   // ── Actions ───────────────────────────────────────────────────────────────
 
@@ -890,7 +904,8 @@ export default function AuctionPage() {
     .sort((a, b) => b.remainingBudget - a.remainingBudget);
 
   // Roster viewer — sport-ordered slots with empty placeholders
-  const rosterUserId = rosterView || user?.uid || '';
+  // For co-owners, default roster view shows the team they co-own (primary owner's userId)
+  const rosterUserId = rosterView || myTeamUserId || user?.uid || '';
   const ownedLots = soldLots.filter(l => !l.passed && l.winnerId === rosterUserId);
   const leagueSports = league?.selectedSports ?? [];
   const orderedLeagueSports = SPORT_ORDER
@@ -933,6 +948,12 @@ export default function AuctionPage() {
   // Base list for the Teams panel depending on view mode
   const teamPanelBase: SportTeam[] = (() => {
     if (teamViewMode === 'drafted') return draftedTeams;
+    if (teamViewMode === 'passed') {
+      return soldLots
+        .filter(l => l.passed)
+        .map(l => teamMapRef.current.get(l.teamId))
+        .filter((t): t is SportTeam => !!t);
+    }
     if (teamViewMode === 'all') {
       const takenTeams = [...soldOrPassedIds]
         .map(id => teamMapRef.current.get(id))
@@ -946,8 +967,8 @@ export default function AuctionPage() {
     ? teamPanelBase.filter(t => t.sportLeagueId === availableFilter)
     : teamPanelBase;
 
-  // Set of IDs that should appear greyscale (sold/passed)
-  const greyedIds = teamViewMode !== 'available' ? soldOrPassedIds : new Set<string>();
+  // Set of IDs that should appear greyscale (sold/passed) — not applied in 'passed' view
+  const greyedIds = (teamViewMode !== 'available' && teamViewMode !== 'passed') ? soldOrPassedIds : new Set<string>();
 
   // Scheduled-start gating
   const scheduledMs = scheduledStartAt ? new Date(scheduledStartAt).getTime() : null;
@@ -1195,17 +1216,17 @@ export default function AuctionPage() {
                   {isSnake
                     ? (snakeDraftOrder.length > 0 ? 'Preparing next pick…' : 'Waiting for snake draft to begin…')
                     : nominationMode === 'manual' && nominatorUserId
-                    ? nominatorUserId === user?.uid
+                    ? nominatorUserId === myTeamUserId
                       ? 'It\'s your turn to nominate!'
                       : `Waiting for ${participantName(nominatorUserId)} to nominate…`
                     : nominationMode === 'manual'
                     ? 'Waiting for nomination…'
                     : 'Preparing next team…'}
                 </p>
-                {nominationMode === 'manual' && nominatorUserId && nominatorUserId !== user?.uid && !isCommissioner && (
+                {nominationMode === 'manual' && nominatorUserId && nominatorUserId !== myTeamUserId && !isCommissioner && (
                   <p className="text-copy-3 text-xs mt-1">{participantName(nominatorUserId)} will pick the next team to auction.</p>
                 )}
-                {nominationMode === 'manual' && nominationTimerRemaining !== null && nominationTimerRemaining > 0 && nominatorUserId !== user?.uid && !isCommissioner && (
+                {nominationMode === 'manual' && nominationTimerRemaining !== null && nominationTimerRemaining > 0 && nominatorUserId !== myTeamUserId && !isCommissioner && (
                   <p className={`text-sm font-bold tabular-nums mt-2 ${nominationTimerRemaining <= 10 ? 'text-danger' : 'text-copy-3'}`}>
                     {nominationTimerRemaining}s
                   </p>
@@ -1220,10 +1241,10 @@ export default function AuctionPage() {
                 <div className="flex items-start gap-4">
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium text-copy-3 uppercase tracking-wide mb-1">
-                      {snakePickerUserId === user?.uid ? 'Your Pick' : 'On The Clock'}
+                      {snakePickerUserId === myTeamUserId ? 'Your Pick' : 'On The Clock'}
                     </p>
                     <h2 className="text-xl font-bold text-copy leading-tight">
-                      {snakePickerUserId === user?.uid ? 'You' : participantName(snakePickerUserId ?? '')}
+                      {snakePickerUserId === myTeamUserId ? 'You' : participantName(snakePickerUserId ?? '')}
                     </h2>
                     <p className="text-xs text-copy-3 mt-1">
                       Pick #{snakePickIndex + 1}
@@ -1238,7 +1259,7 @@ export default function AuctionPage() {
                 </div>
 
                 {/* Confirm pick button — only shown to current picker with a selection */}
-                {snakePickerUserId === user?.uid && (() => {
+                {snakePickerUserId === myTeamUserId && (() => {
                   const selected = availableTeams.find(t => t.id === snakePickSelected);
                   return (
                     <div className={`flex items-center gap-3 rounded-xl px-3 py-2.5 transition-all ${selected ? 'bg-brand/10 border border-brand/30' : 'bg-field border border-line border-dashed'}`}>
@@ -1336,7 +1357,7 @@ export default function AuctionPage() {
                 {/* Team list — always visible to all users */}
                 <div className="max-h-[30rem] overflow-y-auto space-y-1 -mr-1 pr-1">
                   {(() => {
-                    const isMyTurn = snakePickerUserId === user?.uid;
+                    const isMyTurn = snakePickerUserId === myTeamUserId;
                     const q = snakePickSearch.toLowerCase();
                     const filtered = availableTeams.filter(t =>
                       (!snakePickSport || t.sportLeagueId === snakePickSport) &&
@@ -1447,35 +1468,53 @@ export default function AuctionPage() {
                     </div>
                     {bidError && <p className="text-danger text-xs">{bidError}</p>}
                     {/* Quick bid buttons */}
-                    {myBudget >= minNextBid && !iAmHighBidder && (
-                      <div className="flex gap-2">
-                        {[minNextBid, minNextBid + minBidIncrement * 4, minNextBid + minBidIncrement * 9, minNextBid + minBidIncrement * 24]
-                          .filter((a, i, arr) => a <= myBudget && arr.indexOf(a) === i)
-                          .slice(0, 4)
-                          .map(amt => (
-                            <button
-                              key={amt}
-                              type="button"
-                              onClick={() => placeBid(amt)}
-                              disabled={pendingBidAmt !== null}
-                              className={`flex-1 text-xs border border-line text-copy-2 py-2 rounded-lg transition-all active:scale-95 ${
-                                pendingBidAmt === amt
-                                  ? 'bg-brand/10 border-brand/30 text-brand'
-                                  : 'bg-field hover:bg-field-2'
-                              }`}
-                            >
-                              {pendingBidAmt === amt ? '…' : (
-                                <>
-                                  ${amt}
-                                  {currentLot?.currentBidderId && (
-                                    <span className="opacity-50 ml-1">(+{amt - currentLot.currentBid})</span>
-                                  )}
-                                </>
-                              )}
-                            </button>
-                          ))}
-                      </div>
-                    )}
+                    {myBudget >= minNextBid && !iAmHighBidder && (() => {
+                      const rawAmounts = [
+                        minNextBid,
+                        minNextBid + minBidIncrement * 4,
+                        minNextBid + minBidIncrement * 9,
+                        minNextBid + minBidIncrement * 24,
+                      ];
+                      // Cap each button at the user's budget so they can always bid their last dollar
+                      const buttons = rawAmounts
+                        .map(raw => Math.min(raw, myBudget))
+                        .filter((a, i, arr) => a >= minNextBid && arr.indexOf(a) === i)
+                        .slice(0, 4);
+                      // Grey out the smallest-increment (+$1) button when the bid is already high
+                      const bidIsHigh = (currentLot?.currentBid ?? 0) >= 200 && !!currentLot?.currentBidderId;
+                      return (
+                        <div className="flex gap-2">
+                          {buttons.map((amt, idx) => {
+                            const isMinIncrement = idx === 0 && minBidIncrement === 1;
+                            const greyed = bidIsHigh && isMinIncrement;
+                            return (
+                              <button
+                                key={amt}
+                                type="button"
+                                onClick={() => !greyed && placeBid(amt)}
+                                disabled={pendingBidAmt !== null || greyed}
+                                className={`flex-1 text-xs border py-2 rounded-lg transition-all ${
+                                  pendingBidAmt === amt
+                                    ? 'bg-brand/10 border-brand/30 text-brand'
+                                    : greyed
+                                    ? 'bg-field border-line text-copy-3 opacity-40 cursor-not-allowed'
+                                    : 'bg-field border-line text-copy-2 hover:bg-field-2 active:scale-95'
+                                }`}
+                              >
+                                {pendingBidAmt === amt ? '…' : (
+                                  <>
+                                    ${amt}
+                                    {currentLot?.currentBidderId && (
+                                      <span className="opacity-50 ml-1">(+{amt - currentLot.currentBid})</span>
+                                    )}
+                                  </>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
                     {myBudget < minNextBid && (
                       <p className="text-xs text-copy-3">Insufficient budget to bid</p>
                     )}
@@ -1758,7 +1797,7 @@ export default function AuctionPage() {
             )}
 
             {/* Non-commissioner nomination UI: shown when it's the user's turn */}
-            {nominationMode === 'manual' && !isCommissioner && nominatorUserId === user?.uid && status === 'waiting' && league?.state === 'auction' && (
+            {nominationMode === 'manual' && !isCommissioner && nominatorUserId === myTeamUserId && status === 'waiting' && league?.state === 'auction' && (
               <div className="bg-card border border-brand/40 rounded-2xl p-4 space-y-3">
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-semibold text-brand uppercase tracking-wide">Your Turn to Nominate</p>
@@ -1881,11 +1920,20 @@ export default function AuctionPage() {
             {/* Results — auction mode */}
             {!isSnake && soldLots.length > 0 && (
               <div className="bg-card border border-line rounded-2xl p-4">
-                <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide mb-3">
-                  Results — {soldLots.filter(l => !l.passed).length} sold, {soldLots.filter(l => l.passed).length} passed
-                </p>
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide">
+                    Results — {soldLots.filter(l => !l.passed).length} sold, {soldLots.filter(l => l.passed).length} passed
+                  </p>
+                </div>
+                <input
+                  type="text"
+                  placeholder="Search history…"
+                  value={historySearch}
+                  onChange={e => setHistorySearch(e.target.value)}
+                  className="w-full bg-field border border-line-2 rounded-xl px-3 py-2 text-copy text-xs placeholder-copy-3 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors mb-3"
+                />
                 <div className="space-y-2 max-h-64 overflow-y-auto -mr-1 pr-1">
-                  {soldLots.map((lot, i) => (
+                  {soldLots.filter(lot => !historySearch || lot.teamName.toLowerCase().includes(historySearch.toLowerCase()) || (lot.winnerName ?? '').toLowerCase().includes(historySearch.toLowerCase())).map((lot, i) => (
                     <div key={`${lot.teamId}-${i}`} className="flex items-center gap-3 py-2 border-b border-line last:border-0">
                       <TeamLogo logoUrl={lot.logoUrl} name={lot.teamName} size={8} />
                       <div className="flex-1 min-w-0">
@@ -1897,8 +1945,8 @@ export default function AuctionPage() {
                       </div>
                       {lot.passed
                         ? <span className="text-xs text-copy-3 font-medium px-2 py-0.5 rounded-full bg-field">PASS</span>
-                        : <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${lot.winnerId === user?.uid ? 'bg-brand/15 text-brand' : 'bg-positive/10 text-positive'}`}>
-                            {lot.winnerId === user?.uid ? 'YOURS' : 'SOLD'}
+                        : <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${lot.winnerId === myTeamUserId ? 'bg-brand/15 text-brand' : 'bg-positive/10 text-positive'}`}>
+                            {lot.winnerId === myTeamUserId ? 'YOURS' : 'SOLD'}
                           </span>
                       }
                     </div>
@@ -1923,10 +1971,10 @@ export default function AuctionPage() {
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-copy truncate">{pick.teamName}</p>
                         <p className="text-xs text-copy-2 truncate">
-                          {pick.pickerUserId === user?.uid ? 'You' : pick.pickerName}
+                          {pick.pickerUserId === myTeamUserId ? 'You' : pick.pickerName}
                         </p>
                       </div>
-                      {pick.pickerUserId === user?.uid && (
+                      {pick.pickerUserId === myTeamUserId && (
                         <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-brand/15 text-brand flex-shrink-0">
                           YOURS
                         </span>
@@ -1949,6 +1997,7 @@ export default function AuctionPage() {
                     <option value="available">Available</option>
                     <option value="all">All</option>
                     <option value="drafted">Drafted</option>
+                    <option value="passed">Passed</option>
                   </select>
                 </div>
 
@@ -2013,6 +2062,8 @@ export default function AuctionPage() {
                   <p className="text-xs text-copy-3 text-center py-4">
                     {teamViewMode === 'drafted'
                       ? (availableFilter ? `No ${fln(availableFilter)} teams drafted yet` : 'No teams drafted yet')
+                      : teamViewMode === 'passed'
+                      ? (availableFilter ? `No ${fln(availableFilter)} teams passed on` : 'No teams have been passed on')
                       : (availableFilter ? `No ${fln(availableFilter)} teams remaining` : 'All teams have been auctioned')}
                   </p>
                 )}
@@ -2060,7 +2111,7 @@ export default function AuctionPage() {
                     >
                       <option value="">You</option>
                       {sortedParticipants
-                        .filter(ft => ft.userId !== user?.uid)
+                        .filter(ft => ft.userId !== myTeamUserId)
                         .map(ft => <option key={ft.userId} value={ft.userId}>{ft.displayName}</option>)}
                     </select>
                   </div>
@@ -2121,7 +2172,7 @@ export default function AuctionPage() {
                     })
                   : sortedParticipants
                 ).map(ft => {
-                  const isMe = ft.userId === user?.uid;
+                  const isMe = ft.userId === myTeamUserId;
                   const isHighBidder = !isSnake && currentLot?.currentBidderId === ft.userId;
                   const isOnClock = isSnake && snakePickerUserId === ft.userId;
                   const wonCount = isSnake
