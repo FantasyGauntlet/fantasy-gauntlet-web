@@ -33,7 +33,7 @@ interface CurrentLot {
 }
 
 interface SoldLot {
-  teamId: string; teamName: string; logoUrl: string | null;
+  teamId: string; teamName: string; logoUrl: string | null; sportLeagueId: string;
   winnerId: string | null; winnerName: string | null; winningBid: number; passed: boolean;
 }
 
@@ -425,6 +425,7 @@ export default function AuctionPage() {
               teamId: l.teamId,
               teamName: info?.name ?? l.teamId,
               logoUrl: info?.logoUrl ?? null,
+              sportLeagueId: info?.sportLeagueId ?? '',
               winnerId: l.winnerId,
               winnerName: l.winnerId ? participantName(l.winnerId) : null,
               winningBid: l.winningBid ?? 0,
@@ -515,6 +516,7 @@ export default function AuctionPage() {
             teamId: data.teamId,
             teamName: data.teamName ?? info?.name ?? data.teamId,
             logoUrl: info?.logoUrl ?? null,
+            sportLeagueId: info?.sportLeagueId ?? '',
             winnerId: data.pickerUserId,
             winnerName: participantName(data.pickerUserId),
             winningBid: 0,
@@ -635,6 +637,7 @@ export default function AuctionPage() {
           teamId: data.teamId,
           teamName: info?.name ?? data.teamId,
           logoUrl: info?.logoUrl ?? null,
+          sportLeagueId: info?.sportLeagueId ?? '',
           winnerId: data.winnerId,
           winnerName: participantName(data.winnerId),
           winningBid: data.winningBid,
@@ -677,6 +680,7 @@ export default function AuctionPage() {
           teamId: data.teamId,
           teamName: info?.name ?? data.teamId,
           logoUrl: info?.logoUrl ?? null,
+          sportLeagueId: info?.sportLeagueId ?? '',
           winnerId: null, winnerName: null, winningBid: 0, passed: true,
         };
         setSoldLots(prev => [passed, ...prev]);
@@ -701,6 +705,7 @@ export default function AuctionPage() {
           teamId: data.teamId,
           teamName: info?.name ?? data.teamId,
           logoUrl: info?.logoUrl ?? null,
+          sportLeagueId: info?.sportLeagueId ?? '',
           winnerId: data.winnerId,
           winnerName: participantName(data.winnerId),
           winningBid: data.price,
@@ -1938,6 +1943,7 @@ export default function AuctionPage() {
                       <TeamLogo logoUrl={lot.logoUrl} name={lot.teamName} size={8} />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-copy truncate">{lot.teamName}</p>
+                        <p className="text-[10px] text-copy-3 truncate">{fln(lot.sportLeagueId)}</p>
                         {lot.passed
                           ? <p className="text-xs text-copy-3">Passed</p>
                           : <p className="text-xs text-copy-2">{lot.winnerName} — <span className="text-copy font-semibold">${lot.winningBid}</span></p>
