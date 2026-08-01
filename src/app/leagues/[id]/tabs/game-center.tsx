@@ -16,6 +16,15 @@ function formatGameTime(scheduledAt: string): string {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ` · ${time}`;
 }
 
+// Keep live games always; drop finished games from a previous local date.
+// The backend fetches both yesterday and today (ET) to avoid midnight gaps,
+// so without this filter yesterday's complete games bleed into "today."
+function isRelevantGame(g: ScoreboardGame): boolean {
+  if (g.isLive || !g.isFinished) return true;
+  if (!g.scheduledAt) return true;
+  return new Date(g.scheduledAt).toDateString() === new Date().toDateString();
+}
+
 function sortGamesByRelevance(gs: ScoreboardGame[], myOwnedTeamIds: Set<string>): ScoreboardGame[] {
   const owned = (g: ScoreboardGame) =>
     myOwnedTeamIds.has(g.homeTeamId) || myOwnedTeamIds.has(g.awayTeamId) ? 0 : 1;
@@ -110,10 +119,13 @@ function GameCard({ game, isMyHome, isMyAway, showSport = false }: {
 
 // ── Main ───────────────────────────────────────────────────────────────────────
 
-function GameCenterTab({ games, myOwnedTeamIds }: {
+function GameCenterTab({ games: rawGames, myOwnedTeamIds }: {
   games: ScoreboardGame[];
   myOwnedTeamIds: Set<string>;
 }) {
+  // Strip finished games from a previous local date (backend returns yesterday + today)
+  const games = rawGames.filter(isRelevantGame);
+
   if (games.length === 0) {
     return (
       <div className="text-center py-16 border border-dashed border-line rounded-2xl">
