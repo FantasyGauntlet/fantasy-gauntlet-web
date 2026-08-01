@@ -263,7 +263,6 @@ export default function AuctionPage() {
   const timerSyncRef = useRef<{ remaining: number; receivedAt: number } | null>(null);
   const pausedRef = useRef(false);
   useEffect(() => { pausedRef.current = paused; }, [paused]);
-  useEffect(() => { myTeamUserIdRef.current = myTeamUserId; }, [myTeamUserId]);
 
   // ── Derived ───────────────────────────────────────────────────────────────
   const isCommissioner = league?.commissionerId === user?.uid;
@@ -272,6 +271,7 @@ export default function AuctionPage() {
     (ft.userId === user?.uid || (ft.coOwnerIds ?? []).includes(user?.uid ?? '')));
   // The userId that the server resolves bids to (primary owner's uid, even for co-owners)
   const myTeamUserId = myFt?.userId ?? user?.uid ?? '';
+  useEffect(() => { myTeamUserIdRef.current = myTeamUserId; }, [myTeamUserId]);
   const myBudget = myFt?.remainingBudget ?? 0;
   const startingBudget = league?.auctionConfig?.startingBudget ?? 100;
   const iAmHighBidder = !!myTeamUserId && currentLot?.currentBidderId === myTeamUserId;
