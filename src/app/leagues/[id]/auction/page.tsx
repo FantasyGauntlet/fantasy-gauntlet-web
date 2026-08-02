@@ -873,8 +873,10 @@ export default function AuctionPage() {
 
   function handleBidSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const amount = Number(bidInput);
-    if (!amount || amount < minNextBid) { setBidError(`Minimum bid is $${minNextBid}`); return; }
+    const raw = Number(bidInput);
+    if (!Number.isInteger(raw) || raw <= 0) { setBidError('Bids must be whole dollar amounts'); return; }
+    const amount = raw;
+    if (amount < minNextBid) { setBidError(`Minimum bid is $${minNextBid}`); return; }
     if (amount > myBudget) { setBidError(`You only have $${myBudget} remaining`); return; }
     placeBid(amount);
   }
@@ -1598,6 +1600,7 @@ export default function AuctionPage() {
                         type="number"
                         min={minNextBid}
                         max={myBudget}
+                        step="1"
                         value={bidInput}
                         onChange={e => { setBidInput(e.target.value); setBidError(''); }}
                         placeholder={`Min $${minNextBid}`}
