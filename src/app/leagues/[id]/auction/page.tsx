@@ -1283,6 +1283,67 @@ export default function AuctionPage() {
                     </button>
                   )}
                 </div>
+              ) : nominationMode === 'manual' && nominatorUserId === myTeamUserId && league?.state === 'auction' ? (
+                <div className="bg-card border border-brand/40 rounded-2xl p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold text-brand uppercase tracking-wide">Your Turn to Nominate</p>
+                    <div className="flex items-center gap-2">
+                      {nominationTimerRemaining !== null && nominationTimerRemaining > 0 && (
+                        <span className={`text-sm font-bold tabular-nums ${nominationTimerRemaining <= 10 ? 'text-danger' : 'text-copy-3'}`}>
+                          {nominationTimerRemaining}s
+                        </span>
+                      )}
+                      <button
+                        onClick={() => socketRef.current?.emit('skip_nomination_turn')}
+                        className="text-xs text-copy-3 border border-line px-2.5 py-1 rounded-lg hover:bg-field transition-colors"
+                      >
+                        Skip Turn
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <input
+                        type="text"
+                        value={nominationSearch}
+                        onChange={e => { setNominationSearch(e.target.value); setSelectedNomination(''); }}
+                        onFocus={() => setNominationDropdownOpen(true)}
+                        onBlur={() => setTimeout(() => setNominationDropdownOpen(false), 150)}
+                        placeholder="Search teams…"
+                        className="w-full bg-field border border-line-2 rounded-xl px-3 py-2 pr-7 text-copy text-sm placeholder-copy-3 focus:outline-none focus:border-brand"
+                      />
+                      {selectedNomination && (
+                        <button onMouseDown={e => { e.preventDefault(); setSelectedNomination(''); setNominationSearch(''); }}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-copy-3 hover:text-copy text-base leading-none">×</button>
+                      )}
+                      {nominationDropdownOpen && nominationSearch.trim() && !selectedNomination && filteredNominationOptions.length > 0 && (
+                        <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-card border border-line rounded-xl shadow-xl max-h-52 overflow-y-auto">
+                          {filteredNominationOptions.slice(0, 15).map(t => (
+                            <div key={t.id} className="flex items-center gap-2 px-3 py-2 hover:bg-field cursor-pointer group">
+                              <button onMouseDown={e => { e.preventDefault(); setSelectedNomination(t.id); setNominationSearch(t.name); setNominationDropdownOpen(false); }}
+                                className="flex-1 flex items-center gap-2 text-sm text-copy text-left min-w-0">
+                                <TeamLogo logoUrl={t.logoUrl} name={t.name} size={6} />
+                                <span className="flex-1 truncate">{t.name}</span>
+                                <span className="text-copy-3 text-xs flex-shrink-0">{fln(t.sportLeagueId)}</span>
+                              </button>
+                              <button onMouseDown={e => { e.preventDefault(); setNominationQueue(q => q.includes(t.id) ? q : [...q, t.id]); }}
+                                className="text-[10px] text-copy-3 hover:text-brand border border-line rounded px-1.5 py-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                                +Q
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      onClick={handleNominate}
+                      disabled={!selectedNomination || nominating}
+                      className="bg-brand hover:bg-brand-2 disabled:opacity-40 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors whitespace-nowrap"
+                    >
+                      {nominating ? 'Nominating…' : 'Nominate'}
+                    </button>
+                  </div>
+                </div>
               ) : (
                 <div className="bg-card border border-line rounded-2xl p-6 text-center">
                   <div className="w-6 h-6 border-2 border-brand border-t-transparent rounded-full animate-spin mx-auto mb-3" />
@@ -1290,9 +1351,7 @@ export default function AuctionPage() {
                     {isSnake
                       ? (snakeDraftOrder.length > 0 ? 'Preparing next pick…' : 'Waiting for snake draft to begin…')
                       : nominationMode === 'manual' && nominatorUserId
-                      ? nominatorUserId === myTeamUserId
-                        ? 'It\'s your turn to nominate!'
-                        : `Waiting for ${participantName(nominatorUserId)} to nominate…`
+                      ? `Waiting for ${participantName(nominatorUserId)} to nominate…`
                       : nominationMode === 'manual'
                       ? 'Waiting for nomination…'
                       : 'Preparing next team…'}
@@ -1676,8 +1735,8 @@ export default function AuctionPage() {
                       </button>
                     </>
                   )}
-                  {/* Manual mode: commissioner can always nominate (fallback for any turn) */}
-                  {nominationMode === 'manual' && status === 'waiting' && league?.state === 'auction' && (
+                  {/* Manual mode: commissioner nominates on behalf of others (own turn handled by center card) */}
+                  {nominationMode === 'manual' && status === 'waiting' && league?.state === 'auction' && nominatorUserId !== myTeamUserId && (
                     <div className="w-full space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-copy-3">
@@ -1851,70 +1910,6 @@ export default function AuctionPage() {
               </div>
             )}
 
-            {/* Non-commissioner nomination UI: shown when it's the user's turn */}
-            {nominationMode === 'manual' && !isCommissioner && nominatorUserId === myTeamUserId && status === 'waiting' && league?.state === 'auction' && (
-              <div className="bg-card border border-brand/40 rounded-2xl p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-semibold text-brand uppercase tracking-wide">Your Turn to Nominate</p>
-                  <div className="flex items-center gap-2">
-                    {nominationTimerRemaining !== null && nominationTimerRemaining > 0 && (
-                      <span className={`text-sm font-bold tabular-nums ${nominationTimerRemaining <= 10 ? 'text-danger' : 'text-copy-3'}`}>
-                        {nominationTimerRemaining}s
-                      </span>
-                    )}
-                    <button
-                      onClick={() => socketRef.current?.emit('skip_nomination_turn')}
-                      className="text-xs text-copy-3 border border-line px-2.5 py-1 rounded-lg hover:bg-field transition-colors"
-                    >
-                      Skip Turn
-                    </button>
-                  </div>
-                </div>
-                {/* Combobox */}
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <input
-                      type="text"
-                      value={nominationSearch}
-                      onChange={e => { setNominationSearch(e.target.value); setSelectedNomination(''); }}
-                      onFocus={() => setNominationDropdownOpen(true)}
-                      onBlur={() => setTimeout(() => setNominationDropdownOpen(false), 150)}
-                      placeholder="Search teams…"
-                      className="w-full bg-field border border-line-2 rounded-xl px-3 py-2 pr-7 text-copy text-sm placeholder-copy-3 focus:outline-none focus:border-brand"
-                    />
-                    {selectedNomination && (
-                      <button onMouseDown={e => { e.preventDefault(); setSelectedNomination(''); setNominationSearch(''); }}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-copy-3 hover:text-copy text-base leading-none">×</button>
-                    )}
-                    {nominationDropdownOpen && nominationSearch.trim() && !selectedNomination && filteredNominationOptions.length > 0 && (
-                      <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-card border border-line rounded-xl shadow-xl max-h-52 overflow-y-auto">
-                        {filteredNominationOptions.slice(0, 15).map(t => (
-                          <div key={t.id} className="flex items-center gap-2 px-3 py-2 hover:bg-field cursor-pointer group">
-                            <button onMouseDown={e => { e.preventDefault(); setSelectedNomination(t.id); setNominationSearch(t.name); setNominationDropdownOpen(false); }}
-                              className="flex-1 flex items-center gap-2 text-sm text-copy text-left min-w-0">
-                              <TeamLogo logoUrl={t.logoUrl} name={t.name} size={6} />
-                              <span className="flex-1 truncate">{t.name}</span>
-                              <span className="text-copy-3 text-xs flex-shrink-0">{fln(t.sportLeagueId)}</span>
-                            </button>
-                            <button onMouseDown={e => { e.preventDefault(); setNominationQueue(q => q.includes(t.id) ? q : [...q, t.id]); }}
-                              className="text-[10px] text-copy-3 hover:text-brand border border-line rounded px-1.5 py-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                              +Q
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <button
-                    onClick={handleNominate}
-                    disabled={!selectedNomination || nominating}
-                    className="bg-brand hover:bg-brand-2 disabled:opacity-40 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors whitespace-nowrap"
-                  >
-                    {nominating ? 'Nominating…' : 'Nominate'}
-                  </button>
-                </div>
-              </div>
-            )}
 
             {/* Persistent nomination queue — always visible during manual auction or draft queue */}
             {nominationMode === 'manual' && !isSnake && status !== 'closed' && (league?.state === 'auction' || isDraftQueue) && (
