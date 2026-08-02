@@ -540,7 +540,7 @@ export default function AuctionPage() {
           setFantasyTeams(prev => {
             const updated = prev.map(ft =>
               ft.userId === data.pickerUserId
-                ? { ...ft, remainingBudget: ft.remainingBudget } // budget unchanged in snake
+                ? { ...ft, ownedTeamIds: [...ft.ownedTeamIds, data.teamId] }
                 : ft
             );
             fantasyTeamsRef.current = updated;
@@ -686,10 +686,12 @@ export default function AuctionPage() {
           logoUrl: info?.logoUrl ?? null,
           sportLeagueId: info?.sportLeagueId ?? prev.sportLeagueId,
         } : null);
-        // Deduct from the winner's budget
+        // Deduct from the winner's budget and track ownership for sport-cap filtering
         setFantasyTeams(prev => {
           const updated = prev.map(ft =>
-            ft.userId === data.winnerId ? { ...ft, remainingBudget: ft.remainingBudget - data.winningBid } : ft
+            ft.userId === data.winnerId
+              ? { ...ft, remainingBudget: ft.remainingBudget - data.winningBid, ownedTeamIds: [...ft.ownedTeamIds, data.teamId] }
+              : ft
           );
           fantasyTeamsRef.current = updated;
           return updated;
@@ -931,13 +933,13 @@ export default function AuctionPage() {
     .map(tid => teamMapRef.current.get(tid))
     .filter(Boolean) as SportTeam[];
 
-  // Sports the nominator is already at the hard cap for (2 per sport, 1 for Premier League)
+  // Sports the nominator is already at the hard cap for
   const myOwnedIds = myFt?.ownedTeamIds ?? [];
   const sportCapReached = new Set<string>();
   for (const tid of myOwnedIds) {
     const t = teamMapRef.current.get(tid);
     if (!t) continue;
-    const cap = t.sportLeagueId === 'premier-league' ? 1 : 2;
+    const cap = getMaxForSport(t.sportLeagueId);
     const count = myOwnedIds.filter(id => teamMapRef.current.get(id)?.sportLeagueId === t.sportLeagueId).length;
     if (count >= cap) sportCapReached.add(t.sportLeagueId);
   }
@@ -1207,6 +1209,12 @@ export default function AuctionPage() {
             const uid = round % 2 === 0 ? nominationOrderState[pos] : nominationOrderState[n - 1 - pos];
             upcoming.push({ uid, pickNum: i + 1 });
           }
+          const maxWildcard = league?.auctionConfig?.maxWildcard ?? 0;
+          const totalCapacity = orderedLeagueSports.reduce((sum, sport) => sum + getMaxForSport(sport), 0) + maxWildcard;
+          const isDone = (uid: string) => {
+            const ft = ftMap.get(uid);
+            return ft ? ft.ownedTeamIds.length >= totalCapacity : false;
+          };
           return (
             <div className="sticky top-0 z-30 bg-card/95 backdrop-blur-sm border border-line rounded-2xl px-4 py-3 mb-4">
               <div className="flex items-center gap-4">
@@ -1218,15 +1226,21 @@ export default function AuctionPage() {
                     const isMe = uid === user?.uid;
                     const ft = ftMap.get(uid);
                     const label = isMe ? 'You' : (ft?.displayName?.split(' ')[0] ?? uid.slice(0, 6));
+                    const done = isDone(uid);
                     return (
                       <div key={pickNum} className="flex flex-col items-center gap-0.5 flex-shrink-0 w-12">
-                        <span className={`text-[10px] tabular-nums font-semibold ${isCurrent ? 'text-brand' : isNext ? 'text-warn' : 'text-copy-3'}`}>
+                        <span className={`text-[10px] tabular-nums font-semibold ${done ? 'text-copy-3/40' : isCurrent ? 'text-brand' : isNext ? 'text-warn' : 'text-copy-3'}`}>
                           #{pickNum}
                         </span>
-                        <div className={`rounded-lg p-0.5 ${isCurrent ? 'ring-2 ring-brand ring-offset-1 ring-offset-card' : isNext ? 'ring-1 ring-warn/60 ring-offset-1 ring-offset-card' : ''}`}>
+                        <div className={`relative rounded-lg p-0.5 ${done ? 'opacity-40' : isCurrent ? 'ring-2 ring-brand ring-offset-1 ring-offset-card' : isNext ? 'ring-1 ring-warn/60 ring-offset-1 ring-offset-card' : ''}`}>
                           <TeamLogo logoUrl={ft?.logoUrl ?? null} name={ft?.displayName ?? uid} size={8} />
+                          {done && (
+                            <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-card/70">
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-copy-3"><path d="M20 6L9 17l-5-5"/></svg>
+                            </div>
+                          )}
                         </div>
-                        <p className={`text-[10px] text-center leading-tight w-full truncate font-medium ${isCurrent ? 'text-brand' : isNext ? 'text-warn' : isMe ? 'text-brand/70' : 'text-copy-3'}`}>
+                        <p className={`text-[10px] text-center leading-tight w-full truncate font-medium ${done ? 'text-copy-3/40' : isCurrent ? 'text-brand' : isNext ? 'text-warn' : isMe ? 'text-brand/70' : 'text-copy-3'}`}>
                           {label}
                         </p>
                         {isCurrent && nominationTimerRemaining !== null && nominationTimerRemaining > 0 && (
