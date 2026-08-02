@@ -983,6 +983,11 @@ export default function AuctionPage() {
 
   // Base list for the Teams panel depending on view mode
   const teamPanelBase: SportTeam[] = (() => {
+    // During the draft queue phase the auction hasn't built its queue yet, so show
+    // all known sport teams so users can browse and build their nomination queue.
+    if (draftQueueEndsAt !== null && status === 'waiting') {
+      return [...allAuctionTeams].sort((a, b) => a.name.localeCompare(b.name));
+    }
     if (teamViewMode === 'drafted') return draftedTeams;
     if (teamViewMode === 'passed') {
       return soldLots
