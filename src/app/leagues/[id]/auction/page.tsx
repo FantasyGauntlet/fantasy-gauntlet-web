@@ -777,6 +777,11 @@ export default function AuctionPage() {
         setNominationDropdownOpen(false);
       });
 
+      socket.on('nomination_rejected', (data: any) => {
+        setNominating(false);
+        toast('error', data.message ?? 'Nomination rejected');
+      });
+
       socket.on('nomination_timer_update', (data: any) => {
         setNominationTimerRemaining(typeof data.remaining === 'number' ? data.remaining : null);
       });
@@ -897,7 +902,7 @@ export default function AuctionPage() {
     if (!selectedNomination) return;
     setNominating(true);
     socketRef.current?.emit('submit_nomination', { teamId: selectedNomination });
-    setSelectedNomination('');
+    // Don't clear selection here — keep it visible until server confirms or rejects
   }
 
   async function handleStartAuction() {
