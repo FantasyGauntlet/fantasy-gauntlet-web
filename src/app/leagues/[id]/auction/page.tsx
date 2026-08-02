@@ -367,6 +367,7 @@ export default function AuctionPage() {
         if (!session) {
           setStatus('waiting');
           if (data?.draftQueue?.endsAt) setDraftQueueEndsAt(data.draftQueue.endsAt);
+          if (data?.draftQueue?.draftPool) setDraftPool(new Set(data.draftQueue.draftPool as string[]));
           return;
         }
 
@@ -478,6 +479,7 @@ export default function AuctionPage() {
       socket.on('draft_queue_started', (data: any) => {
         if (data.endsAt) {
           setDraftQueueEndsAt(data.endsAt);
+          if (data.draftPool) setDraftPool(new Set(data.draftPool as string[]));
           const mins = data.durationSeconds ? Math.round(data.durationSeconds / 60) : 5;
           toast('info', `Draft queue started! You have ${mins} minute${mins !== 1 ? 's' : ''} to build your nomination queue.`);
         }
