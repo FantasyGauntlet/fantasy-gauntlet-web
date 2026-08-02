@@ -179,7 +179,7 @@ export default function LeaguePage() {
               </div>
             )}
             <div className="flex gap-2 flex-wrap">
-              {league.state === 'auction' && (
+              {(league.state === 'auction' || league.state === 'draft') && (
                 <Link
                   href={`/leagues/${id}/auction`}
                   className="bg-info text-white font-semibold px-4 py-2 rounded-xl text-sm transition-colors hover:opacity-90"

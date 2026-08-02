@@ -1031,7 +1031,7 @@ export default function AuctionPage() {
   // Scheduled-start gating
   const scheduledMs = scheduledStartAt ? new Date(scheduledStartAt).getTime() : null;
   const roomOpenMs = scheduledMs ? scheduledMs - 60 * 60 * 1000 : null;
-  const roomIsOpen = !roomOpenMs || now >= roomOpenMs || league?.state === 'auction';
+  const roomIsOpen = !roomOpenMs || now >= roomOpenMs || league?.state === 'auction' || league?.state === 'draft';
   const msUntilStart = scheduledMs ? Math.max(0, scheduledMs - now) : null;
   const msUntilOpen = roomOpenMs ? Math.max(0, roomOpenMs - now) : null;
 
