@@ -23,7 +23,7 @@ interface League {
   } | null;
 }
 
-interface FantasyTeam { id: string; userId: string; displayName: string; remainingBudget: number; isPlaceholder: boolean; logoUrl?: string | null; coOwnerIds?: string[]; }
+interface FantasyTeam { id: string; userId: string; displayName: string; remainingBudget: number; isPlaceholder: boolean; ownedTeamIds: string[]; logoUrl?: string | null; coOwnerIds?: string[]; }
 interface SportTeam { id: string; name: string; shortName: string; sportLeagueId: string; logoUrl: string | null; }
 interface SportGroup { sport: string; teams: SportTeam[]; }
 
