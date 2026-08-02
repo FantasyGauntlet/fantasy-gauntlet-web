@@ -929,13 +929,24 @@ export default function AuctionPage() {
     .map(tid => teamMapRef.current.get(tid))
     .filter(Boolean) as SportTeam[];
 
-  const filteredNominationOptions = nominationSearch.trim()
-    ? nominationOptions.filter(t =>
-        t.name.toLowerCase().includes(nominationSearch.toLowerCase()) ||
-        t.shortName.toLowerCase().includes(nominationSearch.toLowerCase()) ||
-        fln(t.sportLeagueId).toLowerCase().includes(nominationSearch.toLowerCase())
-      )
-    : nominationOptions;
+  // Sports the nominator is already at the hard cap for (2 per sport, 1 for Premier League)
+  const myOwnedIds = myFt?.ownedTeamIds ?? [];
+  const sportCapReached = new Set<string>();
+  for (const tid of myOwnedIds) {
+    const t = teamMapRef.current.get(tid);
+    if (!t) continue;
+    const cap = t.sportLeagueId === 'premier-league' ? 1 : 2;
+    const count = myOwnedIds.filter(id => teamMapRef.current.get(id)?.sportLeagueId === t.sportLeagueId).length;
+    if (count >= cap) sportCapReached.add(t.sportLeagueId);
+  }
+
+  const filteredNominationOptions = nominationOptions
+    .filter(t => !sportCapReached.has(t.sportLeagueId))
+    .filter(t => !nominationSearch.trim() || (
+      t.name.toLowerCase().includes(nominationSearch.toLowerCase()) ||
+      t.shortName.toLowerCase().includes(nominationSearch.toLowerCase()) ||
+      fln(t.sportLeagueId).toLowerCase().includes(nominationSearch.toLowerCase())
+    ));
 
   const sortedParticipants = [...fantasyTeams]
     .filter(ft => !ft.isPlaceholder)
