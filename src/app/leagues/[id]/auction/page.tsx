@@ -476,17 +476,22 @@ export default function AuctionPage() {
       });
 
       socket.on('draft_queue_started', (data: any) => {
-        if (data.endsAt) setDraftQueueEndsAt(data.endsAt);
+        if (data.endsAt) {
+          setDraftQueueEndsAt(data.endsAt);
+          const mins = data.durationSeconds ? Math.round(data.durationSeconds / 60) : 5;
+          toast('info', `Draft queue started! You have ${mins} minute${mins !== 1 ? 's' : ''} to build your nomination queue.`);
+        }
       });
 
       socket.on('auction_started', (data: any) => {
         setDraftQueueEndsAt(null);
         setStatus('waiting');
+        setLeague(l => l ? { ...l, state: 'auction' as const } : l);
         if (data.nominationMode) setNominationMode(data.nominationMode);
         if (data.queue) setUpcomingQueue(data.queue);
         if (data.draftPool) setDraftPool(new Set(data.draftPool as string[]));
         if (data.nominationOrder) setNominationOrderState(data.nominationOrder);
-        toast('info', 'The auction has started!');
+        toast('info', 'Nominations are starting!');
       });
 
       // ── Snake draft events ─────────────────────────────────────────────
@@ -888,12 +893,9 @@ export default function AuctionPage() {
     setStartingAuction(true);
     try {
       await api.post(`/leagues/${id}/auction/start`);
-      setDraftQueueEndsAt(null);
-      // Mark league as in-auction locally so the Start button hides immediately
-      setLeague(l => l ? { ...l, state: 'auction' as const } : l);
-      toast('info', 'Auction started!');
+      // State is driven by socket events: draft_queue_started or auction_started
     } catch (e: unknown) {
-      toast('error', e instanceof Error ? e.message : 'Failed to start auction');
+      toast('error', e instanceof Error ? e.message : 'Failed to start');
     } finally {
       setStartingAuction(false);
     }
