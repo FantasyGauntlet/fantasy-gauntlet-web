@@ -1100,33 +1100,6 @@ export default function AuctionPage() {
         </div>
       )}
 
-      {/* Draft Queue banner */}
-      {roomIsOpen && isDraftQueue && msUntilDraftStart !== null && (
-        <div className="bg-brand/10 border border-brand/30 rounded-2xl px-4 py-4 mb-4">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-sm font-semibold text-copy">
-                Draft Queue — build your list before the draft begins
-              </p>
-              <p className="text-xs text-copy-3 mt-0.5">
-                Draft auto-starts in <span className="text-brand font-semibold tabular-nums">{fmtCountdown(msUntilDraftStart)}</span>
-              </p>
-            </div>
-            <div className="flex items-center gap-3 flex-shrink-0">
-              {isCommissioner && (
-                <button
-                  disabled={startingAuction}
-                  onClick={handleStartAuction}
-                  className="bg-brand hover:bg-brand-2 disabled:opacity-50 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap"
-                >
-                  {startingAuction ? 'Starting…' : 'Start Now'}
-                </button>
-              )}
-              <div className="w-7 h-7 border-2 border-brand border-t-transparent rounded-full animate-spin" />
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Connecting / Error */}
       {roomIsOpen && status === 'connecting' && (
@@ -1285,30 +1258,46 @@ export default function AuctionPage() {
 
             {/* Waiting for lot */}
             {status === 'waiting' && (
-              <div className="bg-card border border-line rounded-2xl p-6 text-center">
-                <div className="w-6 h-6 border-2 border-brand border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-                <p className="text-copy-2 text-sm mb-1">
-                  {isDraftQueue
-                    ? 'Draft Queue — build your list before the draft begins'
-                    : isSnake
-                    ? (snakeDraftOrder.length > 0 ? 'Preparing next pick…' : 'Waiting for snake draft to begin…')
-                    : nominationMode === 'manual' && nominatorUserId
-                    ? nominatorUserId === myTeamUserId
-                      ? 'It\'s your turn to nominate!'
-                      : `Waiting for ${participantName(nominatorUserId)} to nominate…`
-                    : nominationMode === 'manual'
-                    ? 'Waiting for nomination…'
-                    : 'Preparing next team…'}
-                </p>
-                {nominationMode === 'manual' && nominatorUserId && nominatorUserId !== myTeamUserId && !isCommissioner && (
-                  <p className="text-copy-3 text-xs mt-1">{participantName(nominatorUserId)} will pick the next team to auction.</p>
-                )}
-                {nominationMode === 'manual' && nominationTimerRemaining !== null && nominationTimerRemaining > 0 && nominatorUserId !== myTeamUserId && !isCommissioner && (
-                  <p className={`text-sm font-bold tabular-nums mt-2 ${nominationTimerRemaining <= 10 ? 'text-danger' : 'text-copy-3'}`}>
-                    {nominationTimerRemaining}s
+              isDraftQueue && msUntilDraftStart !== null ? (
+                <div className="bg-card border border-brand/30 rounded-2xl p-6 text-center space-y-3">
+                  <p className="text-xs font-semibold text-brand uppercase tracking-wide">Draft Queue</p>
+                  <p className="text-5xl font-bold tabular-nums text-copy">{fmtCountdown(msUntilDraftStart)}</p>
+                  <p className="text-sm text-copy-2">Use this time to queue up teams you want to nominate.</p>
+                  <p className="text-xs text-copy-3">Nominations begin automatically when the timer ends.</p>
+                  {isCommissioner && (
+                    <button
+                      disabled={startingAuction}
+                      onClick={handleStartAuction}
+                      className="mt-2 bg-brand hover:bg-brand-2 disabled:opacity-50 text-white text-sm font-semibold px-5 py-2 rounded-xl transition-colors"
+                    >
+                      {startingAuction ? 'Starting…' : 'Everyone\'s Ready — Start Now'}
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="bg-card border border-line rounded-2xl p-6 text-center">
+                  <div className="w-6 h-6 border-2 border-brand border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+                  <p className="text-copy-2 text-sm mb-1">
+                    {isSnake
+                      ? (snakeDraftOrder.length > 0 ? 'Preparing next pick…' : 'Waiting for snake draft to begin…')
+                      : nominationMode === 'manual' && nominatorUserId
+                      ? nominatorUserId === myTeamUserId
+                        ? 'It\'s your turn to nominate!'
+                        : `Waiting for ${participantName(nominatorUserId)} to nominate…`
+                      : nominationMode === 'manual'
+                      ? 'Waiting for nomination…'
+                      : 'Preparing next team…'}
                   </p>
-                )}
-              </div>
+                  {nominationMode === 'manual' && nominatorUserId && nominatorUserId !== myTeamUserId && !isCommissioner && (
+                    <p className="text-copy-3 text-xs mt-1">{participantName(nominatorUserId)} will pick the next team to auction.</p>
+                  )}
+                  {nominationMode === 'manual' && nominationTimerRemaining !== null && nominationTimerRemaining > 0 && nominatorUserId !== myTeamUserId && !isCommissioner && (
+                    <p className={`text-sm font-bold tabular-nums mt-2 ${nominationTimerRemaining <= 10 ? 'text-danger' : 'text-copy-3'}`}>
+                      {nominationTimerRemaining}s
+                    </p>
+                  )}
+                </div>
+              )
             )}
 
             {/* Snake Draft Clock */}
@@ -1605,8 +1594,8 @@ export default function AuctionPage() {
               <div className="bg-card border border-line rounded-2xl p-4 space-y-3">
                 <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide">Commissioner</p>
                 <div className="flex flex-wrap gap-2">
-                  {/* Start draft/auction */}
-                  {status === 'waiting' && connected && league?.state === 'draft' && (
+                  {/* Start draft/auction — hidden during draft queue (countdown card has its own Start Now button) */}
+                  {status === 'waiting' && connected && league?.state === 'draft' && !isDraftQueue && (
                     <button
                       onClick={handleStartAuction}
                       disabled={!league.auctionConfig || startingAuction}
@@ -1907,6 +1896,13 @@ export default function AuctionPage() {
                       </div>
                     )}
                   </div>
+                  <button
+                    onClick={handleNominate}
+                    disabled={!selectedNomination || nominating}
+                    className="bg-brand hover:bg-brand-2 disabled:opacity-40 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors whitespace-nowrap"
+                  >
+                    {nominating ? 'Nominating…' : 'Nominate'}
+                  </button>
                 </div>
               </div>
             )}
