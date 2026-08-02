@@ -20,6 +20,7 @@ export interface League {
     scheduledStartAt?: string | null;
     noBidPenaltyPct?: number;
     nominationTimerSeconds?: number;
+    draftQueueDurationSeconds?: number;
   } | null;
   previousLeagueId?: string;
   topZone?: number | null;

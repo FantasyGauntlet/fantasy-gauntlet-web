@@ -178,6 +178,12 @@ export default function AuctionPage() {
   });
   const soundMutedRef = useRef(soundMuted);
   useEffect(() => { soundMutedRef.current = soundMuted; }, [soundMuted]);
+
+  // Persist nomination queue to localStorage so it survives page refreshes
+  useEffect(() => {
+    if (!id) return;
+    try { localStorage.setItem(`fg_nom_queue_${id}`, JSON.stringify(nominationQueue)); } catch { /* ignore */ }
+  }, [nominationQueue, id]);
   const justWonRef = useRef(false);
 
   function toggleMute() {
@@ -228,9 +234,16 @@ export default function AuctionPage() {
   const [nominationTimerRemaining, setNominationTimerRemaining] = useState<number | null>(null);
   const [nominationSearch, setNominationSearch] = useState('');
   const [nominationDropdownOpen, setNominationDropdownOpen] = useState(false);
-  const [nominationQueue, setNominationQueue] = useState<string[]>([]);
+  const [nominationIndexState, setNominationIndexState] = useState(0);
+  const [nominationQueue, setNominationQueue] = useState<string[]>(() => {
+    try {
+      const stored = localStorage.getItem(`fg_nom_queue_${id}`);
+      return stored ? (JSON.parse(stored) as string[]) : [];
+    } catch { return []; }
+  });
   const [auctionErrorMsg, setAuctionErrorMsg] = useState('');
   const [scheduledStartAt, setScheduledStartAt] = useState<string | null>(null);
+  const [draftQueueEndsAt, setDraftQueueEndsAt] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [startingAuction, setStartingAuction] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
@@ -353,7 +366,11 @@ export default function AuctionPage() {
 
       socket.on('auction_state', (data: any) => {
         const session = data?.session;
-        if (!session) { setStatus('waiting'); return; }
+        if (!session) {
+          setStatus('waiting');
+          if (data?.draftQueue?.endsAt) setDraftQueueEndsAt(data.draftQueue.endsAt);
+          return;
+        }
 
         setStatus(session.status as AuctionStatus);
         setPaused(session.paused ?? false);
@@ -375,8 +392,15 @@ export default function AuctionPage() {
         if (session.nominationMode === 'manual') {
           if (session.nominationOrder) setNominationOrderState(session.nominationOrder);
           if (session.nominationOrder && session.nominationIndex !== undefined) {
-            const idx = session.nominationIndex % session.nominationOrder.length;
-            setNominatorUserId(session.nominationOrder[idx]);
+            setNominationIndexState(session.nominationIndex);
+            const order: string[] = session.nominationOrder;
+            const n = order.length;
+            if (n > 0) {
+              const idx = session.nominationIndex as number;
+              const round = Math.floor(idx / n);
+              const pos = idx % n;
+              setNominatorUserId(order[round % 2 === 0 ? pos : n - 1 - pos] ?? null);
+            }
           }
         }
 
@@ -453,7 +477,12 @@ export default function AuctionPage() {
         }
       });
 
+      socket.on('draft_queue_started', (data: any) => {
+        if (data.endsAt) setDraftQueueEndsAt(data.endsAt);
+      });
+
       socket.on('auction_started', (data: any) => {
+        setDraftQueueEndsAt(null);
         setStatus('waiting');
         if (data.nominationMode) setNominationMode(data.nominationMode);
         if (data.queue) setUpcomingQueue(data.queue);
@@ -727,6 +756,7 @@ export default function AuctionPage() {
 
       socket.on('nomination_turn', (data: any) => {
         setNominatorUserId(data.nominatorUserId ?? null);
+        setNominationIndexState(data.nominationIndex ?? 0);
         setNominating(false);
         setSelectedNomination('');
         setNominationTimerRemaining(null);
@@ -799,12 +829,12 @@ export default function AuctionPage() {
     return () => { socket?.disconnect(); socketRef.current = null; };
   }, [dataLoaded, user, id]);
 
-  // ── Clock tick (drives room-open gate and scheduled-start countdown) ───────
+  // ── Clock tick (drives room-open gate, scheduled-start countdown, and draft queue) ───
   useEffect(() => {
-    if (!scheduledStartAt) return;
+    if (!scheduledStartAt && !draftQueueEndsAt) return;
     const interval = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(interval);
-  }, [scheduledStartAt]);
+  }, [scheduledStartAt, draftQueueEndsAt]);
 
   // lotAvgPrice is now set via the lot_avg_price socket event (emitted by the backend
   // right after lot_opened, and included in auction_state on reconnect). This ensures
@@ -860,6 +890,7 @@ export default function AuctionPage() {
     setStartingAuction(true);
     try {
       await api.post(`/leagues/${id}/auction/start`);
+      setDraftQueueEndsAt(null);
       // Mark league as in-auction locally so the Start button hides immediately
       setLeague(l => l ? { ...l, state: 'auction' as const } : l);
       toast('info', 'Auction started!');
@@ -982,6 +1013,11 @@ export default function AuctionPage() {
   const msUntilStart = scheduledMs ? Math.max(0, scheduledMs - now) : null;
   const msUntilOpen = roomOpenMs ? Math.max(0, roomOpenMs - now) : null;
 
+  // Draft queue countdown
+  const draftQueueMs = draftQueueEndsAt ? new Date(draftQueueEndsAt).getTime() : null;
+  const msUntilDraftStart = draftQueueMs ? Math.max(0, draftQueueMs - now) : null;
+  const isDraftQueue = msUntilDraftStart !== null && league?.state === 'draft' && status === 'waiting';
+
   function fmtCountdown(ms: number) {
     const s = Math.floor(ms / 1000);
     const h = Math.floor(s / 3600);
@@ -1066,6 +1102,34 @@ export default function AuctionPage() {
         </div>
       )}
 
+      {/* Draft Queue banner */}
+      {roomIsOpen && isDraftQueue && msUntilDraftStart !== null && (
+        <div className="bg-brand/10 border border-brand/30 rounded-2xl px-4 py-4 mb-4">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold text-copy">
+                Draft Queue — build your list before the draft begins
+              </p>
+              <p className="text-xs text-copy-3 mt-0.5">
+                Draft auto-starts in <span className="text-brand font-semibold tabular-nums">{fmtCountdown(msUntilDraftStart)}</span>
+              </p>
+            </div>
+            <div className="flex items-center gap-3 flex-shrink-0">
+              {isCommissioner && (
+                <button
+                  disabled={startingAuction}
+                  onClick={handleStartAuction}
+                  className="bg-brand hover:bg-brand-2 disabled:opacity-50 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap"
+                >
+                  {startingAuction ? 'Starting…' : 'Start Now'}
+                </button>
+              )}
+              <div className="w-7 h-7 border-2 border-brand border-t-transparent rounded-full animate-spin" />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Connecting / Error */}
       {roomIsOpen && status === 'connecting' && (
         <div className="flex flex-col items-center justify-center py-24 gap-4 text-copy-2">
@@ -1137,26 +1201,34 @@ export default function AuctionPage() {
           );
         })()}
 
-        {/* ── Nomination order ticker — manual mode ────────────── */}
+        {/* ── Nomination order ticker — manual mode, snake sequence ────────────── */}
         {nominationMode === 'manual' && nominationOrderState.length > 0 && status !== 'closed' && (() => {
+          const n = nominationOrderState.length;
           const ftMap = new Map(fantasyTeams.map(ft => [ft.userId, ft]));
+          const baseIdx = nominatorUserId !== null ? nominationIndexState : nominationIndexState + 1;
+          const SHOW = Math.max(n * 3, 12);
+          const upcoming: { uid: string; pickNum: number }[] = [];
+          for (let i = baseIdx; i < baseIdx + SHOW; i++) {
+            const round = Math.floor(i / n);
+            const pos = i % n;
+            const uid = round % 2 === 0 ? nominationOrderState[pos] : nominationOrderState[n - 1 - pos];
+            upcoming.push({ uid, pickNum: i + 1 });
+          }
           return (
-            <div className="bg-card border border-line rounded-2xl px-4 py-3 mb-4">
+            <div className="sticky top-0 z-30 bg-card/95 backdrop-blur-sm border border-line rounded-2xl px-4 py-3 mb-4">
               <div className="flex items-center gap-4">
-                <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide flex-shrink-0">Nominating</p>
-                <div className="flex gap-3 overflow-x-auto scrollbar-none flex-1">
-                  {nominationOrderState.map((uid, idx) => {
-                    const currentNomIdx = nominationOrderState.findIndex(id => id === nominatorUserId);
-                    const offset = currentNomIdx >= 0 ? (idx - currentNomIdx + nominationOrderState.length) % nominationOrderState.length : -1;
-                    const isCurrent = offset === 0 && nominatorUserId !== null;
-                    const isNext = offset === 1 && nominatorUserId !== null;
+                <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide flex-shrink-0">Up Next</p>
+                <div className="flex gap-3 overflow-x-auto scrollbar-none flex-1 -mr-1 pr-1">
+                  {upcoming.map(({ uid, pickNum }, relIdx) => {
+                    const isCurrent = relIdx === 0 && nominatorUserId !== null;
+                    const isNext = relIdx === (nominatorUserId !== null ? 1 : 0);
                     const isMe = uid === user?.uid;
                     const ft = ftMap.get(uid);
                     const label = isMe ? 'You' : (ft?.displayName?.split(' ')[0] ?? uid.slice(0, 6));
                     return (
-                      <div key={uid} className="flex flex-col items-center gap-0.5 flex-shrink-0 w-12">
+                      <div key={pickNum} className="flex flex-col items-center gap-0.5 flex-shrink-0 w-12">
                         <span className={`text-[10px] tabular-nums font-semibold ${isCurrent ? 'text-brand' : isNext ? 'text-warn' : 'text-copy-3'}`}>
-                          #{idx + 1}
+                          #{pickNum}
                         </span>
                         <div className={`rounded-lg p-0.5 ${isCurrent ? 'ring-2 ring-brand ring-offset-1 ring-offset-card' : isNext ? 'ring-1 ring-warn/60 ring-offset-1 ring-offset-card' : ''}`}>
                           <TeamLogo logoUrl={ft?.logoUrl ?? null} name={ft?.displayName ?? uid} size={8} />
@@ -1218,7 +1290,9 @@ export default function AuctionPage() {
               <div className="bg-card border border-line rounded-2xl p-6 text-center">
                 <div className="w-6 h-6 border-2 border-brand border-t-transparent rounded-full animate-spin mx-auto mb-3" />
                 <p className="text-copy-2 text-sm mb-1">
-                  {isSnake
+                  {isDraftQueue
+                    ? 'Draft Queue — build your list before the draft begins'
+                    : isSnake
                     ? (snakeDraftOrder.length > 0 ? 'Preparing next pick…' : 'Waiting for snake draft to begin…')
                     : nominationMode === 'manual' && nominatorUserId
                     ? nominatorUserId === myTeamUserId
@@ -1672,26 +1746,6 @@ export default function AuctionPage() {
                           {nominating ? 'Nominating…' : 'Nominate'}
                         </button>
                       </div>
-                      {/* My Queue */}
-                      {nominationQueue.filter(tid => upcomingQueue.includes(tid)).length > 0 && (
-                        <div className="space-y-1">
-                          <p className="text-[10px] font-semibold text-copy-3 uppercase tracking-wide">My Queue</p>
-                          {nominationQueue.filter(tid => upcomingQueue.includes(tid)).map(tid => {
-                            const t = teamMapRef.current.get(tid);
-                            if (!t) return null;
-                            return (
-                              <div key={tid} className="flex items-center gap-2 bg-field rounded-lg px-2 py-1.5 cursor-pointer group hover:bg-field-2 transition-colors"
-                                onClick={() => { setSelectedNomination(tid); setNominationSearch(t.name); }}>
-                                <TeamLogo logoUrl={t.logoUrl} name={t.name} size={5} />
-                                <span className="flex-1 text-xs text-copy truncate">{t.name}</span>
-                                <span className="text-[10px] text-copy-3">{fln(t.sportLeagueId)}</span>
-                                <button onClick={e => { e.stopPropagation(); setNominationQueue(q => q.filter(id => id !== tid)); }}
-                                  className="text-copy-3 hover:text-danger opacity-0 group-hover:opacity-100 transition-opacity ml-1 text-sm leading-none">×</button>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
                     </div>
                   )}
                   {/* Force-advance if stuck between lots */}
@@ -1855,34 +1909,40 @@ export default function AuctionPage() {
                       </div>
                     )}
                   </div>
-                  <button
-                    onClick={handleNominate}
-                    disabled={!selectedNomination || nominating}
-                    className="bg-brand hover:bg-brand-2 disabled:opacity-40 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors whitespace-nowrap"
-                  >
-                    {nominating ? 'Nominating…' : 'Nominate'}
-                  </button>
                 </div>
-                {/* My Queue */}
-                {nominationQueue.filter(tid => upcomingQueue.includes(tid)).length > 0 && (
-                  <div className="space-y-1">
-                    <p className="text-[10px] font-semibold text-copy-3 uppercase tracking-wide">My Queue</p>
-                    {nominationQueue.filter(tid => upcomingQueue.includes(tid)).map(tid => {
-                      const t = teamMapRef.current.get(tid);
-                      if (!t) return null;
-                      return (
-                        <div key={tid} className="flex items-center gap-2 bg-field rounded-lg px-2 py-1.5 cursor-pointer group hover:bg-field-2 transition-colors"
-                          onClick={() => { setSelectedNomination(tid); setNominationSearch(t.name); }}>
-                          <TeamLogo logoUrl={t.logoUrl} name={t.name} size={5} />
-                          <span className="flex-1 text-xs text-copy truncate">{t.name}</span>
-                          <span className="text-[10px] text-copy-3">{fln(t.sportLeagueId)}</span>
-                          <button onClick={e => { e.stopPropagation(); setNominationQueue(q => q.filter(id => id !== tid)); }}
-                            className="text-copy-3 hover:text-danger opacity-0 group-hover:opacity-100 transition-opacity ml-1 text-sm leading-none">×</button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+              </div>
+            )}
+
+            {/* Persistent nomination queue — always visible during manual auction or draft queue */}
+            {nominationMode === 'manual' && !isSnake && status !== 'closed' && (league?.state === 'auction' || isDraftQueue) && (
+              <div className="bg-card border border-line rounded-2xl p-4">
+                <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide mb-3">My Nomination Queue</p>
+                {(() => {
+                  const validQueue = nominationQueue.filter(tid => !soldOrPassedIds.has(tid) && tid !== currentLot?.teamId);
+                  if (validQueue.length === 0) {
+                    return <p className="text-xs text-copy-3 text-center py-2">No teams queued. Click + on any team below to add.</p>;
+                  }
+                  const canSelect = nominatorUserId === myTeamUserId || isCommissioner;
+                  return (
+                    <div className="space-y-1">
+                      {validQueue.map(tid => {
+                        const t = teamMapRef.current.get(tid);
+                        if (!t) return null;
+                        return (
+                          <div key={tid}
+                            className={`flex items-center gap-2 bg-field rounded-lg px-2 py-1.5 group transition-colors ${canSelect ? 'cursor-pointer hover:bg-field-2' : 'cursor-default'}`}
+                            onClick={() => { if (canSelect) { setSelectedNomination(tid); setNominationSearch(t.name); } }}>
+                            <TeamLogo logoUrl={t.logoUrl} name={t.name} size={5} />
+                            <span className="flex-1 text-xs text-copy truncate">{t.name}</span>
+                            <span className="text-[10px] text-copy-3">{fln(t.sportLeagueId)}</span>
+                            <button onClick={e => { e.stopPropagation(); setNominationQueue(q => q.filter(id => id !== tid)); }}
+                              className="text-copy-3 hover:text-danger opacity-0 group-hover:opacity-100 transition-opacity ml-1 text-sm leading-none">×</button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
               </div>
             )}
 

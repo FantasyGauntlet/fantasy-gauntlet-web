@@ -22,7 +22,8 @@ function CommissionerTab({
     countdownSeconds:       league.auctionConfig?.countdownSeconds       ?? 15,
     maxWildcard:            league.auctionConfig?.maxWildcard            ?? league.maxWildcard ?? 0,
     noBidPenaltyPct:        league.auctionConfig?.noBidPenaltyPct        ?? 2.5,
-    nominationTimerSeconds: league.auctionConfig?.nominationTimerSeconds ?? 30,
+    nominationTimerSeconds:      league.auctionConfig?.nominationTimerSeconds      ?? 30,
+    draftQueueDurationSeconds:   league.auctionConfig?.draftQueueDurationSeconds   ?? 300,
   });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -693,7 +694,7 @@ function CommissionerTab({
             <select value={auctionForm.nominationMode}
               onChange={e => setAuctionForm(f => ({ ...f, nominationMode: e.target.value }))}
               className={inputCls}>
-              <option value="manual">Manual — commissioner picks who nominates</option>
+              <option value="manual">Nomination Auction — commissioner picks who nominates</option>
               <option value="random-disclosed">Random (disclosed) — order shown to all</option>
               <option value="random-hidden">Random (hidden) — revealed one at a time</option>
               <option value="snake-random">Snake Draft — random pick order</option>
@@ -721,6 +722,15 @@ function CommissionerTab({
                     onChange={e => { const v = e.target.valueAsNumber; if (!isNaN(v)) setAuctionForm((f: typeof auctionForm) => ({ ...f, nominationTimerSeconds: v })); }}
                     className={inputCls} />
                   <p className="text-[11px] text-copy-3 mt-1">Seconds to pick before auto-skip. Set to 0 to disable.</p>
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs font-medium text-copy-2 mb-1.5">Draft Queue Timer (min)</label>
+                  <input type="number" min={0} max={30} step={0.5}
+                    value={Math.round(auctionForm.draftQueueDurationSeconds / 60 * 10) / 10}
+                    onFocus={e => e.target.select()}
+                    onChange={e => { const v = e.target.valueAsNumber; if (!isNaN(v)) setAuctionForm((f: typeof auctionForm) => ({ ...f, draftQueueDurationSeconds: Math.round(v * 60) })); }}
+                    className={inputCls} />
+                  <p className="text-[11px] text-copy-3 mt-1">Pre-draft period for participants to build their queue. Set to 0 to disable.</p>
                 </div>
               </div>
             </div>
