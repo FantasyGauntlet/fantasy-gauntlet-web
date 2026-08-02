@@ -178,12 +178,6 @@ export default function AuctionPage() {
   });
   const soundMutedRef = useRef(soundMuted);
   useEffect(() => { soundMutedRef.current = soundMuted; }, [soundMuted]);
-
-  // Persist nomination queue to localStorage so it survives page refreshes
-  useEffect(() => {
-    if (!id) return;
-    try { localStorage.setItem(`fg_nom_queue_${id}`, JSON.stringify(nominationQueue)); } catch { /* ignore */ }
-  }, [nominationQueue, id]);
   const justWonRef = useRef(false);
 
   function toggleMute() {
@@ -241,6 +235,10 @@ export default function AuctionPage() {
       return stored ? (JSON.parse(stored) as string[]) : [];
     } catch { return []; }
   });
+  useEffect(() => {
+    if (!id) return;
+    try { localStorage.setItem(`fg_nom_queue_${id}`, JSON.stringify(nominationQueue)); } catch { /* ignore */ }
+  }, [nominationQueue, id]);
   const [auctionErrorMsg, setAuctionErrorMsg] = useState('');
   const [scheduledStartAt, setScheduledStartAt] = useState<string | null>(null);
   const [draftQueueEndsAt, setDraftQueueEndsAt] = useState<string | null>(null);
