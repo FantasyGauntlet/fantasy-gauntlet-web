@@ -1671,6 +1671,229 @@ export default function AuctionPage() {
               </div>
             )}
 
+            {/* Persistent nomination queue — always visible during manual auction or draft queue */}
+            {nominationMode === 'manual' && !isSnake && status !== 'closed' && (league?.state === 'auction' || isDraftQueue) && (
+              <div className="bg-card border border-line rounded-2xl p-4">
+                <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide mb-3">My Nomination Queue</p>
+                {(() => {
+                  const validQueue = nominationQueue.filter(tid => !soldOrPassedIds.has(tid) && tid !== currentLot?.teamId);
+                  if (validQueue.length === 0) {
+                    return <p className="text-xs text-copy-3 text-center py-2">No teams queued. Click + on any team below to add.</p>;
+                  }
+                  const canSelect = nominatorUserId === myTeamUserId || isCommissioner;
+                  return (
+                    <div className="space-y-1">
+                      {validQueue.map(tid => {
+                        const t = teamMapRef.current.get(tid);
+                        if (!t) return null;
+                        return (
+                          <div key={tid}
+                            className={`flex items-center gap-2 bg-field rounded-lg px-2 py-1.5 group transition-colors ${canSelect ? 'cursor-pointer hover:bg-field-2' : 'cursor-default'}`}
+                            onClick={() => { if (canSelect) { setSelectedNomination(tid); setNominationSearch(t.name); } }}>
+                            <TeamLogo logoUrl={t.logoUrl} name={t.name} size={5} />
+                            <span className="flex-1 text-xs text-copy truncate">{t.name}</span>
+                            <span className="text-[10px] text-copy-3">{fln(t.sportLeagueId)}</span>
+                            <button onClick={e => { e.stopPropagation(); setNominationQueue(q => q.filter(id => id !== tid)); }}
+                              className="text-copy-3 hover:text-danger opacity-0 group-hover:opacity-100 transition-opacity ml-1 text-sm leading-none">×</button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
+            {/* Teams remaining count for random-hidden (no queue revealed) */}
+            {nominationMode === 'random-hidden' && hiddenQueueSize > 0 && (
+              <div className="bg-card border border-line rounded-2xl px-4 py-3 flex items-center justify-between">
+                <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide">Teams Remaining</p>
+                <span className="text-2xl font-bold text-copy tabular-nums">
+                  {hiddenQueueSize - soldLots.length}
+                </span>
+              </div>
+            )}
+
+            {/* Up Next queue — auction mode, non-hidden, non-manual */}
+            {!isSnake && upcomingQueue.length > 0 && nominationMode !== 'random-hidden' && nominationMode !== 'manual' && (
+              <div className="bg-card border border-line rounded-2xl p-4">
+                <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide mb-3">
+                  Up Next — {upcomingQueue.length} remaining
+                </p>
+                <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+                  {upcomingQueue.slice(0, 12).map(tid => {
+                    const info = teamMapRef.current.get(tid);
+                    return (
+                      <div key={tid} className="flex flex-col items-center gap-1 flex-shrink-0 w-14">
+                        <TeamLogo logoUrl={info?.logoUrl ?? null} name={info?.name ?? tid} size={10} />
+                        <p className="text-[10px] text-copy-3 text-center leading-tight w-full truncate">{info?.shortName ?? tid.split('_')[0]}</p>
+                      </div>
+                    );
+                  })}
+                  {upcomingQueue.length > 12 && (
+                    <div className="flex flex-col items-center justify-center flex-shrink-0 w-14">
+                      <span className="text-xs text-copy-3">+{upcomingQueue.length - 12}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+
+            {/* Results — auction mode */}
+            {!isSnake && soldLots.length > 0 && (
+              <div className="bg-card border border-line rounded-2xl p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide">
+                    Results — {soldLots.filter(l => !l.passed).length} sold, {soldLots.filter(l => l.passed).length} passed
+                  </p>
+                </div>
+                <input
+                  type="text"
+                  placeholder="Search history…"
+                  value={historySearch}
+                  onChange={e => setHistorySearch(e.target.value)}
+                  className="w-full bg-field border border-line-2 rounded-xl px-3 py-2 text-copy text-xs placeholder-copy-3 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors mb-3"
+                />
+                <div className="space-y-2 max-h-64 overflow-y-auto -mr-1 pr-1">
+                  {soldLots.filter(lot => !historySearch || lot.teamName.toLowerCase().includes(historySearch.toLowerCase()) || (lot.winnerName ?? '').toLowerCase().includes(historySearch.toLowerCase())).map((lot, i) => (
+                    <div key={`${lot.teamId}-${i}`} className="flex items-center gap-3 py-2 border-b border-line last:border-0">
+                      <TeamLogo logoUrl={lot.logoUrl} name={lot.teamName} size={8} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-copy truncate">{lot.teamName}</p>
+                        <p className="text-[10px] text-copy-3 truncate">{fln(lot.sportLeagueId)}</p>
+                        {lot.passed
+                          ? <p className="text-xs text-copy-3">Passed</p>
+                          : <p className="text-xs text-copy-2">{lot.winnerName} — <span className="text-copy font-semibold">${lot.winningBid}</span></p>
+                        }
+                      </div>
+                      {lot.passed
+                        ? <span className="text-xs text-copy-3 font-medium px-2 py-0.5 rounded-full bg-field">PASS</span>
+                        : <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${lot.winnerId === myTeamUserId ? 'bg-brand/15 text-brand' : 'bg-positive/10 text-positive'}`}>
+                            {lot.winnerId === myTeamUserId ? 'YOURS' : 'SOLD'}
+                          </span>
+                      }
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Snake: draft pick history */}
+            {isSnake && snakePickHistory.length > 0 && (
+              <div className="bg-card border border-line rounded-2xl p-4">
+                <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide mb-3">
+                  Draft Picks — {snakePickHistory.length} made
+                </p>
+                <div className="space-y-2 max-h-64 overflow-y-auto -mr-1 pr-1">
+                  {[...snakePickHistory].reverse().map((pick, i) => (
+                    <div key={pick.pickIndex} className="flex items-center gap-3 py-2 border-b border-line last:border-0">
+                      <span className="text-xs text-copy-3 tabular-nums w-6 text-right flex-shrink-0">
+                        {pick.pickIndex + 1}
+                      </span>
+                      <TeamLogo logoUrl={pick.logoUrl} name={pick.teamName} size={8} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-copy truncate">{pick.teamName}</p>
+                        <p className="text-xs text-copy-2 truncate">
+                          {pick.pickerUserId === myTeamUserId ? 'You' : pick.pickerName}
+                        </p>
+                      </div>
+                      {pick.pickerUserId === myTeamUserId && (
+                        <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-brand/15 text-brand flex-shrink-0">
+                          YOURS
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {/* Teams panel — auction mode only (snake shows teams in draft clock card) */}
+            {!isSnake && allAuctionTeams.length > 0 && status !== 'closed' && (
+              <div className="bg-card border border-line rounded-2xl p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide">Teams</p>
+                  <select
+                    value={teamViewMode}
+                    onChange={e => setTeamViewMode(e.target.value as typeof teamViewMode)}
+                    className="bg-field border border-line-2 rounded-lg px-2 py-1 text-xs text-copy-2 focus:outline-none focus:border-brand transition-colors cursor-pointer"
+                  >
+                    <option value="available">Available</option>
+                    <option value="all">All</option>
+                    <option value="drafted">Drafted</option>
+                    <option value="passed">Passed</option>
+                  </select>
+                </div>
+
+                {/* Sport filter tabs */}
+                {orderedLeagueSports.length > 1 && (
+                  <div className="flex gap-1.5 flex-wrap mb-3">
+                    <button
+                      onClick={() => setAvailableFilter('')}
+                      className={`text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${
+                        availableFilter === '' ? 'bg-brand text-white' : 'bg-field text-copy-2 hover:bg-field-2'
+                      }`}
+                    >
+                      All
+                    </button>
+                    {orderedLeagueSports.map(sport => {
+                      const count = teamPanelBase.filter(t => t.sportLeagueId === sport).length;
+                      return (
+                        <button
+                          key={sport}
+                          onClick={() => setAvailableFilter(sport)}
+                          className={`text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${
+                            availableFilter === sport ? 'bg-brand text-white' : 'bg-field text-copy-2 hover:bg-field-2'
+                          }`}
+                        >
+                          {fln(sport)} <span className="opacity-70">({count})</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {teamPanelList.length > 0 ? (
+                  <div className="grid gap-1.5 max-h-72 overflow-y-auto" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(56px, 1fr))' }}>
+                    {teamPanelList.map(team => {
+                      const greyed = greyedIds.has(team.id);
+                      const inQueue = nominationQueue.includes(team.id);
+                      return (
+                        <div key={team.id} className="relative group">
+                          <div
+                            onClick={() => openProfile({ teamId: team.id, leagueId: id, name: team.name, logoUrl: team.logoUrl, sportLeagueId: team.sportLeagueId })}
+                            className={`flex flex-col items-center gap-1 p-1.5 rounded-lg cursor-pointer hover:bg-field transition-colors ${greyed ? 'opacity-40 grayscale' : ''}`}
+                            title={team.name}
+                          >
+                            <TeamLogo logoUrl={team.logoUrl} name={team.name} size={8} />
+                            <p className="text-[10px] text-copy-3 text-center leading-tight w-full truncate">{team.shortName}</p>
+                          </div>
+                          {nominationMode === 'manual' && !greyed && (
+                            <button
+                              onClick={e => { e.stopPropagation(); setNominationQueue(q => inQueue ? q.filter(id => id !== team.id) : [...q, team.id]); }}
+                              title={inQueue ? 'Remove from queue' : 'Add to queue'}
+                              className={`absolute top-0.5 right-0.5 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold transition-all leading-none
+                                ${inQueue ? 'bg-brand text-white opacity-100' : 'bg-field-2 text-copy-3 opacity-0 group-hover:opacity-100 hover:bg-brand hover:text-white'}`}
+                            >
+                              {inQueue ? '✓' : '+'}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-xs text-copy-3 text-center py-4">
+                    {teamViewMode === 'drafted'
+                      ? (availableFilter ? `No ${fln(availableFilter)} teams drafted yet` : 'No teams drafted yet')
+                      : teamViewMode === 'passed'
+                      ? (availableFilter ? `No ${fln(availableFilter)} teams passed on` : 'No teams have been passed on')
+                      : (availableFilter ? `No ${fln(availableFilter)} teams remaining` : 'All teams have been auctioned')}
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* Commissioner controls */}
             {isCommissioner && (
               <div className="bg-card border border-line rounded-2xl p-4 space-y-3">
@@ -1920,230 +2143,6 @@ export default function AuctionPage() {
                       </div>
                     )}
                   </div>
-                )}
-              </div>
-            )}
-
-
-            {/* Persistent nomination queue — always visible during manual auction or draft queue */}
-            {nominationMode === 'manual' && !isSnake && status !== 'closed' && (league?.state === 'auction' || isDraftQueue) && (
-              <div className="bg-card border border-line rounded-2xl p-4">
-                <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide mb-3">My Nomination Queue</p>
-                {(() => {
-                  const validQueue = nominationQueue.filter(tid => !soldOrPassedIds.has(tid) && tid !== currentLot?.teamId);
-                  if (validQueue.length === 0) {
-                    return <p className="text-xs text-copy-3 text-center py-2">No teams queued. Click + on any team below to add.</p>;
-                  }
-                  const canSelect = nominatorUserId === myTeamUserId || isCommissioner;
-                  return (
-                    <div className="space-y-1">
-                      {validQueue.map(tid => {
-                        const t = teamMapRef.current.get(tid);
-                        if (!t) return null;
-                        return (
-                          <div key={tid}
-                            className={`flex items-center gap-2 bg-field rounded-lg px-2 py-1.5 group transition-colors ${canSelect ? 'cursor-pointer hover:bg-field-2' : 'cursor-default'}`}
-                            onClick={() => { if (canSelect) { setSelectedNomination(tid); setNominationSearch(t.name); } }}>
-                            <TeamLogo logoUrl={t.logoUrl} name={t.name} size={5} />
-                            <span className="flex-1 text-xs text-copy truncate">{t.name}</span>
-                            <span className="text-[10px] text-copy-3">{fln(t.sportLeagueId)}</span>
-                            <button onClick={e => { e.stopPropagation(); setNominationQueue(q => q.filter(id => id !== tid)); }}
-                              className="text-copy-3 hover:text-danger opacity-0 group-hover:opacity-100 transition-opacity ml-1 text-sm leading-none">×</button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  );
-                })()}
-              </div>
-            )}
-
-            {/* Teams remaining count for random-hidden (no queue revealed) */}
-            {nominationMode === 'random-hidden' && hiddenQueueSize > 0 && (
-              <div className="bg-card border border-line rounded-2xl px-4 py-3 flex items-center justify-between">
-                <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide">Teams Remaining</p>
-                <span className="text-2xl font-bold text-copy tabular-nums">
-                  {hiddenQueueSize - soldLots.length}
-                </span>
-              </div>
-            )}
-
-            {/* Up Next queue — auction mode, non-hidden, non-manual */}
-            {!isSnake && upcomingQueue.length > 0 && nominationMode !== 'random-hidden' && nominationMode !== 'manual' && (
-              <div className="bg-card border border-line rounded-2xl p-4">
-                <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide mb-3">
-                  Up Next — {upcomingQueue.length} remaining
-                </p>
-                <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
-                  {upcomingQueue.slice(0, 12).map(tid => {
-                    const info = teamMapRef.current.get(tid);
-                    return (
-                      <div key={tid} className="flex flex-col items-center gap-1 flex-shrink-0 w-14">
-                        <TeamLogo logoUrl={info?.logoUrl ?? null} name={info?.name ?? tid} size={10} />
-                        <p className="text-[10px] text-copy-3 text-center leading-tight w-full truncate">{info?.shortName ?? tid.split('_')[0]}</p>
-                      </div>
-                    );
-                  })}
-                  {upcomingQueue.length > 12 && (
-                    <div className="flex flex-col items-center justify-center flex-shrink-0 w-14">
-                      <span className="text-xs text-copy-3">+{upcomingQueue.length - 12}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-
-            {/* Results — auction mode */}
-            {!isSnake && soldLots.length > 0 && (
-              <div className="bg-card border border-line rounded-2xl p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide">
-                    Results — {soldLots.filter(l => !l.passed).length} sold, {soldLots.filter(l => l.passed).length} passed
-                  </p>
-                </div>
-                <input
-                  type="text"
-                  placeholder="Search history…"
-                  value={historySearch}
-                  onChange={e => setHistorySearch(e.target.value)}
-                  className="w-full bg-field border border-line-2 rounded-xl px-3 py-2 text-copy text-xs placeholder-copy-3 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors mb-3"
-                />
-                <div className="space-y-2 max-h-64 overflow-y-auto -mr-1 pr-1">
-                  {soldLots.filter(lot => !historySearch || lot.teamName.toLowerCase().includes(historySearch.toLowerCase()) || (lot.winnerName ?? '').toLowerCase().includes(historySearch.toLowerCase())).map((lot, i) => (
-                    <div key={`${lot.teamId}-${i}`} className="flex items-center gap-3 py-2 border-b border-line last:border-0">
-                      <TeamLogo logoUrl={lot.logoUrl} name={lot.teamName} size={8} />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-copy truncate">{lot.teamName}</p>
-                        <p className="text-[10px] text-copy-3 truncate">{fln(lot.sportLeagueId)}</p>
-                        {lot.passed
-                          ? <p className="text-xs text-copy-3">Passed</p>
-                          : <p className="text-xs text-copy-2">{lot.winnerName} — <span className="text-copy font-semibold">${lot.winningBid}</span></p>
-                        }
-                      </div>
-                      {lot.passed
-                        ? <span className="text-xs text-copy-3 font-medium px-2 py-0.5 rounded-full bg-field">PASS</span>
-                        : <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${lot.winnerId === myTeamUserId ? 'bg-brand/15 text-brand' : 'bg-positive/10 text-positive'}`}>
-                            {lot.winnerId === myTeamUserId ? 'YOURS' : 'SOLD'}
-                          </span>
-                      }
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Snake: draft pick history */}
-            {isSnake && snakePickHistory.length > 0 && (
-              <div className="bg-card border border-line rounded-2xl p-4">
-                <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide mb-3">
-                  Draft Picks — {snakePickHistory.length} made
-                </p>
-                <div className="space-y-2 max-h-64 overflow-y-auto -mr-1 pr-1">
-                  {[...snakePickHistory].reverse().map((pick, i) => (
-                    <div key={pick.pickIndex} className="flex items-center gap-3 py-2 border-b border-line last:border-0">
-                      <span className="text-xs text-copy-3 tabular-nums w-6 text-right flex-shrink-0">
-                        {pick.pickIndex + 1}
-                      </span>
-                      <TeamLogo logoUrl={pick.logoUrl} name={pick.teamName} size={8} />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-copy truncate">{pick.teamName}</p>
-                        <p className="text-xs text-copy-2 truncate">
-                          {pick.pickerUserId === myTeamUserId ? 'You' : pick.pickerName}
-                        </p>
-                      </div>
-                      {pick.pickerUserId === myTeamUserId && (
-                        <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-brand/15 text-brand flex-shrink-0">
-                          YOURS
-                        </span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {/* Teams panel — auction mode only (snake shows teams in draft clock card) */}
-            {!isSnake && allAuctionTeams.length > 0 && status !== 'closed' && (
-              <div className="bg-card border border-line rounded-2xl p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide">Teams</p>
-                  <select
-                    value={teamViewMode}
-                    onChange={e => setTeamViewMode(e.target.value as typeof teamViewMode)}
-                    className="bg-field border border-line-2 rounded-lg px-2 py-1 text-xs text-copy-2 focus:outline-none focus:border-brand transition-colors cursor-pointer"
-                  >
-                    <option value="available">Available</option>
-                    <option value="all">All</option>
-                    <option value="drafted">Drafted</option>
-                    <option value="passed">Passed</option>
-                  </select>
-                </div>
-
-                {/* Sport filter tabs */}
-                {orderedLeagueSports.length > 1 && (
-                  <div className="flex gap-1.5 flex-wrap mb-3">
-                    <button
-                      onClick={() => setAvailableFilter('')}
-                      className={`text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${
-                        availableFilter === '' ? 'bg-brand text-white' : 'bg-field text-copy-2 hover:bg-field-2'
-                      }`}
-                    >
-                      All
-                    </button>
-                    {orderedLeagueSports.map(sport => {
-                      const count = teamPanelBase.filter(t => t.sportLeagueId === sport).length;
-                      return (
-                        <button
-                          key={sport}
-                          onClick={() => setAvailableFilter(sport)}
-                          className={`text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${
-                            availableFilter === sport ? 'bg-brand text-white' : 'bg-field text-copy-2 hover:bg-field-2'
-                          }`}
-                        >
-                          {fln(sport)} <span className="opacity-70">({count})</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {teamPanelList.length > 0 ? (
-                  <div className="grid gap-1.5 max-h-72 overflow-y-auto" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(56px, 1fr))' }}>
-                    {teamPanelList.map(team => {
-                      const greyed = greyedIds.has(team.id);
-                      const inQueue = nominationQueue.includes(team.id);
-                      return (
-                        <div key={team.id} className="relative group">
-                          <div
-                            onClick={() => openProfile({ teamId: team.id, leagueId: id, name: team.name, logoUrl: team.logoUrl, sportLeagueId: team.sportLeagueId })}
-                            className={`flex flex-col items-center gap-1 p-1.5 rounded-lg cursor-pointer hover:bg-field transition-colors ${greyed ? 'opacity-40 grayscale' : ''}`}
-                            title={team.name}
-                          >
-                            <TeamLogo logoUrl={team.logoUrl} name={team.name} size={8} />
-                            <p className="text-[10px] text-copy-3 text-center leading-tight w-full truncate">{team.shortName}</p>
-                          </div>
-                          {nominationMode === 'manual' && !greyed && (
-                            <button
-                              onClick={e => { e.stopPropagation(); setNominationQueue(q => inQueue ? q.filter(id => id !== team.id) : [...q, team.id]); }}
-                              title={inQueue ? 'Remove from queue' : 'Add to queue'}
-                              className={`absolute top-0.5 right-0.5 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold transition-all leading-none
-                                ${inQueue ? 'bg-brand text-white opacity-100' : 'bg-field-2 text-copy-3 opacity-0 group-hover:opacity-100 hover:bg-brand hover:text-white'}`}
-                            >
-                              {inQueue ? '✓' : '+'}
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <p className="text-xs text-copy-3 text-center py-4">
-                    {teamViewMode === 'drafted'
-                      ? (availableFilter ? `No ${fln(availableFilter)} teams drafted yet` : 'No teams drafted yet')
-                      : teamViewMode === 'passed'
-                      ? (availableFilter ? `No ${fln(availableFilter)} teams passed on` : 'No teams have been passed on')
-                      : (availableFilter ? `No ${fln(availableFilter)} teams remaining` : 'All teams have been auctioned')}
-                  </p>
                 )}
               </div>
             )}
