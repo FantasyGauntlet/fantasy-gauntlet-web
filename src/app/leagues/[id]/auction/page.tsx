@@ -207,6 +207,7 @@ export default function AuctionPage() {
   const [upcomingQueue, setUpcomingQueue] = useState<string[]>([]);
   const [hiddenQueueSize, setHiddenQueueSize] = useState<number>(0);
   const [draftPool, setDraftPool] = useState<Set<string>>(new Set());
+  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
   const [nominationMode, setNominationMode] = useState('random');
   const [minBidIncrement, setMinBidIncrement] = useState(1);
   const [minOpeningBid, setMinOpeningBid] = useState(1);
@@ -363,6 +364,7 @@ export default function AuctionPage() {
       socket.on('auction_scheduled', (data: any) => setScheduledStartAt(data?.scheduledStartAt ?? null));
 
       socket.on('auction_state', (data: any) => {
+        if (data?.onlineUserIds) setOnlineUsers(new Set(data.onlineUserIds as string[]));
         const session = data?.session;
         if (!session) {
           setStatus('waiting');
@@ -474,6 +476,10 @@ export default function AuctionPage() {
             setSnakePickHistory(picks);
           }
         }
+      });
+
+      socket.on('presence_update', (data: any) => {
+        if (data?.onlineUserIds) setOnlineUsers(new Set(data.onlineUserIds as string[]));
       });
 
       socket.on('draft_queue_started', (data: any) => {
@@ -2269,8 +2275,11 @@ export default function AuctionPage() {
                   const wonCount = isSnake
                     ? snakePickHistory.filter(p => p.pickerUserId === ft.userId).length
                     : soldLots.filter(l => !l.passed && l.winnerId === ft.userId).length;
+                  const isOnline = onlineUsers.has(ft.userId);
                   return (
                     <div key={ft.id} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg ${isMe ? 'bg-brand/8' : isOnClock ? 'bg-warn/8' : ''}`}>
+                      <div className="flex-shrink-0 w-2 h-2 rounded-full mt-0.5" title={isOnline ? 'In room' : 'Not in room'}
+                        style={{ backgroundColor: isOnline ? '#22c55e' : '#4b5563' }} />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
                           <p className={`text-sm font-medium truncate ${isMe ? 'text-brand' : 'text-copy'}`}>
