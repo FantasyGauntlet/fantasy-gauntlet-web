@@ -12,7 +12,7 @@ interface SportLeague { id: string; name: string; }
 interface Team { id: string; name: string; logoUrl?: string | null; }
 interface Season { id: string; label: string; regularSeasonStart: string; regularSeasonEnd: string; }
 interface BonusPoint { id: string; teamId: string; teamName: string; seasonId: string; seasonLabel: string; sportLeagueId: string; label: string; points: number; awardedAt: string; }
-interface AdminLeague { id: string; name: string; state: 'draft' | 'auction' | 'active' | 'completed' | 'cancelled'; selectedSports: string[]; commissionerId: string; memberCap: number | null; createdAt: string; isPublic: boolean; hiddenFromPublic?: boolean; }
+interface AdminLeague { id: string; name: string; state: 'draft' | 'auction' | 'active' | 'completed' | 'cancelled'; selectedSports: string[]; commissionerId: string; memberCap: number | null; createdAt: string; isPublic: boolean; hiddenFromPublic?: boolean; waiverType?: 'reserve-standings' | 'faab'; faabStartingBudget?: number; }
 
 const LEAGUE_ACRONYMS = new Set(['nhl', 'nba', 'nfl', 'mlb', 'ucl', 'ncaa', 'mls', 'fifa', 'ufc']);
 function formatLeagueName(id: string): string {
@@ -559,6 +559,32 @@ export default function AdminPage() {
     try {
       const res = await api.post<{ message: string; updated: number }>(`/admin/leagues/${leagueId}/reset-faab`);
       setLeagueStatuses(s => ({ ...s, [leagueId]: { status: 'success', message: res.message } }));
+    } catch (e: unknown) {
+      setLeagueStatuses(s => ({ ...s, [leagueId]: { status: 'error', message: e instanceof Error ? e.message : 'Failed' } }));
+    }
+  }
+
+  // Per-league waiver draft edits: { waiverType, faabStartingBudget }
+  const [waiverDrafts, setWaiverDrafts] = useState<Record<string, { waiverType: 'reserve-standings' | 'faab'; faabStartingBudget: string }>>({});
+
+  function getWaiverDraft(league: AdminLeague) {
+    return waiverDrafts[league.id] ?? {
+      waiverType: league.waiverType ?? 'reserve-standings',
+      faabStartingBudget: String(league.faabStartingBudget ?? 100),
+    };
+  }
+
+  async function saveWaiverSettings(leagueId: string) {
+    const draft = waiverDrafts[leagueId];
+    if (!draft) return;
+    setLeagueStatuses(s => ({ ...s, [leagueId]: { status: 'loading', message: '' } }));
+    try {
+      const body: { waiverType: 'reserve-standings' | 'faab'; faabStartingBudget?: number } = { waiverType: draft.waiverType };
+      if (draft.waiverType === 'faab') body.faabStartingBudget = Number(draft.faabStartingBudget) || 100;
+      await api.patch(`/admin/leagues/${leagueId}/waiver`, body);
+      setAllLeagues(ls => ls.map(l => l.id === leagueId ? { ...l, ...body } : l));
+      setWaiverDrafts(d => { const n = { ...d }; delete n[leagueId]; return n; });
+      setLeagueStatuses(s => ({ ...s, [leagueId]: { status: 'success', message: `Waiver type → ${draft.waiverType}` } }));
     } catch (e: unknown) {
       setLeagueStatuses(s => ({ ...s, [leagueId]: { status: 'error', message: e instanceof Error ? e.message : 'Failed' } }));
     }
@@ -1650,16 +1676,51 @@ export default function AdminPage() {
                         </button>
                       </div>
 
-                      {/* Reset FAAB budgets */}
-                      <div>
-                        <p className="text-xs font-medium text-copy-2 mb-2">FAAB</p>
-                        <button
-                          onClick={() => resetFaabBudgets(league.id)}
-                          disabled={lStatus?.status === 'loading'}
-                          className="text-xs font-medium px-3 py-1.5 rounded-lg border bg-field hover:bg-field-2 border-line text-copy-2 disabled:opacity-50 transition-colors"
-                        >
-                          Seed FAAB Budgets
-                        </button>
+                      {/* Waiver settings */}
+                      <div className="space-y-2">
+                        <p className="text-xs font-medium text-copy-2">Waivers</p>
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={getWaiverDraft(league).waiverType}
+                            onChange={e => setWaiverDrafts(d => ({ ...d, [league.id]: { ...getWaiverDraft(league), waiverType: e.target.value as 'reserve-standings' | 'faab' } }))}
+                            className="text-xs border border-line rounded-lg px-2 py-1.5 bg-field text-copy focus:outline-none focus:border-brand"
+                          >
+                            <option value="reserve-standings">Reserve Standings</option>
+                            <option value="faab">FAAB</option>
+                          </select>
+                          {getWaiverDraft(league).waiverType === 'faab' && (
+                            <div className="flex items-center gap-1">
+                              <span className="text-xs text-copy-3">$</span>
+                              <input
+                                type="number"
+                                min={1}
+                                value={getWaiverDraft(league).faabStartingBudget}
+                                onChange={e => setWaiverDrafts(d => ({ ...d, [league.id]: { ...getWaiverDraft(league), faabStartingBudget: e.target.value } }))}
+                                className="text-xs border border-line rounded-lg px-2 py-1.5 bg-field text-copy w-16 focus:outline-none focus:border-brand"
+                                placeholder="100"
+                              />
+                              <span className="text-xs text-copy-3">budget</span>
+                            </div>
+                          )}
+                          {waiverDrafts[league.id] && (
+                            <button
+                              onClick={() => saveWaiverSettings(league.id)}
+                              disabled={lStatus?.status === 'loading'}
+                              className="text-xs font-medium px-3 py-1.5 rounded-lg border bg-brand text-white border-brand hover:bg-brand-2 disabled:opacity-50 transition-colors"
+                            >
+                              Save
+                            </button>
+                          )}
+                        </div>
+                        {getWaiverDraft(league).waiverType === 'faab' && (
+                          <button
+                            onClick={() => resetFaabBudgets(league.id)}
+                            disabled={lStatus?.status === 'loading'}
+                            className="text-xs font-medium px-3 py-1.5 rounded-lg border bg-field hover:bg-field-2 border-line text-copy-2 disabled:opacity-50 transition-colors"
+                          >
+                            Seed FAAB Budgets
+                          </button>
+                        )}
                       </div>
 
                       {/* Status feedback */}
