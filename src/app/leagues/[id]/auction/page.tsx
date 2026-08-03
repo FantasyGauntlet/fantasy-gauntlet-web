@@ -290,6 +290,13 @@ export default function AuctionPage() {
   const minNextBid = currentLot
     ? (currentLot.currentBidderId === null ? minOpeningBid : currentLot.currentBid + minBidIncrement)
     : minOpeningBid;
+  const bidIsHigh = (currentLot?.currentBid ?? 0) >= 200 && !!currentLot?.currentBidderId;
+  const customBidIsInvalid = (() => {
+    if (!bidIsHigh || bidInput === '') return false;
+    const amt = Number(bidInput);
+    if (!amt || isNaN(amt)) return false;
+    return amt % 5 !== 0 && amt !== myBudget;
+  })();
 
   // ── Local timer interpolation ─────────────────────────────────────────────
   // Runs every 250ms to count down between server ticks. Without this, the
@@ -891,6 +898,10 @@ export default function AuctionPage() {
     const amount = raw;
     if (amount < minNextBid) { setBidError(`Minimum bid is $${minNextBid}`); return; }
     if (amount > myBudget) { setBidError(`You only have $${myBudget} remaining`); return; }
+    if (bidIsHigh && amount % 5 !== 0 && amount !== myBudget) {
+      setBidError(`Must be a multiple of $5`);
+      return;
+    }
     placeBid(amount);
   }
 
@@ -1629,17 +1640,24 @@ export default function AuctionPage() {
                         value={bidInput}
                         onChange={e => { setBidInput(e.target.value); setBidError(''); }}
                         placeholder={`Min $${minNextBid}`}
-                        className="flex-1 bg-field border border-line-2 rounded-xl px-4 py-2.5 text-copy text-sm placeholder-copy-3 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors"
+                        className={`flex-1 bg-field border rounded-xl px-4 py-2.5 text-copy text-sm placeholder-copy-3 focus:outline-none focus:ring-1 transition-colors ${
+                          customBidIsInvalid
+                            ? 'border-danger focus:border-danger focus:ring-danger'
+                            : 'border-line-2 focus:border-brand focus:ring-brand'
+                        }`}
                       />
                       <button
                         type="submit"
-                        disabled={myBudget < minNextBid || iAmHighBidder}
+                        disabled={myBudget < minNextBid || iAmHighBidder || customBidIsInvalid}
                         className="bg-brand hover:bg-brand-2 disabled:opacity-40 text-white font-semibold px-5 py-2.5 rounded-xl transition-colors text-sm whitespace-nowrap"
                       >
                         {iAmHighBidder ? 'Winning' : 'Place Bid'}
                       </button>
                     </div>
                     {bidError && <p className="text-danger text-xs">{bidError}</p>}
+                    {customBidIsInvalid && !bidError && (
+                      <p className="text-copy-3 text-xs">Must be a multiple of $5{myBudget % 5 !== 0 ? ` or your full budget ($${myBudget})` : ''}</p>
+                    )}
                     {/* Quick bid buttons */}
                     {myBudget >= minNextBid && !iAmHighBidder && (() => {
                       const rawAmounts = [
@@ -1654,7 +1672,6 @@ export default function AuctionPage() {
                         .filter((a, i, arr) => a >= minNextBid && arr.indexOf(a) === i)
                         .slice(0, 4);
                       // Grey out the smallest-increment (+$1) button when the bid is already high
-                      const bidIsHigh = (currentLot?.currentBid ?? 0) >= 200 && !!currentLot?.currentBidderId;
                       return (
                         <div className="flex gap-2">
                           {buttons.map((amt, idx) => {
