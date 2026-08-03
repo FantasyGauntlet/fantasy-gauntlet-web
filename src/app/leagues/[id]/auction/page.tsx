@@ -291,11 +291,12 @@ export default function AuctionPage() {
     ? (currentLot.currentBidderId === null ? minOpeningBid : currentLot.currentBid + minBidIncrement)
     : minOpeningBid;
   const bidIsHigh = (currentLot?.currentBid ?? 0) >= 200 && !!currentLot?.currentBidderId;
+  const minHighBid = (currentLot?.currentBid ?? 0) + 5;
   const customBidIsInvalid = (() => {
     if (!bidIsHigh || bidInput === '') return false;
     const amt = Number(bidInput);
     if (!amt || isNaN(amt)) return false;
-    return amt % 5 !== 0 && amt !== myBudget;
+    return amt < minHighBid && amt !== myBudget;
   })();
 
   // ── Local timer interpolation ─────────────────────────────────────────────
@@ -898,8 +899,8 @@ export default function AuctionPage() {
     const amount = raw;
     if (amount < minNextBid) { setBidError(`Minimum bid is $${minNextBid}`); return; }
     if (amount > myBudget) { setBidError(`You only have $${myBudget} remaining`); return; }
-    if (bidIsHigh && amount % 5 !== 0 && amount !== myBudget) {
-      setBidError(`Must be a multiple of $5`);
+    if (bidIsHigh && amount < minHighBid && amount !== myBudget) {
+      setBidError(`Must be at least $5 more than the current bid`);
       return;
     }
     placeBid(amount);
@@ -1656,7 +1657,7 @@ export default function AuctionPage() {
                     </div>
                     {bidError && <p className="text-danger text-xs">{bidError}</p>}
                     {customBidIsInvalid && !bidError && (
-                      <p className="text-copy-3 text-xs">Must be a multiple of $5{myBudget % 5 !== 0 ? ` or your full budget ($${myBudget})` : ''}</p>
+                      <p className="text-copy-3 text-xs">Must be at least $5 more than the current bid</p>
                     )}
                     {/* Quick bid buttons */}
                     {myBudget >= minNextBid && !iAmHighBidder && (() => {
