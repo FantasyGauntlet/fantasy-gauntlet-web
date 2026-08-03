@@ -33,6 +33,8 @@ export default function LeaguePage() {
   const [loading, setLoading] = useState(true);
   const [openDropdown, setOpenDropdown] = useState<'teams' | 'league' | null>(null);
   const [scoreboard, setScoreboard] = useState<ScoreboardGame[]>([]);
+  const [schedule, setSchedule] = useState<ScoreboardGame[]>([]);
+  const [scheduleLoaded, setScheduleLoaded] = useState(false);
   const [standings, setStandings] = useState<Standing[]>([]);
   const [waiverFilterPush, setWaiverFilterPush] = useState<{ sport: string | null; v: number }>({ sport: null, v: 0 });
   const tabBarRef = useRef<HTMLDivElement>(null);
@@ -87,6 +89,15 @@ export default function LeaguePage() {
     const interval = setInterval(fetch, 60_000);
     return () => clearInterval(interval);
   }, [league?.state, league?.selectedSports]);
+
+  useEffect(() => {
+    if (!mountedTabs.has('games') || scheduleLoaded) return;
+    if (!league?.selectedSports.length || league.state !== 'active') return;
+    setScheduleLoaded(true);
+    const sports = league.selectedSports.join(',');
+    api.get<ScoreboardGame[]>(`/sports/schedule?sports=${sports}&days=21`)
+      .then(setSchedule).catch(() => {});
+  }, [mountedTabs, scheduleLoaded, league?.selectedSports, league?.state]);
 
   const liveTeamIds = useMemo(() => {
     const ids = new Set<string>();
@@ -382,7 +393,7 @@ export default function LeaguePage() {
       )}
       {mountedTabs.has('games') && (
         <div className={tab !== 'games' ? 'hidden' : ''}>
-          <GameCenterTab games={scoreboard} myOwnedTeamIds={myOwnedTeamIds} />
+          <GameCenterTab games={scoreboard} schedule={schedule} selectedSports={league.selectedSports} myOwnedTeamIds={myOwnedTeamIds} />
         </div>
       )}
       {mountedTabs.has('home') && (
