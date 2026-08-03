@@ -230,8 +230,10 @@ function GameCenterTab({ games: rawGames, schedule, selectedSports, myOwnedTeamI
               myOwnedTeamIds.has(g.homeTeamId) || myOwnedTeamIds.has(g.awayTeamId)
             );
 
-            // Default collapsed view: all owned games (today + upcoming)
-            const ownedDefaultGames = [...ownedTodayGames, ...ownedUpcomingGames];
+            // Default collapsed view: today's owned games, or the single next upcoming owned game
+            const ownedDefaultGames = ownedTodayGames.length > 0
+              ? ownedTodayGames
+              : ownedUpcomingGames.slice(0, 1);
 
             const isExpanded = expandedSports.has(sport);
             const totalCount = todaySportGames.length + upcomingSportGames.length;

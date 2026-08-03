@@ -95,7 +95,7 @@ export default function LeaguePage() {
     if (!league?.selectedSports.length || league.state !== 'active') return;
     setScheduleLoaded(true);
     const sports = league.selectedSports.join(',');
-    api.get<ScoreboardGame[]>(`/sports/schedule?sports=${sports}&days=21`)
+    api.get<ScoreboardGame[]>(`/sports/schedule?sports=${sports}&days=60`)
       .then(setSchedule).catch(() => {});
   }, [mountedTabs, scheduleLoaded, league?.selectedSports, league?.state]);
 
