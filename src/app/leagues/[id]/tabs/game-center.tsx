@@ -7,13 +7,20 @@ import type { ScoreboardGame } from '../_types';
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 function formatGameTime(scheduledAt: string): string {
-  if (!scheduledAt) return '—';
+  if (!scheduledAt) return 'TBD';
   const d = new Date(scheduledAt);
-  if (isNaN(d.getTime())) return '—';
   const now = new Date();
+  const tomorrow = new Date(now.getTime() + 86_400_000);
+  if (isNaN(d.getTime())) {
+    // Salvage the date from malformed strings like "2026-09-10TZ"
+    const fallback = new Date(`${scheduledAt.slice(0, 10)}T12:00:00Z`);
+    if (isNaN(fallback.getTime())) return 'TBD';
+    if (fallback.toDateString() === now.toDateString()) return 'Today';
+    if (fallback.toDateString() === tomorrow.toDateString()) return 'Tomorrow';
+    return fallback.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  }
   const time = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
   if (d.toDateString() === now.toDateString()) return time;
-  const tomorrow = new Date(now.getTime() + 86_400_000);
   if (d.toDateString() === tomorrow.toDateString()) return `Tomorrow · ${time}`;
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ` · ${time}`;
 }
