@@ -9,6 +9,7 @@ import type { ScoreboardGame } from '../_types';
 function formatGameTime(scheduledAt: string): string {
   if (!scheduledAt) return '—';
   const d = new Date(scheduledAt);
+  if (isNaN(d.getTime())) return '—';
   const now = new Date();
   const time = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
   if (d.toDateString() === now.toDateString()) return time;
