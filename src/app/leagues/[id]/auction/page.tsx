@@ -2015,6 +2015,20 @@ export default function AuctionPage() {
                       </button>
                     </>
                   )}
+                  {/* End Draft — available when no lot is active */}
+                  {status !== 'closed' && !currentLot && league?.state === 'auction' && (
+                    <button
+                      onClick={() => {
+                        if (confirm('End the draft now? All remaining teams will be unassigned.')) {
+                          socketRef.current?.emit('commissioner_end_draft');
+                        }
+                      }}
+                      className="bg-field hover:bg-field-2 border border-line text-danger text-sm font-medium px-4 py-2 rounded-xl transition-colors"
+                    >
+                      End Draft
+                    </button>
+                  )}
+
                   {/* Manual mode: commissioner nominates on behalf of others (own turn handled by center card) */}
                   {nominationMode === 'manual' && status === 'waiting' && league?.state === 'auction' && nominatorUserId !== myTeamUserId && (
                     <div className="w-full space-y-2">
