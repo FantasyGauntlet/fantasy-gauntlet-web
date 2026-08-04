@@ -542,7 +542,7 @@ function RosterTab({
         <div className="divide-y divide-line/50">
           {loadingTeams && (
             <div className="divide-y divide-line/50">
-              {[...Array(3)].map((_, i) => (
+              {[...Array(Math.max(3, (selectedSports?.length ?? 0) + (maxWildcard ?? 0)))].map((_, i) => (
                 <div key={i} className="px-5 py-4 flex items-center gap-3 animate-pulse">
                   <div className="w-9 h-9 rounded-lg bg-field-2 flex-shrink-0" />
                   <div className="flex-1 space-y-1.5">
@@ -559,7 +559,7 @@ function RosterTab({
               <p className="text-copy-3 text-sm">No teams yet</p>
             </div>
           )}
-          {rosterRenderItems.map((item, idx) => {
+          {!loadingTeams && rosterRenderItems.map((item, idx) => {
             if (item.kind === 'missing') {
               return (
                 <div key={`missing-${item.sportLeagueId}-${idx}`} className="flex items-center justify-between px-5 py-3.5 gap-3">
