@@ -35,6 +35,8 @@ const TYPE_ICON: Record<string, string> = {
   auctionResults:  '📊',
   rankChanged:     '📈',
   finalStandings:  '🎯',
+  nominationTurn:  '🎯',
+  snakePickTurn:   '🐍',
 };
 
 export default function NotificationBell() {
@@ -116,7 +118,14 @@ export default function NotificationBell() {
   function handleItemClick(n: AppNotification) {
     if (!n.readAt) markRead(n.id);
     setOpen(false);
-    if (n.leagueId) router.push(`/leagues/${n.leagueId}`);
+    if (!n.leagueId) return;
+    if (n.data?.action === 'auction') {
+      router.push(`/leagues/${n.leagueId}/auction`);
+    } else if (n.data?.tab) {
+      router.push(`/leagues/${n.leagueId}?tab=${n.data.tab}`);
+    } else {
+      router.push(`/leagues/${n.leagueId}`);
+    }
   }
 
   return (

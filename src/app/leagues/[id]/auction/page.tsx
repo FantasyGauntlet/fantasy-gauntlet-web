@@ -1078,20 +1078,21 @@ export default function AuctionPage() {
       <ToastStack toasts={toasts} />
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <Link href={`/leagues/${id}`} className="flex items-center gap-1.5 text-copy-3 hover:text-copy text-sm transition-colors">
+      <div className="flex items-center justify-between gap-3 mb-6 min-w-0">
+        <div className="flex items-center gap-2 min-w-0">
+          <Link href={`/leagues/${id}`} className="flex items-center gap-1.5 text-copy-3 hover:text-copy text-sm transition-colors flex-shrink-0">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="15 18 9 12 15 6" />
             </svg>
             Back
           </Link>
-          <span className="text-copy-3">/</span>
-          <span className="text-copy font-semibold">{league?.name ?? '...'}</span>
-          <span className="text-copy-3">/</span>
-          <span className="text-brand font-semibold">Draft Room</span>
+          <span className="text-copy-3 flex-shrink-0 hidden sm:inline">/</span>
+          <span className="text-copy font-semibold truncate hidden sm:inline">{league?.name ?? '...'}</span>
+          <span className="text-copy-3 flex-shrink-0 hidden sm:inline">/</span>
+          <span className="text-brand font-semibold flex-shrink-0 hidden sm:inline">Draft Room</span>
+          <span className="text-brand font-semibold flex-shrink-0 sm:hidden">Draft Room</span>
         </div>
-        <div className="flex items-center gap-3 text-sm text-copy-2">
+        <div className="flex items-center gap-3 text-sm text-copy-2 flex-shrink-0">
           <button
             onClick={toggleMute}
             title={soundMuted ? 'Unmute sounds' : 'Mute sounds'}
@@ -1110,7 +1111,7 @@ export default function AuctionPage() {
             )}
           </button>
           <Dot color={connected ? 'green' : 'red'} />
-          <span>{connected ? 'Live' : 'Disconnected'}</span>
+          <span className="hidden sm:inline">{connected ? 'Live' : 'Disconnected'}</span>
         </div>
       </div>
 
@@ -1283,7 +1284,7 @@ export default function AuctionPage() {
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_272px] gap-4">
 
           {/* ── Left column ──────────────────────────────────────── */}
-          <div className="space-y-4 min-w-0">
+          <div className="space-y-4 min-w-0 order-2 lg:order-1">
 
             {/* Closed banner */}
             {status === 'closed' && (
@@ -1632,7 +1633,7 @@ export default function AuctionPage() {
                 {/* Bid form */}
                 {!lotFlash && (
                   <form onSubmit={handleBidSubmit} className="space-y-2">
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <input
                         type="number"
                         min={minNextBid}
@@ -1674,7 +1675,7 @@ export default function AuctionPage() {
                         .slice(0, 4);
                       // Grey out the smallest-increment (+$1) button when the bid is already high
                       return (
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap gap-2">
                           {buttons.map((amt, idx) => {
                             const isMinIncrement = idx === 0 && minBidIncrement === 1;
                             const greyed = bidIsHigh && isMinIncrement;
@@ -2206,7 +2207,7 @@ export default function AuctionPage() {
           </div>
 
           {/* ── Right sidebar ─────────────────────────────────────── */}
-          <div className="space-y-4">
+          <div className="space-y-4 order-1 lg:order-2">
 
             {/* My budget — auction mode only */}
             {!isSnake && (
