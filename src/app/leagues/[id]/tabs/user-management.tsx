@@ -73,26 +73,34 @@ function UserManagementTab({
     }
   }
 
-  async function removeCoOwner(teamId: string, uid: string, name: string) {
-    if (!confirm(`Remove ${name} as co-manager?`)) return;
-    const key = `${teamId}_${uid}`;
-    setRemovingCoOwner(key);
-    try {
-      await api.delete(`/leagues/${leagueId}/teams/${teamId}/co-owners/${uid}`);
-      setTeams((prev: FantasyTeam[]) => prev.map((t: FantasyTeam) => {
-        if (t.id !== teamId) return t;
-        const idx = (t.coOwnerIds ?? []).indexOf(uid);
-        return {
-          ...t,
-          coOwnerIds: (t.coOwnerIds ?? []).filter((id: string) => id !== uid),
-          coOwnerDisplayNames: (t.coOwnerDisplayNames ?? []).filter((_: string, i: number) => i !== idx),
-        };
-      }));
-    } catch (e) {
-      setActionError(e instanceof Error ? e.message : 'Failed to remove co-manager');
-    } finally {
-      setRemovingCoOwner(null);
-    }
+  function removeCoOwner(teamId: string, uid: string, name: string) {
+    setConfirmModal({
+      title: 'Remove Co-manager',
+      message: `Remove ${name} as co-manager?`,
+      confirmLabel: 'Remove',
+      danger: true,
+      onConfirm: async () => {
+        setConfirmModal(null);
+        const key = `${teamId}_${uid}`;
+        setRemovingCoOwner(key);
+        try {
+          await api.delete(`/leagues/${leagueId}/teams/${teamId}/co-owners/${uid}`);
+          setTeams((prev: FantasyTeam[]) => prev.map((t: FantasyTeam) => {
+            if (t.id !== teamId) return t;
+            const idx = (t.coOwnerIds ?? []).indexOf(uid);
+            return {
+              ...t,
+              coOwnerIds: (t.coOwnerIds ?? []).filter((id: string) => id !== uid),
+              coOwnerDisplayNames: (t.coOwnerDisplayNames ?? []).filter((_: string, i: number) => i !== idx),
+            };
+          }));
+        } catch (e) {
+          setActionError(e instanceof Error ? e.message : 'Failed to remove co-manager');
+        } finally {
+          setRemovingCoOwner(null);
+        }
+      },
+    });
   }
 
   function removeMember(team: FantasyTeam) {

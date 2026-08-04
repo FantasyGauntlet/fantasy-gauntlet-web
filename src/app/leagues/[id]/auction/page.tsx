@@ -7,6 +7,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useTeamProfile } from '@/context/TeamProfileContext';
 import { api, WS_URL } from '@/lib/api';
 import { io, type Socket } from 'socket.io-client';
+import { ConfirmModal } from '../_components';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -203,6 +204,7 @@ export default function AuctionPage() {
   const [status, setStatus] = useState<AuctionStatus>('connecting');
   const [connected, setConnected] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
+  const [confirmModal, setConfirmModal] = useState<{ title: string; message: string; danger?: boolean; confirmLabel?: string; onConfirm: () => void } | null>(null);
   const [currentLot, setCurrentLot] = useState<CurrentLot | null>(null);
   const [soldLots, setSoldLots] = useState<SoldLot[]>([]);
   const [upcomingQueue, setUpcomingQueue] = useState<string[]>([]);
@@ -1079,6 +1081,16 @@ export default function AuctionPage() {
   return (
     <div className="max-w-6xl mx-auto">
       <ToastStack toasts={toasts} />
+      {confirmModal && (
+        <ConfirmModal
+          title={confirmModal.title}
+          message={confirmModal.message}
+          confirmLabel={confirmModal.confirmLabel}
+          danger={confirmModal.danger}
+          onConfirm={confirmModal.onConfirm}
+          onCancel={() => setConfirmModal(null)}
+        />
+      )}
 
       {/* Header */}
       <div className="flex items-center justify-between gap-3 mb-6 min-w-0">
@@ -2032,11 +2044,13 @@ export default function AuctionPage() {
                   {/* End Draft — available when no lot is active */}
                   {status !== 'closed' && !currentLot && league?.state === 'auction' && (
                     <button
-                      onClick={() => {
-                        if (confirm('End the draft now? All remaining teams will be unassigned.')) {
-                          socketRef.current?.emit('commissioner_end_draft');
-                        }
-                      }}
+                      onClick={() => setConfirmModal({
+                        title: 'End Draft',
+                        message: 'End the draft now? All remaining teams will be unassigned.',
+                        confirmLabel: 'End Draft',
+                        danger: true,
+                        onConfirm: () => { setConfirmModal(null); socketRef.current?.emit('commissioner_end_draft'); },
+                      })}
                       className="bg-field hover:bg-field-2 border border-line text-danger text-sm font-medium px-4 py-2 rounded-xl transition-colors"
                     >
                       End Draft

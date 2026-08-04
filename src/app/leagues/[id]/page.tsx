@@ -144,8 +144,28 @@ export default function LeaguePage() {
 
   if (loading) {
     return (
-      <div className="flex justify-center py-20">
-        <Spinner />
+      <div className="animate-pulse">
+        {/* Header skeleton */}
+        <div className="mb-6">
+          <div className="flex items-start justify-between gap-4 flex-wrap mb-3">
+            <div className="flex-1 min-w-0 space-y-2">
+              <div className="h-8 bg-field rounded-xl w-56" />
+              <div className="h-4 bg-field rounded-lg w-32" />
+            </div>
+          </div>
+        </div>
+        {/* Tab bar skeleton */}
+        <div className="flex gap-2 overflow-x-auto pb-1 mb-6">
+          {[80, 72, 64, 88, 72].map((w, i) => (
+            <div key={i} className="flex-shrink-0 h-9 bg-field rounded-xl" style={{ width: w }} />
+          ))}
+        </div>
+        {/* Content skeleton */}
+        <div className="space-y-3">
+          {[1, 2, 3, 4, 5].map(i => (
+            <div key={i} className="h-16 bg-field rounded-2xl" />
+          ))}
+        </div>
       </div>
     );
   }
