@@ -166,6 +166,7 @@ export default function DashboardPage() {
   const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
   const [acceptingInvite, setAcceptingInvite] = useState<Record<string, boolean>>({});
   const [decliningInvite, setDecliningInvite] = useState<Record<string, boolean>>({});
+  const [inviteError, setInviteError] = useState<string | null>(null);
 
   const [fetchKey, setFetchKey] = useState(0);
 
@@ -190,7 +191,7 @@ export default function DashboardPage() {
       const updated = await api.get<League[]>('/leagues/mine');
       setLeagues(updated);
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : 'Failed to accept invite');
+      setInviteError(e instanceof Error ? e.message : 'Failed to accept invite');
     } finally {
       setAcceptingInvite(s => ({ ...s, [invite.id]: false }));
     }
@@ -202,7 +203,7 @@ export default function DashboardPage() {
       await api.post(`/leagues/invites/${invite.inviteCode}/decline`, {});
       setPendingInvites(p => p.filter(i => i.id !== invite.id));
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : 'Failed to decline invite');
+      setInviteError(e instanceof Error ? e.message : 'Failed to decline invite');
     } finally {
       setDecliningInvite(s => ({ ...s, [invite.id]: false }));
     }
@@ -291,16 +292,24 @@ export default function DashboardPage() {
           <h2 className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-3">
             Pending Invites · {pendingInvites.length}
           </h2>
+          {inviteError && (
+            <div className="mb-2 bg-danger/10 border border-danger/30 text-danger text-sm rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+              <span>{inviteError}</span>
+              <button onClick={() => setInviteError(null)} className="flex-shrink-0 text-danger/70 hover:text-danger text-lg leading-none">×</button>
+            </div>
+          )}
           <div className="space-y-2">
             {pendingInvites.map(invite => {
               const accepting = acceptingInvite[invite.id];
               const declining = decliningInvite[invite.id];
               const busy = accepting || declining;
-              const daysLeft = Math.max(0, Math.ceil((new Date(invite.expiresAt).getTime() - Date.now()) / 86400000));
+              const msLeft = new Date(invite.expiresAt).getTime() - Date.now();
+              const daysLeft = Math.ceil(msLeft / 86400000);
+              const expired = msLeft <= 0;
               return (
-                <div key={invite.id} className="bg-card border border-brand/20 rounded-2xl px-5 py-4 flex items-center gap-4">
-                  <div className="w-9 h-9 rounded-full bg-brand-dim border border-brand/20 flex items-center justify-center flex-shrink-0">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-brand">
+                <div key={invite.id} className={`bg-card border rounded-2xl px-5 py-4 flex items-center gap-4 ${expired ? 'border-line opacity-60' : 'border-brand/20'}`}>
+                  <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${expired ? 'bg-field border border-line' : 'bg-brand-dim border border-brand/20'}`}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={expired ? 'text-copy-3' : 'text-brand'}>
                       <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
                       <polyline points="22,6 12,13 2,6" />
                     </svg>
@@ -310,25 +319,29 @@ export default function DashboardPage() {
                     <p className="text-xs text-copy-3 mt-0.5">
                       Invited by {invite.fromDisplayName}
                       <span className="mx-1.5 opacity-40">·</span>
-                      Expires in {daysLeft}d
+                      {expired ? <span className="text-danger">Expired</span> : `Expires in ${daysLeft}d`}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <button
-                      onClick={() => declineInvite(invite)}
-                      disabled={busy}
-                      className="text-xs font-medium text-copy-3 hover:text-copy px-3 py-1.5 rounded-lg hover:bg-field disabled:opacity-50 transition-colors"
-                    >
-                      {declining ? 'Declining…' : 'Decline'}
-                    </button>
-                    <button
-                      onClick={() => acceptInvite(invite)}
-                      disabled={busy}
-                      className="text-xs font-semibold bg-brand hover:bg-brand-2 disabled:opacity-50 text-white px-4 py-1.5 rounded-lg transition-colors"
-                    >
-                      {accepting ? 'Joining…' : 'Accept'}
-                    </button>
-                  </div>
+                  {expired ? (
+                    <span className="text-xs text-copy-3 flex-shrink-0">Expired</span>
+                  ) : (
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <button
+                        onClick={() => declineInvite(invite)}
+                        disabled={busy}
+                        className="text-xs font-medium text-copy-3 hover:text-copy px-3 py-1.5 rounded-lg hover:bg-field disabled:opacity-50 transition-colors"
+                      >
+                        {declining ? 'Declining…' : 'Decline'}
+                      </button>
+                      <button
+                        onClick={() => acceptInvite(invite)}
+                        disabled={busy}
+                        className="text-xs font-semibold bg-brand hover:bg-brand-2 disabled:opacity-50 text-white px-4 py-1.5 rounded-lg transition-colors"
+                      >
+                        {accepting ? 'Joining…' : 'Accept'}
+                      </button>
+                    </div>
+                  )}
                 </div>
               );
             })}

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
+import { ConfirmModal } from '../_components';
 import type { League } from '../_types';
 
 function CommissionerTab({
@@ -67,6 +68,7 @@ function CommissionerTab({
 
   const [actionError, setActionError] = useState<string | null>(null);
   const [waiverResult, setWaiverResult] = useState<{ approved: number; denied: number } | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{ title: string; message: string; danger?: boolean; confirmLabel?: string; onConfirm: () => void } | null>(null);
 
   const inputCls = 'w-full bg-field border border-line-2 rounded-xl px-4 py-2.5 text-copy text-sm focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors';
 
@@ -111,16 +113,23 @@ function CommissionerTab({
     }
   }
 
-  async function handleRenew() {
-    if (!confirm('Start a new season? Members will be carried over and the new league will be in draft state.')) return;
-    setRenewing(true);
-    try {
-      const newLeague = await api.post<{ id: string }>(`/leagues/${leagueId}/renew`);
-      router.push(`/leagues/${newLeague.id}`);
-    } catch (e: unknown) {
-      setActionError(e instanceof Error ? e.message : 'Failed to renew league');
-      setRenewing(false);
-    }
+  function handleRenew() {
+    setConfirmModal({
+      title: 'Start New Season',
+      message: 'Members will be carried over and the new league will be in draft state.',
+      confirmLabel: 'Start New Season',
+      onConfirm: async () => {
+        setConfirmModal(null);
+        setRenewing(true);
+        try {
+          const newLeague = await api.post<{ id: string }>(`/leagues/${leagueId}/renew`);
+          router.push(`/leagues/${newLeague.id}`);
+        } catch (e: unknown) {
+          setActionError(e instanceof Error ? e.message : 'Failed to renew league');
+          setRenewing(false);
+        }
+      },
+    });
   }
 
   async function saveTableZones() {
@@ -413,6 +422,17 @@ function CommissionerTab({
         </div>
       </div>}
 
+      {confirmModal && (
+        <ConfirmModal
+          title={confirmModal.title}
+          message={confirmModal.message}
+          confirmLabel={confirmModal.confirmLabel}
+          danger={confirmModal.danger}
+          onConfirm={confirmModal.onConfirm}
+          onCancel={() => setConfirmModal(null)}
+        />
+      )}
+
       {/* Delete modal */}
       {showDeleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -472,13 +492,18 @@ function CommissionerTab({
                 <p className="text-xs text-copy-3 mt-0.5">Transition directly to active without running an auction.</p>
               </div>
               <button
-                onClick={async () => {
-                  if (!confirm('Set league to active? This skips the auction and cannot be undone.')) return;
-                  try {
-                    const updated = await api.patch<League>(`/leagues/${leagueId}/state`, { state: 'active' });
-                    setLeague(updated);
-                  } catch (e: unknown) { setActionError(e instanceof Error ? e.message : 'Failed'); }
-                }}
+                onClick={() => setConfirmModal({
+                  title: 'Skip Auction & Go Live',
+                  message: 'This transitions the league directly to active, skipping the auction. This cannot be undone.',
+                  confirmLabel: 'Set Active',
+                  onConfirm: async () => {
+                    setConfirmModal(null);
+                    try {
+                      const updated = await api.patch<League>(`/leagues/${leagueId}/state`, { state: 'active' });
+                      setLeague(updated);
+                    } catch (e: unknown) { setActionError(e instanceof Error ? e.message : 'Failed'); }
+                  },
+                })}
                 className="flex-shrink-0 bg-brand hover:bg-brand-2 text-white text-xs font-semibold px-3 py-2 rounded-xl transition-colors whitespace-nowrap"
               >
                 Set Active
@@ -497,13 +522,19 @@ function CommissionerTab({
                 </p>
               </div>
               <button
-                onClick={async () => {
-                  if (!confirm('End the season now? This marks the league as completed and cannot be undone.')) return;
-                  try {
-                    const updated = await api.patch<League>(`/leagues/${leagueId}/state`, { state: 'completed' });
-                    setLeague(updated);
-                  } catch (e: unknown) { setActionError(e instanceof Error ? e.message : 'Failed'); }
-                }}
+                onClick={() => setConfirmModal({
+                  title: 'End Season',
+                  message: 'This marks the league as completed and locks all rosters. This cannot be undone.',
+                  confirmLabel: 'End Season',
+                  danger: true,
+                  onConfirm: async () => {
+                    setConfirmModal(null);
+                    try {
+                      const updated = await api.patch<League>(`/leagues/${leagueId}/state`, { state: 'completed' });
+                      setLeague(updated);
+                    } catch (e: unknown) { setActionError(e instanceof Error ? e.message : 'Failed'); }
+                  },
+                })}
                 className="flex-shrink-0 bg-danger hover:bg-danger/80 text-white text-xs font-semibold px-3 py-2 rounded-xl transition-colors whitespace-nowrap"
               >
                 End Season

@@ -45,6 +45,40 @@ export function Spinner({ size = 'md' }: { size?: 'sm' | 'md' }) {
   return <div className={`${s} border-brand border-t-transparent rounded-full animate-spin`} />;
 }
 
+export function ConfirmModal({
+  title, message, confirmLabel = 'Confirm', danger = false, onConfirm, onCancel,
+}: {
+  title: string;
+  message: string;
+  confirmLabel?: string;
+  danger?: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="bg-card border border-line rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+        <h3 className="font-semibold text-copy mb-2">{title}</h3>
+        <p className="text-sm text-copy-2 mb-6">{message}</p>
+        <div className="flex gap-2">
+          <button
+            onClick={onCancel}
+            className="flex-1 bg-field hover:bg-field-2 border border-line text-copy-2 font-medium py-2.5 rounded-xl transition-colors text-sm"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className={`flex-1 font-semibold py-2.5 rounded-xl transition-colors text-sm text-white ${danger ? 'bg-danger hover:bg-danger/80' : 'bg-brand hover:bg-brand-2'}`}
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function Lightbox({ url, onClose }: { url: string | null; onClose: () => void }) {
   if (!url) return null;
   return (

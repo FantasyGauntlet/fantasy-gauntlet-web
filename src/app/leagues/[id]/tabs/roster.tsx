@@ -5,7 +5,7 @@ import { ref as storageRef, uploadBytesResumable, getDownloadURL } from 'firebas
 import { api } from '@/lib/api';
 import { storage } from '@/lib/firebase';
 import { useTeamProfile } from '@/context/TeamProfileContext';
-import { Spinner, Lightbox, formatLeagueName, formatRecord, SPORT_ORDER } from '../_components';
+import { Spinner, Lightbox, ConfirmModal, formatLeagueName, formatRecord, SPORT_ORDER } from '../_components';
 import type { SportGroup, Standing, FantasyTeam, SportTeam, Trade, TeamBreakdown, BonusBreakdownItem } from '../_types';
 
 function RosterTab({
@@ -56,6 +56,7 @@ function RosterTab({
   const [tradeMsg, setTradeMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [actingTrade, setActingTrade] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{ title: string; message: string; danger?: boolean; confirmLabel?: string; onConfirm: () => void } | null>(null);
   const { openProfile } = useTeamProfile();
 
   useEffect(() => {
@@ -63,6 +64,10 @@ function RosterTab({
       .then(setSportGroups).catch(() => {}).finally(() => setLoadingTeams(false));
     api.get<Standing[]>(`/leagues/${leagueId}/standings`).then(setStandings).catch(() => {});
     api.get<Trade[]>(`/leagues/${leagueId}/trades`).then(setTrades).catch(() => {});
+    const poll = setInterval(() => {
+      api.get<Trade[]>(`/leagues/${leagueId}/trades`).then(setTrades).catch(() => {});
+    }, 30_000);
+    return () => clearInterval(poll);
   }, [leagueId]);
 
 
@@ -281,19 +286,27 @@ function RosterTab({
   }
 
 
-  async function handleRemoveTeam() {
+  function handleRemoveTeam() {
     if (!viewingTeam) return;
-    if (!confirm(`Remove "${viewingTeam.displayName}" from the league? Their sport teams will return to the pool. This cannot be undone.`)) return;
-    setRemovingTeam(true);
-    try {
-      await api.delete(`/leagues/${leagueId}/teams/${viewingId}`);
-      setFantasyTeams(prev => prev.filter(ft => ft.id !== viewingId));
-      setViewingId('');
-    } catch (err: unknown) {
-      setActionError(err instanceof Error ? err.message : 'Failed to remove team');
-    } finally {
-      setRemovingTeam(false);
-    }
+    setConfirmModal({
+      title: 'Remove Team',
+      message: `Remove "${viewingTeam.displayName}" from the league? Their sport teams will return to the pool. This cannot be undone.`,
+      confirmLabel: 'Remove',
+      danger: true,
+      onConfirm: async () => {
+        setConfirmModal(null);
+        setRemovingTeam(true);
+        try {
+          await api.delete(`/leagues/${leagueId}/teams/${viewingId}`);
+          setFantasyTeams(prev => prev.filter(ft => ft.id !== viewingId));
+          setViewingId('');
+        } catch (err: unknown) {
+          setActionError(err instanceof Error ? err.message : 'Failed to remove team');
+        } finally {
+          setRemovingTeam(false);
+        }
+      },
+    });
   }
 
   async function uploadLogo(file: File) {
@@ -347,6 +360,16 @@ function RosterTab({
 
   return (
     <div className="space-y-6">
+      {confirmModal && (
+        <ConfirmModal
+          title={confirmModal.title}
+          message={confirmModal.message}
+          confirmLabel={confirmModal.confirmLabel}
+          danger={confirmModal.danger}
+          onConfirm={confirmModal.onConfirm}
+          onCancel={() => setConfirmModal(null)}
+        />
+      )}
       {actionError && (
         <div className="bg-danger/10 border border-danger/30 text-danger text-sm rounded-xl px-4 py-3 flex items-center justify-between gap-3">
           <span>{actionError}</span>

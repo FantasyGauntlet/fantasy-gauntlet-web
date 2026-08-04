@@ -202,6 +202,7 @@ export default function AuctionPage() {
   // ── Auction state ──────────────────────────────────────────────────────────
   const [status, setStatus] = useState<AuctionStatus>('connecting');
   const [connected, setConnected] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
   const [currentLot, setCurrentLot] = useState<CurrentLot | null>(null);
   const [soldLots, setSoldLots] = useState<SoldLot[]>([]);
   const [upcomingQueue, setUpcomingQueue] = useState<string[]>([]);
@@ -366,9 +367,11 @@ export default function AuctionPage() {
       });
       socketRef.current = socket;
 
-      socket.on('connect', () => setConnected(true));
-      socket.on('disconnect', () => setConnected(false));
+      socket.on('connect', () => { setConnected(true); setReconnecting(false); });
+      socket.on('disconnect', () => { setConnected(false); });
       socket.on('connect_error', () => { setConnected(false); setStatus('error'); });
+      socket.io.on('reconnect_attempt', () => { setReconnecting(true); });
+      socket.io.on('reconnect', () => { setReconnecting(false); });
       socket.on('auction_scheduled', (data: any) => setScheduledStartAt(data?.scheduledStartAt ?? null));
 
       socket.on('auction_state', (data: any) => {
@@ -1110,8 +1113,18 @@ export default function AuctionPage() {
               </svg>
             )}
           </button>
-          <Dot color={connected ? 'green' : 'red'} />
-          <span className="hidden sm:inline">{connected ? 'Live' : 'Disconnected'}</span>
+          <Dot color={connected ? 'green' : reconnecting ? 'yellow' : 'red'} />
+          <span className="hidden sm:inline">
+            {connected ? 'Live' : reconnecting ? 'Reconnecting…' : 'Disconnected'}
+          </span>
+          {!connected && !reconnecting && (
+            <button
+              onClick={() => socketRef.current?.connect()}
+              className="hidden sm:inline text-xs font-semibold text-brand hover:text-brand-2 transition-colors"
+            >
+              Retry
+            </button>
+          )}
         </div>
       </div>
 

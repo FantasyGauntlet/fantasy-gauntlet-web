@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
+import { ConfirmModal } from '../_components';
 import type { FantasyTeam, League, LeagueInvite, Member } from '../_types';
 
 function UserManagementTab({
@@ -41,6 +42,7 @@ function UserManagementTab({
   const [inviteActions, setInviteActions] = useState<Record<string, 'cancelling' | 'resending' | null>>({});
   const [actionError, setActionError] = useState<string | null>(null);
   const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{ title: string; message: string; danger?: boolean; confirmLabel?: string; onConfirm: () => void } | null>(null);
 
   const memberNameMap = Object.fromEntries(
     members.filter(m => m.displayName).map(m => [m.userId, m.displayName!]),
@@ -93,18 +95,26 @@ function UserManagementTab({
     }
   }
 
-  async function removeMember(team: FantasyTeam) {
+  function removeMember(team: FantasyTeam) {
     const label = team.isPlaceholder ? 'placeholder slot' : team.displayName;
-    if (!confirm(`Remove ${label} from the league? This cannot be undone.`)) return;
-    setRemovingTeam(team.id);
-    try {
-      await api.delete(`/leagues/${leagueId}/teams/${team.id}`);
-      setTeams((prev: FantasyTeam[]) => prev.filter((t: FantasyTeam) => t.id !== team.id));
-    } catch (e) {
-      setActionError(e instanceof Error ? e.message : 'Failed to remove member');
-    } finally {
-      setRemovingTeam(null);
-    }
+    setConfirmModal({
+      title: 'Remove Member',
+      message: `Remove "${label}" from the league? This cannot be undone.`,
+      confirmLabel: 'Remove',
+      danger: true,
+      onConfirm: async () => {
+        setConfirmModal(null);
+        setRemovingTeam(team.id);
+        try {
+          await api.delete(`/leagues/${leagueId}/teams/${team.id}`);
+          setTeams((prev: FantasyTeam[]) => prev.filter((t: FantasyTeam) => t.id !== team.id));
+        } catch (e) {
+          setActionError(e instanceof Error ? e.message : 'Failed to remove member');
+        } finally {
+          setRemovingTeam(null);
+        }
+      },
+    });
   }
 
   async function sendPlaceholderInvite(teamId: string) {
@@ -300,6 +310,16 @@ function UserManagementTab({
 
   return (
     <div className="space-y-4">
+      {confirmModal && (
+        <ConfirmModal
+          title={confirmModal.title}
+          message={confirmModal.message}
+          confirmLabel={confirmModal.confirmLabel}
+          danger={confirmModal.danger}
+          onConfirm={confirmModal.onConfirm}
+          onCancel={() => setConfirmModal(null)}
+        />
+      )}
       {actionError && (
         <div className="bg-danger/10 border border-danger/30 text-danger text-sm rounded-xl px-4 py-3 flex items-center justify-between gap-3">
           <span>{actionError}</span>
