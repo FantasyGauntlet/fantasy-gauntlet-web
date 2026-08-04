@@ -249,6 +249,7 @@ function WaiversTab({
   const [denyingId, setDenyingId] = useState<string | null>(null);
   const [denyReason, setDenyReason] = useState('');
   const [reviewing, setReviewing] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     if (filterPush) setBrowseSport(filterPush.sport ?? 'all');
@@ -380,7 +381,7 @@ function WaiversTab({
       await api.delete(`/leagues/${leagueId}/waivers/${claimId}`);
       setClaims(c => c.filter(x => x.id !== claimId));
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : 'Failed to withdraw claim');
+      setActionError(e instanceof Error ? e.message : 'Failed to withdraw claim');
     }
   }
 
@@ -390,7 +391,7 @@ function WaiversTab({
       await api.patch(`/leagues/${leagueId}/waivers/${claimId}/approve`);
       setClaims(c => c.map(x => x.id === claimId
         ? { ...x, status: 'approved' as const, reviewedAt: new Date().toISOString() } : x));
-    } catch (e: unknown) { alert(e instanceof Error ? e.message : 'Failed to approve'); }
+    } catch (e: unknown) { setActionError(e instanceof Error ? e.message : 'Failed to approve'); }
     finally { setReviewing(null); }
   }
 
@@ -401,7 +402,7 @@ function WaiversTab({
       setClaims(c => c.map(x => x.id === claimId
         ? { ...x, status: 'denied' as const, reviewedAt: new Date().toISOString(), denialReason: denyReason || null } : x));
       setDenyingId(null); setDenyReason('');
-    } catch (e: unknown) { alert(e instanceof Error ? e.message : 'Failed to deny'); }
+    } catch (e: unknown) { setActionError(e instanceof Error ? e.message : 'Failed to deny'); }
     finally { setReviewing(null); }
   }
 
@@ -451,6 +452,12 @@ function WaiversTab({
 
   return (
     <div className="space-y-6">
+      {actionError && (
+        <div className="bg-danger/10 border border-danger/30 text-danger text-sm rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+          <span>{actionError}</span>
+          <button onClick={() => setActionError(null)} className="flex-shrink-0 text-danger/70 hover:text-danger text-lg leading-none">×</button>
+        </div>
+      )}
       {/* Processing schedule banner */}
       {(waiverSettings || true) && (
         <div className="flex items-center gap-3 bg-field border border-line rounded-xl px-4 py-3">

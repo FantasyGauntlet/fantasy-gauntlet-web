@@ -55,6 +55,7 @@ function RosterTab({
   const [tradeSubmitting, setTradeSubmitting] = useState(false);
   const [tradeMsg, setTradeMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [actingTrade, setActingTrade] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const { openProfile } = useTeamProfile();
 
   useEffect(() => {
@@ -224,7 +225,7 @@ function RosterTab({
         setFantasyTeams(freshTeams);
       }
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Failed');
+      setActionError(err instanceof Error ? err.message : 'Failed');
     } finally {
       setActingTrade(null);
     }
@@ -249,7 +250,7 @@ function RosterTab({
     try {
       const updated = await api.post<FantasyTeam>(`/leagues/${leagueId}/roster/assign`, { fantasyTeamId, teamId });
       setFantasyTeams(prev => prev.map(ft => ft.id === fantasyTeamId ? updated : ft));
-    } catch (e: unknown) { alert(e instanceof Error ? e.message : 'Failed'); }
+    } catch (e: unknown) { setActionError(e instanceof Error ? e.message : 'Failed'); }
     finally { setAssigning(null); }
   }
 
@@ -258,7 +259,7 @@ function RosterTab({
     try {
       const updated = await api.post<FantasyTeam>(`/leagues/${leagueId}/roster/remove`, { fantasyTeamId, teamId });
       setFantasyTeams(prev => prev.map(ft => ft.id === fantasyTeamId ? updated : ft));
-    } catch (e: unknown) { alert(e instanceof Error ? e.message : 'Failed'); }
+    } catch (e: unknown) { setActionError(e instanceof Error ? e.message : 'Failed'); }
     finally { setAssigning(null); }
   }
 
@@ -289,7 +290,7 @@ function RosterTab({
       setFantasyTeams(prev => prev.filter(ft => ft.id !== viewingId));
       setViewingId('');
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Failed to remove team');
+      setActionError(err instanceof Error ? err.message : 'Failed to remove team');
     } finally {
       setRemovingTeam(false);
     }
@@ -346,6 +347,12 @@ function RosterTab({
 
   return (
     <div className="space-y-6">
+      {actionError && (
+        <div className="bg-danger/10 border border-danger/30 text-danger text-sm rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+          <span>{actionError}</span>
+          <button onClick={() => setActionError(null)} className="flex-shrink-0 text-danger/70 hover:text-danger text-lg leading-none">×</button>
+        </div>
+      )}
 
       {/* ── Pending trades ── */}
       {(incomingTrades.length > 0 || outgoingTrades.length > 0) && (

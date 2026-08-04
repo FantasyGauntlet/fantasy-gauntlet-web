@@ -37,6 +37,7 @@ export default function LeaguePage() {
   const [scheduleLoaded, setScheduleLoaded] = useState(false);
   const [standings, setStandings] = useState<Standing[]>([]);
   const [waiverFilterPush, setWaiverFilterPush] = useState<{ sport: string | null; v: number }>({ sport: null, v: 0 });
+  const [startAuctionError, setStartAuctionError] = useState<string | null>(null);
   const tabBarRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -121,7 +122,7 @@ export default function LeaguePage() {
       setLeague((l: League | null) => l ? { ...l, state: 'auction' } : l);
       router.push(`/leagues/${id}/auction`);
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : 'Failed to start auction');
+      setStartAuctionError(e instanceof Error ? e.message : 'Failed to start auction');
     }
   }
 
@@ -199,14 +200,19 @@ export default function LeaguePage() {
                 </Link>
               )}
               {isCommissioner && league.state === 'draft' && (
-                <button
-                  onClick={startAuction}
-                  disabled={!league.auctionConfig}
-                  title={!league.auctionConfig ? 'Set auction config in Settings first' : undefined}
-                  className="bg-brand hover:bg-brand-2 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold px-4 py-2 rounded-xl text-sm transition-colors"
-                >
-                  Start Draft
-                </button>
+                <div className="flex flex-col items-end gap-1">
+                  <button
+                    onClick={() => { setStartAuctionError(null); startAuction(); }}
+                    disabled={!league.auctionConfig}
+                    title={!league.auctionConfig ? 'Set auction config in Settings first' : undefined}
+                    className="bg-brand hover:bg-brand-2 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold px-4 py-2 rounded-xl text-sm transition-colors"
+                  >
+                    Start Draft
+                  </button>
+                  {startAuctionError && (
+                    <p className="text-xs text-danger">{startAuctionError}</p>
+                  )}
+                </div>
               )}
             </div>
           </div>

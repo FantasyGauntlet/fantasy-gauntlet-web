@@ -65,6 +65,9 @@ function CommissionerTab({
   const [leagueEndDate, setLeagueEndDate] = useState(league.endDate ?? '');
   const [dateSaving, setDateSaving] = useState(false);
 
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [waiverResult, setWaiverResult] = useState<{ approved: number; denied: number } | null>(null);
+
   const inputCls = 'w-full bg-field border border-line-2 rounded-xl px-4 py-2.5 text-copy text-sm focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors';
 
   async function saveAuctionConfig(e: React.FormEvent) {
@@ -76,7 +79,7 @@ function CommissionerTab({
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Failed to save');
+      setActionError(err instanceof Error ? err.message : 'Failed to save');
     } finally {
       setSaving(false);
     }
@@ -90,7 +93,7 @@ function CommissionerTab({
       if (league) setLeague({ ...league, auctionConfig: league.auctionConfig ? { ...league.auctionConfig, scheduledStartAt } : league.auctionConfig });
       if (clear) setScheduleInput('');
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Failed to save schedule');
+      setActionError(err instanceof Error ? err.message : 'Failed to save schedule');
     } finally {
       setSavingSchedule(false);
     }
@@ -103,7 +106,7 @@ function CommissionerTab({
       await api.delete(`/leagues/${leagueId}`);
       router.replace('/leagues');
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : 'Failed to delete league');
+      setActionError(e instanceof Error ? e.message : 'Failed to delete league');
       setDeleting(false);
     }
   }
@@ -115,7 +118,7 @@ function CommissionerTab({
       const newLeague = await api.post<{ id: string }>(`/leagues/${leagueId}/renew`);
       router.push(`/leagues/${newLeague.id}`);
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : 'Failed to renew league');
+      setActionError(e instanceof Error ? e.message : 'Failed to renew league');
       setRenewing(false);
     }
   }
@@ -129,7 +132,7 @@ function CommissionerTab({
       });
       setLeague(updated);
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : 'Failed to save');
+      setActionError(e instanceof Error ? e.message : 'Failed to save');
     } finally {
       setZonesSaving(false);
     }
@@ -146,7 +149,7 @@ function CommissionerTab({
       const updated = await api.patch<League>(`/leagues/${leagueId}/settings`, body);
       setLeague(updated);
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : 'Failed to save league settings');
+      setActionError(e instanceof Error ? e.message : 'Failed to save league settings');
     } finally {
       setLeagueSettingsSaving(false);
     }
@@ -161,7 +164,7 @@ function CommissionerTab({
       });
       setLeague(updated);
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : 'Failed to save dates');
+      setActionError(e instanceof Error ? e.message : 'Failed to save dates');
     } finally {
       setDateSaving(false);
     }
@@ -175,7 +178,7 @@ function CommissionerTab({
       const updated = await api.patch<League>(`/leagues/${leagueId}/settings`, { name: trimmed });
       setLeague(updated);
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : 'Failed to save league name');
+      setActionError(e instanceof Error ? e.message : 'Failed to save league name');
     } finally {
       setLeagueNameSaving(false);
     }
@@ -188,7 +191,7 @@ function CommissionerTab({
       setLeague(updated);
       setIsPublic(next);
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : 'Failed to save visibility');
+      setActionError(e instanceof Error ? e.message : 'Failed to save visibility');
     } finally {
       setVisibilitySaving(false);
     }
@@ -198,9 +201,9 @@ function CommissionerTab({
     setProcessingWaivers(true);
     try {
       const result = await api.post<{ approved: number; denied: number }>(`/leagues/${leagueId}/waivers/process`);
-      alert(`Processing complete: ${result.approved} approved, ${result.denied} denied.`);
+      setWaiverResult(result);
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : 'Failed to process waivers');
+      setActionError(e instanceof Error ? e.message : 'Failed to process waivers');
     } finally {
       setProcessingWaivers(false);
     }
@@ -215,7 +218,7 @@ function CommissionerTab({
       });
       setLeague(updated);
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : 'Failed to save waiver settings');
+      setActionError(e instanceof Error ? e.message : 'Failed to save waiver settings');
     } finally {
       setWaiverSettingsSaving(false);
     }
@@ -223,6 +226,13 @@ function CommissionerTab({
 
   return (
     <div className="space-y-4">
+      {actionError && (
+        <div className="bg-danger/10 border border-danger/30 text-danger text-sm rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+          <span>{actionError}</span>
+          <button onClick={() => setActionError(null)} className="flex-shrink-0 text-danger/70 hover:text-danger text-lg leading-none">×</button>
+        </div>
+      )}
+
       {/* League name */}
       <div className="bg-card border border-line rounded-2xl p-5">
         <h2 className="text-sm font-semibold text-copy mb-4">League Name</h2>
@@ -467,7 +477,7 @@ function CommissionerTab({
                   try {
                     const updated = await api.patch<League>(`/leagues/${leagueId}/state`, { state: 'active' });
                     setLeague(updated);
-                  } catch (e: unknown) { alert(e instanceof Error ? e.message : 'Failed'); }
+                  } catch (e: unknown) { setActionError(e instanceof Error ? e.message : 'Failed'); }
                 }}
                 className="flex-shrink-0 bg-brand hover:bg-brand-2 text-white text-xs font-semibold px-3 py-2 rounded-xl transition-colors whitespace-nowrap"
               >
@@ -492,7 +502,7 @@ function CommissionerTab({
                   try {
                     const updated = await api.patch<League>(`/leagues/${leagueId}/state`, { state: 'completed' });
                     setLeague(updated);
-                  } catch (e: unknown) { alert(e instanceof Error ? e.message : 'Failed'); }
+                  } catch (e: unknown) { setActionError(e instanceof Error ? e.message : 'Failed'); }
                 }}
                 className="flex-shrink-0 bg-danger hover:bg-danger/80 text-white text-xs font-semibold px-3 py-2 rounded-xl transition-colors whitespace-nowrap"
               >
@@ -596,11 +606,16 @@ function CommissionerTab({
           <div>
             <h2 className="text-sm font-semibold text-copy">Waiver Processing</h2>
             <p className="text-xs text-copy-3 mt-0.5">Configure when pending claims are automatically processed.</p>
+            {waiverResult && (
+              <p className="text-xs text-positive mt-1">
+                Done: {waiverResult.approved} approved, {waiverResult.denied} denied.
+              </p>
+            )}
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             {league.state === 'active' && (
               <button
-                onClick={processWaivers}
+                onClick={() => { setWaiverResult(null); processWaivers(); }}
                 disabled={processingWaivers}
                 className="bg-positive hover:bg-positive/90 disabled:opacity-50 text-white text-xs font-semibold px-3 py-2 rounded-xl transition-colors whitespace-nowrap"
               >

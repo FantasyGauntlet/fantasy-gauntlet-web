@@ -43,6 +43,7 @@ function LeagueHomeTab({
   const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [leaveLoading, setLeaveLoading] = useState(false);
   const leaveRouter = useRouter();
+  const [actionError, setActionError] = useState<string | null>(null);
 
   async function handleLeaveLeague() {
     setLeaveLoading(true);
@@ -50,7 +51,7 @@ function LeagueHomeTab({
       await api.delete(`/leagues/${leagueId}/members/me`);
       leaveRouter.replace('/dashboard');
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : 'Failed to leave league');
+      setActionError(e instanceof Error ? e.message : 'Failed to leave league');
       setLeaveLoading(false);
     }
   }
@@ -82,7 +83,7 @@ function LeagueHomeTab({
     setUploading: (v: boolean) => void,
     setProgress: (v: number) => void,
   ) {
-    if (!storage) { alert('Firebase Storage not initialized.'); return; }
+    if (!storage) { setActionError('Firebase Storage not initialized.'); return; }
     const ext = file.name.split('.').pop() ?? 'jpg';
     const path = `message-images/${leagueId}_${Date.now()}.${ext}`;
     const sRef = storageRef(storage, path);
@@ -100,7 +101,7 @@ function LeagueHomeTab({
       });
       setUrl(await getDownloadURL(sRef));
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : 'Upload failed');
+      setActionError(e instanceof Error ? e.message : 'Upload failed');
     } finally {
       setUploading(false);
       setProgress(0);
@@ -130,7 +131,7 @@ function LeagueHomeTab({
       setShowAnnImageInput(false);
       setShowAnnounceForm(false);
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : 'Failed to post');
+      setActionError(e instanceof Error ? e.message : 'Failed to post');
     } finally {
       setAnnouncementSaving(false);
     }
@@ -141,7 +142,7 @@ function LeagueHomeTab({
       await api.delete(`/leagues/${leagueId}/announcements/${id}`);
       setAnnouncements(prev => prev.filter(a => a.id !== id));
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : 'Failed to delete');
+      setActionError(e instanceof Error ? e.message : 'Failed to delete');
     }
   }
 
@@ -158,7 +159,7 @@ function LeagueHomeTab({
       setShowMsgImageInput(false);
       setTimeout(() => msgEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : 'Failed to send');
+      setActionError(e instanceof Error ? e.message : 'Failed to send');
     } finally {
       setMessageSending(false);
     }
@@ -169,12 +170,18 @@ function LeagueHomeTab({
       await api.delete(`/leagues/${leagueId}/messages/${id}`);
       setMessages(prev => prev.filter(m => m.id !== id));
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : 'Failed to delete');
+      setActionError(e instanceof Error ? e.message : 'Failed to delete');
     }
   }
 
   return (
     <div className="space-y-4">
+      {actionError && (
+        <div className="bg-danger/10 border border-danger/30 text-danger text-sm rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+          <span>{actionError}</span>
+          <button onClick={() => setActionError(null)} className="flex-shrink-0 text-danger/70 hover:text-danger text-lg leading-none">×</button>
+        </div>
+      )}
       {/* ── Message Board ──────────────────────────────────────────────────────── */}
       <div className="bg-card border border-line rounded-2xl overflow-hidden">
         <div className="px-5 py-4 border-b border-line">

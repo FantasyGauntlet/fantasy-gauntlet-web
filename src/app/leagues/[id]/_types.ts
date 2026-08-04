@@ -36,7 +36,7 @@ export interface League {
 export interface Member { id: string; userId: string; role: 'commissioner' | 'member'; joinedAt: string; displayName?: string; }
 
 export interface LeagueInvite {
-  id: string; leagueId: string; toEmail: string;
+  id: string; leagueId: string; toEmail: string; inviteCode: string;
   status: 'pending' | 'accepted' | 'declined' | 'expired' | 'cancelled';
   createdAt: string; expiresAt: string;
 }

@@ -39,6 +39,8 @@ function UserManagementTab({
   const [removingTeam, setRemovingTeam] = useState<string | null>(null);
   const [removingCoOwner, setRemovingCoOwner] = useState<string | null>(null);
   const [inviteActions, setInviteActions] = useState<Record<string, 'cancelling' | 'resending' | null>>({});
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null);
 
   const memberNameMap = Object.fromEntries(
     members.filter(m => m.displayName).map(m => [m.userId, m.displayName!]),
@@ -85,7 +87,7 @@ function UserManagementTab({
         };
       }));
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Failed to remove co-manager');
+      setActionError(e instanceof Error ? e.message : 'Failed to remove co-manager');
     } finally {
       setRemovingCoOwner(null);
     }
@@ -99,7 +101,7 @@ function UserManagementTab({
       await api.delete(`/leagues/${leagueId}/teams/${team.id}`);
       setTeams((prev: FantasyTeam[]) => prev.filter((t: FantasyTeam) => t.id !== team.id));
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Failed to remove member');
+      setActionError(e instanceof Error ? e.message : 'Failed to remove member');
     } finally {
       setRemovingTeam(null);
     }
@@ -131,7 +133,7 @@ function UserManagementTab({
       setTeams((prev: FantasyTeam[]) => [...prev, team]);
       setPlaceholderName('');
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Failed to add placeholder');
+      setActionError(e instanceof Error ? e.message : 'Failed to add placeholder');
     } finally {
       setAddingPlaceholder(false);
     }
@@ -154,7 +156,7 @@ function UserManagementTab({
     try {
       await api.post(`/leagues/${leagueId}/invites/${inviteId}/resend`);
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Failed to resend');
+      setActionError(e instanceof Error ? e.message : 'Failed to resend');
     } finally {
       setInviteActions((a: Record<string, 'cancelling' | 'resending' | null>) => ({ ...a, [inviteId]: null }));
     }
@@ -298,6 +300,12 @@ function UserManagementTab({
 
   return (
     <div className="space-y-4">
+      {actionError && (
+        <div className="bg-danger/10 border border-danger/30 text-danger text-sm rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+          <span>{actionError}</span>
+          <button onClick={() => setActionError(null)} className="flex-shrink-0 text-danger/70 hover:text-danger text-lg leading-none">×</button>
+        </div>
+      )}
       {/* Add Team — draft only */}
       {league.state === 'draft' && (
         <div className="bg-card border border-line rounded-2xl p-5">
@@ -455,6 +463,16 @@ function UserManagementTab({
                     </p>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(`${window.location.origin}/invite/${invite.inviteCode}`);
+                        setCopiedInviteId(invite.id);
+                        setTimeout(() => setCopiedInviteId(null), 2000);
+                      }}
+                      className={btnBrand}
+                    >
+                      {copiedInviteId === invite.id ? 'Copied!' : 'Copy Link'}
+                    </button>
                     <button
                       onClick={() => resendInvite(invite.id)}
                       disabled={inviteActions[invite.id] != null}

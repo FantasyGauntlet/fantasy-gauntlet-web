@@ -15,6 +15,8 @@ interface NotificationPrefs {
   leagueInvite:    boolean;
   waiverUpdated:   boolean;
   finalStandings:  boolean;
+  nominationTurn:  boolean;
+  snakePickTurn:   boolean;
 }
 
 const EVENT_LABELS: Record<keyof NotificationPrefs, string> = {
@@ -25,6 +27,8 @@ const EVENT_LABELS: Record<keyof NotificationPrefs, string> = {
   leagueInvite:    'League invitations',
   waiverUpdated:   'Waiver claim results',
   finalStandings:  'Final standings',
+  nominationTurn:  'Draft turn alerts',
+  snakePickTurn:   'Snake pick alerts',
 };
 
 const DEFAULT_PREFS: NotificationPrefs = {
@@ -35,6 +39,8 @@ const DEFAULT_PREFS: NotificationPrefs = {
   leagueInvite:    true,
   waiverUpdated:   true,
   finalStandings:  true,
+  nominationTurn:  true,
+  snakePickTurn:   true,
 };
 
 function Toggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
