@@ -138,7 +138,7 @@ export default function LeaguePage() {
           router.push(`/leagues/${id}/auction`);
         }
       } catch {}
-    }, 3000);
+    }, 30_000);
     return () => clearInterval(poll);
   }, [league?.state, id, router]);
 
