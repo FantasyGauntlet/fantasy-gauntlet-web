@@ -247,6 +247,8 @@ function WaiversTab({
   const [slots, setSlots] = useState<{ addTeamId: string; faabBid: number; search: string }[]>([
     { addTeamId: '', faabBid: 0, search: '' },
   ]);
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [submitSuccess, setSubmitSuccess] = useState('');
@@ -356,6 +358,15 @@ function WaiversTab({
 
   function updateSlot(i: number, updates: Partial<{ addTeamId: string; faabBid: number; search: string }>) {
     setSlots(prev => prev.map((s, idx) => idx === i ? { ...s, ...updates } : s));
+  }
+
+  function moveSlot(fromIdx: number, toIdx: number) {
+    setSlots(prev => {
+      const next = [...prev];
+      const [moved] = next.splice(fromIdx, 1);
+      next.splice(toIdx, 0, moved);
+      return next;
+    });
   }
 
   function openAddForm(teamId?: string) {
@@ -573,13 +584,41 @@ function WaiversTab({
               const slotPool = filteredPoolForSlot(slot.search).filter(t =>
                 !slots.some((s, si) => si !== i && s.addTeamId === t.id)
               );
-              const label = i === 0 ? '1st choice' : i === 1 ? '2nd choice (backup)' : `#${i + 1} backup`;
+              const isDragging = dragIdx === i;
+              const isDropTarget = dragOverIdx === i && dragIdx !== i;
 
               return (
-                <div key={i} className="border border-line rounded-xl overflow-hidden">
-                  <div className="flex items-center justify-between px-3 py-2 bg-field/60 border-b border-line">
-                    <span className="text-[11px] font-semibold text-copy-3 uppercase tracking-wide">{label}</span>
-                    {i > 0 && (
+                <div
+                  key={i}
+                  draggable={slots.length > 1}
+                  onDragStart={() => { setDragIdx(i); setDragOverIdx(i); }}
+                  onDragOver={e => { e.preventDefault(); setDragOverIdx(i); }}
+                  onDrop={e => { e.preventDefault(); if (dragIdx !== null && dragIdx !== i) moveSlot(dragIdx, i); setDragIdx(null); setDragOverIdx(null); }}
+                  onDragEnd={() => { setDragIdx(null); setDragOverIdx(null); }}
+                  className="border rounded-xl overflow-hidden transition-all"
+                  style={{
+                    opacity: isDragging ? 0.45 : 1,
+                    borderColor: isDropTarget ? 'var(--color-brand)' : 'var(--color-line)',
+                    boxShadow: isDropTarget ? '0 0 0 1px var(--color-brand)' : undefined,
+                  }}
+                >
+                  <div className="flex items-center gap-2 px-3 py-2 bg-field/60 border-b border-line">
+                    {slots.length > 1 && (
+                      <svg
+                        width="14" height="14" viewBox="0 0 24 24" fill="currentColor"
+                        className="text-copy-3 flex-shrink-0 cursor-grab active:cursor-grabbing"
+                        style={{ touchAction: 'none' }}
+                      >
+                        <circle cx="9" cy="5" r="1.5" /><circle cx="15" cy="5" r="1.5" />
+                        <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
+                        <circle cx="9" cy="19" r="1.5" /><circle cx="15" cy="19" r="1.5" />
+                      </svg>
+                    )}
+                    <span className="text-[11px] font-bold text-brand tabular-nums">#{i + 1}</span>
+                    <span className="text-[11px] font-semibold text-copy-3 uppercase tracking-wide flex-1">
+                      {i === 0 ? 'First choice' : 'Backup'}
+                    </span>
+                    {slots.length > 1 && (
                       <button
                         type="button"
                         onClick={() => setSlots(prev => prev.filter((_, idx) => idx !== i))}
@@ -681,7 +720,7 @@ function WaiversTab({
             })}
 
             {/* Add backup slot */}
-            {slots.length < 5 && slots[slots.length - 1].addTeamId && (
+            {slots[slots.length - 1].addTeamId && (
               <button
                 type="button"
                 onClick={() => setSlots(prev => [...prev, { addTeamId: '', faabBid: 0, search: '' }])}
