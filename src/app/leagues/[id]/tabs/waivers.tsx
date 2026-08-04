@@ -104,6 +104,11 @@ function ClaimCard({
 
           {/* Meta */}
           <div className="flex items-center gap-3 mt-2.5 flex-wrap">
+            {claim.groupId && (
+              <span className="text-[11px] font-semibold text-copy-3 bg-field border border-line px-2 py-0.5 rounded-full">
+                #{claim.priority ?? 1} priority
+              </span>
+            )}
             <p className="text-xs text-copy-3">
               {new Date(claim.requestedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
               {' · '}
@@ -238,9 +243,10 @@ function WaiversTab({
   // Waiver claim form
   const [showForm, setShowForm] = useState(false);
   const [dropTeamId, setDropTeamId] = useState('');
-  const [addTeamId, setAddTeamId] = useState('');
-  const [formSearch, setFormSearch] = useState('');
-  const [faabBid, setFaabBid] = useState(0);
+  // Each slot is one priority claim (all share the same drop)
+  const [slots, setSlots] = useState<{ addTeamId: string; faabBid: number; search: string }[]>([
+    { addTeamId: '', faabBid: 0, search: '' },
+  ]);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [submitSuccess, setSubmitSuccess] = useState('');
@@ -335,11 +341,11 @@ function WaiversTab({
 
   const isUnderRosterSize = myRosterTeams.length < rosterSize;
 
-  const formFilteredPool = useMemo(() => {
-    if (!formSearch.trim()) return pool;
-    const q = formSearch.trim().toLowerCase();
+  function filteredPoolForSlot(search: string) {
+    if (!search.trim()) return pool;
+    const q = search.trim().toLowerCase();
     return pool.filter(t => t.name.toLowerCase().includes(q) || t.shortName.toLowerCase().includes(q));
-  }, [pool, formSearch]);
+  }
 
   const pending = claims.filter(c => c.status === 'pending');
   const history = isCommissioner
@@ -348,28 +354,47 @@ function WaiversTab({
   const myTeamUserId = myTeam?.userId;
   const canSubmit = !!myTeam;
 
+  function updateSlot(i: number, updates: Partial<{ addTeamId: string; faabBid: number; search: string }>) {
+    setSlots(prev => prev.map((s, idx) => idx === i ? { ...s, ...updates } : s));
+  }
+
   function openAddForm(teamId?: string) {
-    if (teamId) setAddTeamId(teamId);
+    if (teamId) updateSlot(0, { addTeamId: teamId });
     setShowForm(true);
   }
 
   function closeForm() {
-    setShowForm(false); setDropTeamId(''); setAddTeamId('');
-    setFaabBid(0); setSubmitError(''); setFormSearch('');
+    setShowForm(false);
+    setDropTeamId('');
+    setSlots([{ addTeamId: '', faabBid: 0, search: '' }]);
+    setSubmitError('');
   }
 
   async function submitClaim() {
-    if (!addTeamId) return;
+    const filledSlots = slots.filter(s => s.addTeamId);
+    if (!filledSlots.length) return;
     if (!isUnderRosterSize && !dropTeamId) return;
     setSubmitting(true); setSubmitError('');
     try {
-      const body: Record<string, unknown> = { addTeamId };
-      if (dropTeamId) body.dropTeamId = dropTeamId;
-      if (waiverType === 'faab') body.faabBid = faabBid;
-      const claim = await api.post<WaiverClaim>(`/leagues/${leagueId}/waivers`, body);
-      setClaims(c => [claim, ...c]);
+      if (filledSlots.length === 1) {
+        const body: Record<string, unknown> = { addTeamId: filledSlots[0].addTeamId };
+        if (dropTeamId) body.dropTeamId = dropTeamId;
+        if (waiverType === 'faab') body.faabBid = filledSlots[0].faabBid;
+        const claim = await api.post<WaiverClaim>(`/leagues/${leagueId}/waivers`, body);
+        setClaims(c => [claim, ...c]);
+      } else {
+        const body: Record<string, unknown> = {
+          claims: filledSlots.map(s => ({
+            addTeamId: s.addTeamId,
+            ...(waiverType === 'faab' ? { faabBid: s.faabBid } : {}),
+          })),
+        };
+        if (dropTeamId) body.dropTeamId = dropTeamId;
+        const newClaims = await api.post<WaiverClaim[]>(`/leagues/${leagueId}/waivers/group`, body);
+        setClaims(c => [...newClaims, ...c]);
+      }
       closeForm();
-      setSubmitSuccess('Claim submitted.');
+      setSubmitSuccess(filledSlots.length > 1 ? `Priority group of ${filledSlots.length} claims submitted.` : 'Claim submitted.');
       setTimeout(() => setSubmitSuccess(''), 4000);
     } catch (e: unknown) {
       setSubmitError(e instanceof Error ? e.message : 'Failed to submit claim');
@@ -419,8 +444,6 @@ function WaiversTab({
     onConfirmDeny: deny,
     onCancelDeny: () => setDenyingId(null),
   };
-
-  const addedTeam = addTeamId ? comprehensiveTeamMap.get(addTeamId) : null;
 
   const nextProcessingLabel = (() => {
     const day = waiverSettings?.processingDay ?? 'tuesday';
@@ -538,115 +561,149 @@ function WaiversTab({
             )}
           </div>
 
-          {/* Step 2: Add */}
-          <div>
-            <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
-              <p className="text-xs font-semibold text-copy-3 uppercase tracking-wider">
-                2. Add from available pool
-              </p>
-            </div>
+          {/* Step 2: Priority slots */}
+          <div className="space-y-3">
+            <p className="text-xs font-semibold text-copy-3 uppercase tracking-wider">
+              2. Add from available pool
+              {slots.length > 1 && <span className="ml-1.5 normal-case font-normal text-copy-3">· priority order — #1 is first choice</span>}
+            </p>
 
-            {/* Step 2 content: selected team chip or search picker */}
-            {addedTeam ? (
-              <div className="flex items-center gap-3 bg-brand-dim border border-brand/30 rounded-xl px-3 py-2.5">
-                <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center">
-                  {addedTeam.logoUrl
-                    ? <img src={addedTeam.logoUrl} alt={addedTeam.name} className="w-8 h-8 object-contain" />
-                    : <div className="w-8 h-8 rounded bg-field-2 flex items-center justify-center text-copy-3 text-[10px] font-bold">{addedTeam.shortName?.slice(0, 2).toUpperCase() ?? '?'}</div>
-                  }
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-brand truncate">{addedTeam.name}</p>
-                  <p className="text-xs text-copy-3">{formatLeagueName(addedTeam.sportLeagueId)}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => { setAddTeamId(''); setFormSearch(''); }}
-                  className="text-copy-3 hover:text-copy transition-colors p-1 flex-shrink-0"
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" />
-                  </svg>
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <div className="relative">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="absolute left-2.5 top-1/2 -translate-y-1/2 text-copy-3 pointer-events-none">
-                    <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" strokeLinecap="round" />
-                  </svg>
-                  <input
-                    type="text"
-                    value={formSearch}
-                    onChange={e => setFormSearch(e.target.value)}
-                    placeholder="Search available teams…"
-                    className="w-full bg-field border border-line-2 rounded-lg pl-7 pr-3 py-1.5 text-xs text-copy placeholder-copy-3 focus:outline-none focus:border-brand transition-colors"
-                  />
-                </div>
-                {formFilteredPool.length === 0 ? (
-                  <p className="text-copy-3 text-xs py-2 text-center">No available teams found.</p>
-                ) : (
-                  <div className="border border-line rounded-xl overflow-hidden max-h-64 overflow-y-auto divide-y divide-line/50">
-                    {formFilteredPool.map(t => (
+            {slots.map((slot, i) => {
+              const slotTeam = slot.addTeamId ? comprehensiveTeamMap.get(slot.addTeamId) : null;
+              const slotPool = filteredPoolForSlot(slot.search).filter(t =>
+                !slots.some((s, si) => si !== i && s.addTeamId === t.id)
+              );
+              const label = i === 0 ? '1st choice' : i === 1 ? '2nd choice (backup)' : `#${i + 1} backup`;
+
+              return (
+                <div key={i} className="border border-line rounded-xl overflow-hidden">
+                  <div className="flex items-center justify-between px-3 py-2 bg-field/60 border-b border-line">
+                    <span className="text-[11px] font-semibold text-copy-3 uppercase tracking-wide">{label}</span>
+                    {i > 0 && (
                       <button
-                        key={t.id}
                         type="button"
-                        onClick={() => setAddTeamId(t.id)}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 transition-colors text-left hover:bg-field"
+                        onClick={() => setSlots(prev => prev.filter((_, idx) => idx !== i))}
+                        className="text-copy-3 hover:text-danger transition-colors"
                       >
-                        <div className="w-7 h-7 flex-shrink-0 flex items-center justify-center">
-                          {t.logoUrl
-                            ? <img src={t.logoUrl} alt={t.name} className="w-7 h-7 object-contain" />
-                            : <div className="w-7 h-7 rounded bg-field-2 flex items-center justify-center text-copy-3 text-[10px] font-bold">{t.shortName?.slice(0, 2).toUpperCase() ?? '?'}</div>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="p-3 space-y-2">
+                    {slotTeam ? (
+                      <div className="flex items-center gap-3 bg-brand-dim border border-brand/30 rounded-xl px-3 py-2.5">
+                        <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center">
+                          {slotTeam.logoUrl
+                            ? <img src={slotTeam.logoUrl} alt={slotTeam.name} className="w-8 h-8 object-contain" />
+                            : <div className="w-8 h-8 rounded bg-field-2 flex items-center justify-center text-copy-3 text-[10px] font-bold">{slotTeam.shortName?.slice(0, 2).toUpperCase() ?? '?'}</div>
                           }
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs font-medium text-copy truncate">{t.name}</p>
-                          <p className="text-[10px] text-copy-3">{formatLeagueName(t.sportLeagueId)}</p>
+                          <p className="text-sm font-semibold text-brand truncate">{slotTeam.name}</p>
+                          <p className="text-xs text-copy-3">{formatLeagueName(slotTeam.sportLeagueId)}</p>
                         </div>
-                        <div className="text-right flex-shrink-0">
-                          <p className="text-xs font-semibold text-copy tabular-nums">{t.points.toFixed(1)}</p>
-                          <p className="text-[10px] text-copy-3">pts</p>
+                        <button
+                          type="button"
+                          onClick={() => updateSlot(i, { addTeamId: '', search: '' })}
+                          className="text-copy-3 hover:text-copy transition-colors p-1 flex-shrink-0"
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" />
+                          </svg>
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="relative">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="absolute left-2.5 top-1/2 -translate-y-1/2 text-copy-3 pointer-events-none">
+                            <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" strokeLinecap="round" />
+                          </svg>
+                          <input
+                            type="text"
+                            value={slot.search}
+                            onChange={e => updateSlot(i, { search: e.target.value })}
+                            placeholder="Search available teams…"
+                            className="w-full bg-field border border-line-2 rounded-lg pl-7 pr-3 py-1.5 text-xs text-copy placeholder-copy-3 focus:outline-none focus:border-brand transition-colors"
+                          />
                         </div>
-                      </button>
-                    ))}
+                        {slotPool.length === 0 ? (
+                          <p className="text-copy-3 text-xs py-2 text-center">No available teams found.</p>
+                        ) : (
+                          <div className="border border-line rounded-xl overflow-hidden max-h-48 overflow-y-auto divide-y divide-line/50">
+                            {slotPool.map(t => (
+                              <button
+                                key={t.id}
+                                type="button"
+                                onClick={() => updateSlot(i, { addTeamId: t.id, search: '' })}
+                                className="w-full flex items-center gap-3 px-3 py-2.5 transition-colors text-left hover:bg-field"
+                              >
+                                <div className="w-7 h-7 flex-shrink-0 flex items-center justify-center">
+                                  {t.logoUrl
+                                    ? <img src={t.logoUrl} alt={t.name} className="w-7 h-7 object-contain" />
+                                    : <div className="w-7 h-7 rounded bg-field-2 flex items-center justify-center text-copy-3 text-[10px] font-bold">{t.shortName?.slice(0, 2).toUpperCase() ?? '?'}</div>
+                                  }
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-medium text-copy truncate">{t.name}</p>
+                                  <p className="text-[10px] text-copy-3">{formatLeagueName(t.sportLeagueId)}</p>
+                                </div>
+                                <div className="text-right flex-shrink-0">
+                                  <p className="text-xs font-semibold text-copy tabular-nums">{t.points.toFixed(1)}</p>
+                                  <p className="text-[10px] text-copy-3">pts</p>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    )}
+
+                    {/* Per-slot FAAB bid */}
+                    {waiverType === 'faab' && slotTeam && (
+                      <div className="flex items-center gap-2 pt-1">
+                        <span className="text-xs text-copy-3">Bid:</span>
+                        <span className="text-xs text-copy-2">$</span>
+                        <input
+                          type="number" min={0} step={1} max={myTeam?.faabRemaining ?? 0}
+                          value={slot.faabBid}
+                          onFocus={e => e.target.select()}
+                          onChange={e => { const v = e.target.valueAsNumber; updateSlot(i, { faabBid: isNaN(v) ? 0 : Math.max(0, Math.floor(v)) }); }}
+                          className="w-24 bg-field border border-line-2 rounded-lg px-3 py-1.5 text-xs text-copy focus:outline-none focus:border-brand transition-colors"
+                        />
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
+                </div>
+              );
+            })}
+
+            {/* Add backup slot */}
+            {slots.length < 5 && slots[slots.length - 1].addTeamId && (
+              <button
+                type="button"
+                onClick={() => setSlots(prev => [...prev, { addTeamId: '', faabBid: 0, search: '' }])}
+                className="w-full flex items-center justify-center gap-1.5 text-xs font-medium text-brand border border-dashed border-brand/40 rounded-xl py-2.5 hover:bg-brand-dim transition-colors"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M12 5v14M5 12h14" strokeLinecap="round" />
+                </svg>
+                Add backup claim
+              </button>
+            )}
+
+            {myTeam && waiverType === 'faab' && (
+              <p className="text-xs text-copy-3">
+                Budget remaining: <span className="font-medium text-copy">${myTeam.faabRemaining ?? 0}</span>
+              </p>
             )}
           </div>
 
-          {/* FAAB bid */}
-          {waiverType === 'faab' && (
-            <div>
-              <p className="text-xs font-semibold text-copy-3 uppercase tracking-wider mb-2">
-                3. Your FAAB bid
-              </p>
-              <div className="flex items-center gap-2">
-                <span className="text-copy-2 text-sm">$</span>
-                <input
-                  type="number"
-                  min={0}
-                  step={1}
-                  max={myTeam?.faabRemaining ?? 0}
-                  value={faabBid}
-                  onFocus={e => e.target.select()}
-                  onChange={e => { const v = e.target.valueAsNumber; setFaabBid(isNaN(v) ? 0 : Math.max(0, Math.floor(v))); }}
-                  className="w-full bg-field border border-line-2 rounded-xl px-4 py-2.5 text-sm text-copy focus:outline-none focus:border-brand transition-colors"
-                  placeholder="0"
-                />
-              </div>
-              {myTeam && (
-                <p className="text-xs text-copy-3 mt-1.5">
-                  Budget remaining: <span className="font-medium text-copy">${myTeam.faabRemaining ?? 0}</span>
-                </p>
-              )}
-            </div>
-          )}
-
           {/* Summary pill */}
-          {(dropTeamId || addTeamId) && (
-            <div className="bg-field rounded-xl px-4 py-2.5 text-xs flex items-center gap-2">
+          {(dropTeamId || slots[0].addTeamId) && (
+            <div className="bg-field rounded-xl px-4 py-2.5 text-xs flex items-center gap-2 flex-wrap">
               {isUnderRosterSize && !dropTeamId ? (
                 <span className="text-copy-3 italic">No drop needed</span>
               ) : (
@@ -657,9 +714,13 @@ function WaiversTab({
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-copy-3 flex-shrink-0">
                 <path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              <span className={addTeamId ? 'text-brand font-medium' : 'text-copy-3'}>
-                {addTeamId ? (comprehensiveTeamMap.get(addTeamId)?.name ?? addTeamId) : 'Pick a team to add'}
-              </span>
+              {slots.filter(s => s.addTeamId).length === 0 ? (
+                <span className="text-copy-3">Pick a team to add</span>
+              ) : slots.filter(s => s.addTeamId).length === 1 ? (
+                <span className="text-brand font-medium">{comprehensiveTeamMap.get(slots[0].addTeamId)?.name ?? slots[0].addTeamId}</span>
+              ) : (
+                <span className="text-brand font-medium">{slots.filter(s => s.addTeamId).length} priority claims</span>
+              )}
             </div>
           )}
 
@@ -678,10 +739,10 @@ function WaiversTab({
             </button>
             <button
               onClick={submitClaim}
-              disabled={submitting || !addTeamId || (!isUnderRosterSize && !dropTeamId)}
+              disabled={submitting || !slots[0].addTeamId || (!isUnderRosterSize && !dropTeamId)}
               className="flex-1 bg-brand hover:bg-brand-2 disabled:opacity-40 text-white text-sm font-semibold py-2.5 rounded-xl transition-colors"
             >
-              {submitting ? 'Submitting...' : 'Submit Claim'}
+              {submitting ? 'Submitting...' : slots.filter(s => s.addTeamId).length > 1 ? `Submit ${slots.filter(s => s.addTeamId).length} Priority Claims` : 'Submit Claim'}
             </button>
           </div>
         </div>
@@ -850,18 +911,43 @@ function WaiversTab({
       </div>
 
       {/* My pending claims — visible to the claimant (primary owner or co-manager) */}
-      {!isCommissioner && myTeam && pending.filter(c => c.claimantUserId === myTeamUserId).length > 0 && (
-        <div>
-          <p className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-2">
-            Your Pending Claims · {pending.filter(c => c.claimantUserId === myTeamUserId).length}
-          </p>
-          <div className="space-y-2">
-            {pending.filter(c => c.claimantUserId === myTeamUserId).map(c => (
-              <ClaimCard key={c.id} claim={c} {...claimCardProps} onWithdraw={withdraw} />
-            ))}
+      {!isCommissioner && myTeam && pending.filter(c => c.claimantUserId === myTeamUserId).length > 0 && (() => {
+        const myClaims = pending.filter(c => c.claimantUserId === myTeamUserId);
+        const seenGroupIds = new Set<string>();
+        const groups: WaiverClaim[][] = [];
+        for (const claim of myClaims) {
+          if (!claim.groupId) { groups.push([claim]); continue; }
+          if (seenGroupIds.has(claim.groupId)) continue;
+          seenGroupIds.add(claim.groupId);
+          groups.push(myClaims.filter(c => c.groupId === claim.groupId).sort((a, b) => (a.priority ?? 1) - (b.priority ?? 1)));
+        }
+        return (
+          <div>
+            <p className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-2">
+              Your Pending Claims · {myClaims.length}
+            </p>
+            <div className="space-y-3">
+              {groups.map((group, gi) => (
+                <div key={gi} className={group.length > 1 ? 'border border-brand/20 rounded-2xl overflow-hidden' : ''}>
+                  {group.length > 1 && (
+                    <div className="px-4 py-2 bg-brand-dim border-b border-brand/20">
+                      <p className="text-[11px] font-semibold text-brand">Priority group · {group.length} claims</p>
+                      <p className="text-[10px] text-copy-3 mt-0.5">If #1 is denied, #2 is tried next, and so on</p>
+                    </div>
+                  )}
+                  <div className={group.length > 1 ? 'divide-y divide-line/60' : 'space-y-2'}>
+                    {group.map(c => (
+                      <div key={c.id} className={group.length > 1 ? 'rounded-none border-0' : ''}>
+                        <ClaimCard claim={c} {...claimCardProps} onWithdraw={withdraw} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Pending claims — commissioner only */}
       {isCommissioner && pending.length > 0 && (

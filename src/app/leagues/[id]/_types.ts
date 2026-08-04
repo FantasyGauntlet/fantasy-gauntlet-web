@@ -89,6 +89,8 @@ export interface WaiverClaim {
   reviewedAt: string | null;
   reviewedBy: string | null;
   denialReason: string | null;
+  priority: number;
+  groupId: string | null;
 }
 
 export interface Trade {
