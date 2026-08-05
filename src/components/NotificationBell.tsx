@@ -35,7 +35,6 @@ const TYPE_ICON: Record<string, string> = {
   auctionStarting: '🏁',
   auctionEnded:    '🏆',
   auctionResults:  '📊',
-  rankChanged:     '📈',
   finalStandings:  '🎯',
   nominationTurn:  '🎯',
   snakePickTurn:   '🐍',
