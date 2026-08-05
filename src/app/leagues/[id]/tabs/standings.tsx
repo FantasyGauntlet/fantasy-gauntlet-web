@@ -1,7 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { api } from '@/lib/api';
+import { db } from '@/lib/firebase';
 import { useTeamProfile } from '@/context/TeamProfileContext';
 import { Spinner, Lightbox, formatLeagueName, formatRecord, SPORT_ORDER } from '../_components';
 import type { Standing, FantasyTeam } from '../_types';
@@ -24,10 +26,33 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone, own
   );
 
   useEffect(() => {
-    if (initialStandings?.length) return;
+    if (!db) return;
     setLoading(true);
-    api.get<Standing[]>(`/leagues/${leagueId}/standings`)
-      .then(setStandings).catch(() => {}).finally(() => setLoading(false));
+    let seeded = false;
+
+    const unsub = onSnapshot(
+      doc(db, 'standingsCache', leagueId),
+      snap => {
+        if (snap.exists()) {
+          seeded = true;
+          setStandings((snap.data() as { standings: Standing[] }).standings);
+          setLoading(false);
+        }
+      },
+      () => setLoading(false),
+    );
+
+    // If no cached Firestore doc yet, call REST once — backend writes the doc,
+    // which triggers the onSnapshot above.
+    const timer = setTimeout(() => {
+      if (!seeded) {
+        api.get<Standing[]>(`/leagues/${leagueId}/standings`)
+          .catch(() => {})
+          .finally(() => setLoading(false));
+      }
+    }, 1500);
+
+    return () => { unsub(); clearTimeout(timer); };
   }, [leagueId]);
 
   if (loading) return <div className="flex justify-center py-12"><Spinner /></div>;

@@ -7,7 +7,7 @@ import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
 import { STATE_META, Spinner } from './_components';
 import { VALID_TABS } from './_types';
-import type { League, Member, FantasyTeam, Tab, ScoreboardGame, Standing } from './_types';
+import type { League, Member, FantasyTeam, Tab, ScoreboardGame } from './_types';
 import { StandingsTab } from './tabs/standings';
 import { RosterTab } from './tabs/roster';
 import { WaiversTab } from './tabs/waivers';
@@ -35,7 +35,6 @@ export default function LeaguePage() {
   const [scoreboard, setScoreboard] = useState<ScoreboardGame[]>([]);
   const [schedule, setSchedule] = useState<ScoreboardGame[]>([]);
   const [scheduleLoaded, setScheduleLoaded] = useState(false);
-  const [standings, setStandings] = useState<Standing[]>([]);
   const [waiverFilterPush, setWaiverFilterPush] = useState<{ sport: string | null; v: number }>({ sport: null, v: 0 });
   const [startAuctionError, setStartAuctionError] = useState<string | null>(null);
   const tabBarRef = useRef<HTMLDivElement>(null);
@@ -65,9 +64,8 @@ export default function LeaguePage() {
       api.get<League>(`/leagues/${id}`),
       api.get<Member[]>(`/leagues/${id}/members`),
       api.get<FantasyTeam[]>(`/leagues/${id}/teams`),
-      api.get<Standing[]>(`/leagues/${id}/standings`),
-    ]).then(([l, m, ft, st]) => {
-      setLeague(l); setMembers(m); setFantasyTeams(ft); setStandings(st);
+    ]).then(([l, m, ft]) => {
+      setLeague(l); setMembers(m); setFantasyTeams(ft);
     }).catch(() => router.replace('/dashboard'))
       .finally(() => setLoading(false));
   }, [id, router]);
@@ -362,7 +360,7 @@ export default function LeaguePage() {
 
       {mountedTabs.has('standings') && (
         <div className={tab !== 'standings' ? 'hidden' : ''}>
-          <StandingsTab leagueId={id} userId={user?.uid} fantasyTeams={fantasyTeams} topZone={league.topZone} bottomZone={league.bottomZone} ownerNameByUserId={Object.fromEntries(members.filter((m: Member) => m.displayName).map((m: Member) => [m.userId, m.displayName!]))} liveTeamIds={liveTeamIds} initialStandings={standings} selectedSports={league.selectedSports} maxWildcard={league.maxWildcard ?? 0} />
+          <StandingsTab leagueId={id} userId={user?.uid} fantasyTeams={fantasyTeams} topZone={league.topZone} bottomZone={league.bottomZone} ownerNameByUserId={Object.fromEntries(members.filter((m: Member) => m.displayName).map((m: Member) => [m.userId, m.displayName!]))} liveTeamIds={liveTeamIds} selectedSports={league.selectedSports} maxWildcard={league.maxWildcard ?? 0} />
         </div>
       )}
       {mountedTabs.has('roster') && (
