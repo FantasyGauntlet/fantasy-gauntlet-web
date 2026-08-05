@@ -1,9 +1,11 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { collection, query, where, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { api } from '@/lib/api';
-import { listenForeground } from '@/lib/push';
+import { db } from '@/lib/firebase';
+import { useAuth } from '@/context/AuthContext';
 
 interface AppNotification {
   id: string;
@@ -45,38 +47,24 @@ export default function NotificationBell() {
   const [markingAll, setMarkingAll] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  const { user } = useAuth();
 
   const unreadCount = notifications.filter(n => !n.readAt).length;
 
-  const fetchNotifications = useCallback(async () => {
-    try {
-      const data = await api.get<AppNotification[]>('/notifications');
-      setNotifications(data);
-    } catch { /* silent */ }
-  }, []);
-
+  // Real-time listener — reads up to 50 docs on mount, then 0 reads until a new notification arrives
   useEffect(() => {
-    fetchNotifications();
-    const interval = setInterval(fetchNotifications, 30_000);
-    return () => clearInterval(interval);
-  }, [fetchNotifications]);
-
-  // Inject foreground push messages directly into the list without a re-fetch
-  useEffect(() => {
-    return listenForeground(({ title, body, data }) => {
-      const newNotif: AppNotification = {
-        id: `fg-${Date.now()}`,
-        type: data.type ?? 'general',
-        title,
-        body,
-        data,
-        readAt: null,
-        createdAt: new Date().toISOString(),
-        leagueId: data.leagueId,
-      };
-      setNotifications(prev => [newNotif, ...prev]);
-    });
-  }, []);
+    if (!user || !db) return;
+    const q = query(
+      collection(db, 'notifications'),
+      where('userId', '==', user.uid),
+      orderBy('createdAt', 'desc'),
+      limit(50),
+    );
+    const unsub = onSnapshot(q, snap => {
+      setNotifications(snap.docs.map(d => d.data() as AppNotification));
+    }, () => { /* silent on error */ });
+    return unsub;
+  }, [user]);
 
   useEffect(() => {
     if (!open) return;
@@ -88,13 +76,6 @@ export default function NotificationBell() {
     document.addEventListener('pointerdown', onPointerDown);
     return () => document.removeEventListener('pointerdown', onPointerDown);
   }, [open]);
-
-  function handleBellClick() {
-    setOpen(o => {
-      if (!o) fetchNotifications();
-      return !o;
-    });
-  }
 
   async function markRead(id: string) {
     try {
@@ -132,7 +113,7 @@ export default function NotificationBell() {
     <div className="relative" ref={panelRef}>
       {/* Bell button */}
       <button
-        onClick={handleBellClick}
+        onClick={() => setOpen(o => !o)}
         aria-label="Notifications"
         className="relative w-8 h-8 rounded-md flex items-center justify-center text-copy-2 hover:text-copy hover:bg-field transition-colors"
       >
@@ -188,11 +169,9 @@ export default function NotificationBell() {
                   onClick={() => handleItemClick(n)}
                   className={`w-full text-left px-4 py-3 border-b border-line/40 last:border-0 hover:bg-field transition-colors flex gap-3 items-start ${!n.readAt ? 'bg-brand-dim/20' : ''}`}
                 >
-                  {/* Type icon */}
                   <span className="text-base flex-shrink-0 mt-0.5" aria-hidden>
                     {TYPE_ICON[n.type] ?? '🔔'}
                   </span>
-
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
                       <p className={`text-sm leading-snug ${!n.readAt ? 'font-semibold text-copy' : 'font-medium text-copy-2'}`}>
