@@ -26,6 +26,7 @@ export default function NewLeaguePage() {
   const router = useRouter();
   const [sportLeagues, setSportLeagues] = useState<SportLeague[]>([]);
   const [leagueCreationEnabled, setLeagueCreationEnabled] = useState<boolean | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [form, setForm] = useState({
     name: '',
     selectedSports: [] as string[],
@@ -46,6 +47,9 @@ export default function NewLeaguePage() {
       .then(r => r.json())
       .then((cfg: { leagueCreationEnabled: boolean }) => setLeagueCreationEnabled(cfg.leagueCreationEnabled))
       .catch(() => setLeagueCreationEnabled(true));
+    api.get('/admin/config')
+      .then(() => setIsAdmin(true))
+      .catch(() => {});
     fetch(`${BASE}/sports/leagues`)
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then(setSportLeagues)
@@ -112,7 +116,7 @@ export default function NewLeaguePage() {
         <p className="text-copy-3 text-sm mt-1">Set up your multi-sport fantasy league.</p>
       </div>
 
-      {leagueCreationEnabled === false && (
+      {leagueCreationEnabled === false && !isAdmin && (
         <div className="bg-warn-bg border border-warn/30 rounded-2xl px-5 py-4 mb-2">
           <p className="text-sm font-semibold text-warn">League creation is temporarily disabled</p>
           <p className="text-xs text-warn/80 mt-0.5">Check back soon — new leagues will be available again shortly.</p>
@@ -349,7 +353,7 @@ export default function NewLeaguePage() {
           </button>
           <button
             type="submit"
-            disabled={loading || form.selectedSports.length === 0 || leagueCreationEnabled === false}
+            disabled={loading || form.selectedSports.length === 0 || (leagueCreationEnabled === false && !isAdmin)}
             className="flex-1 bg-brand hover:bg-brand-2 disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-colors text-sm"
           >
             {loading ? 'Creating...' : 'Create League'}
