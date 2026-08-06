@@ -921,11 +921,7 @@ function WaiversTab({
           .filter(t => rosterStats[t.id]?.trend === 'up' && rosterStats[t.id]?.delta30d != null)
           .sort((a, b) => (rosterStats[b.id]?.delta30d ?? 0) - (rosterStats[a.id]?.delta30d ?? 0))
           .slice(0, 12);
-        const cold = allDisplayTeams
-          .filter(t => rosterStats[t.id]?.trend === 'down' && rosterStats[t.id]?.delta30d != null)
-          .sort((a, b) => (rosterStats[a.id]?.delta30d ?? 0) - (rosterStats[b.id]?.delta30d ?? 0))
-          .slice(0, 12);
-        if (!hot.length && !cold.length) return null;
+        if (!hot.length) return null;
         return (
           <div className="bg-card border border-line rounded-2xl overflow-hidden">
             <div className="px-4 py-3 border-b border-line flex items-center justify-between">
@@ -948,27 +944,6 @@ function WaiversTab({
                       key={t.id}
                       t={t}
                       accent="positive"
-                      stats={rosterStats[t.id]}
-                      onOpen={() => openProfile({ teamId: t.id, name: t.name, logoUrl: t.logoUrl, sportLeagueId: t.sportLeagueId, wins: t.wins, draws: t.draws, losses: t.losses, points: t.points, ownerDisplayName: t.ownerName })}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-            {cold.length > 0 && (
-              <div className={`px-4 pt-3 pb-4 ${hot.length > 0 ? 'border-t border-line/50' : ''}`}>
-                <p className="text-xs font-semibold text-danger mb-3 flex items-center gap-1.5">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 5v14M5 12l7 7 7-7" />
-                  </svg>
-                  Falling
-                </p>
-                <div className="flex gap-2.5 overflow-x-auto pb-2" style={{ scrollbarWidth: 'thin' }}>
-                  {cold.map(t => (
-                    <TrendCard
-                      key={t.id}
-                      t={t}
-                      accent="danger"
                       stats={rosterStats[t.id]}
                       onOpen={() => openProfile({ teamId: t.id, name: t.name, logoUrl: t.logoUrl, sportLeagueId: t.sportLeagueId, wins: t.wins, draws: t.draws, losses: t.losses, points: t.points, ownerDisplayName: t.ownerName })}
                     />
