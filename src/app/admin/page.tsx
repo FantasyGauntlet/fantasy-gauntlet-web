@@ -68,6 +68,7 @@ export default function AdminPage() {
   const [usersLoading, setUsersLoading] = useState(false);
   const [usersError, setUsersError] = useState<string | null>(null);
   const [userSearch, setUserSearch] = useState('');
+  const [adminToggling, setAdminToggling] = useState<Set<string>>(new Set());
 
   async function loadUsers() {
     setUsersLoading(true);
@@ -75,6 +76,21 @@ export default function AdminPage() {
     try { setUsers(await api.get<AdminUser[]>('/admin/users')); }
     catch (e: unknown) { setUsersError(e instanceof Error ? e.message : String(e)); }
     setUsersLoading(false);
+  }
+
+  async function toggleAdmin(uid: string, currentlyAdmin: boolean) {
+    setAdminToggling(prev => new Set([...prev, uid]));
+    try {
+      await api.patch(`/admin/users/${uid}/admin`, { grant: !currentlyAdmin });
+      setUsers(prev => prev.map(u => u.id !== uid ? u : {
+        ...u,
+        roles: currentlyAdmin ? u.roles.filter(r => r !== 'admin') : [...u.roles, 'admin'],
+      }));
+    } catch (e: unknown) {
+      setUsersError(e instanceof Error ? e.message : 'Failed to update role');
+    } finally {
+      setAdminToggling(prev => { const n = new Set(prev); n.delete(uid); return n; });
+    }
   }
 
   useEffect(() => { if (tab === 'users') loadUsers(); }, [tab]);
@@ -2137,12 +2153,25 @@ export default function AdminPage() {
                           {u.isPremium && (
                             <span className="text-xs bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-full">Premium</span>
                           )}
-                          {u.roles.includes('admin') && (
-                            <span className="text-xs bg-danger-bg text-danger border border-danger/20 px-1.5 py-0.5 rounded-full">Admin</span>
-                          )}
                           <span className="text-xs text-copy-3 whitespace-nowrap">
                             {u.createdAt ? new Date(u.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
                           </span>
+                          {u.id !== user?.uid && (
+                            <button
+                              onClick={() => toggleAdmin(u.id, u.roles.includes('admin'))}
+                              disabled={adminToggling.has(u.id)}
+                              className={`text-xs font-medium px-2.5 py-1 rounded-lg border transition-colors disabled:opacity-50 whitespace-nowrap ${
+                                u.roles.includes('admin')
+                                  ? 'bg-danger-bg text-danger border-danger/20 hover:bg-danger hover:text-white'
+                                  : 'bg-field text-copy-3 border-line hover:bg-brand/10 hover:text-brand hover:border-brand/20'
+                              }`}
+                            >
+                              {adminToggling.has(u.id) ? '...' : u.roles.includes('admin') ? 'Admin ×' : 'Make Admin'}
+                            </button>
+                          )}
+                          {u.id === user?.uid && u.roles.includes('admin') && (
+                            <span className="text-xs bg-danger-bg text-danger border border-danger/20 px-1.5 py-0.5 rounded-full">Admin (you)</span>
+                          )}
                         </div>
                       </div>
                     ))}
