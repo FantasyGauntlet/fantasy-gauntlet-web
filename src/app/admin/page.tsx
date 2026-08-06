@@ -13,6 +13,7 @@ interface Team { id: string; name: string; logoUrl?: string | null; }
 interface Season { id: string; label: string; regularSeasonStart: string; regularSeasonEnd: string; }
 interface BonusPoint { id: string; teamId: string; teamName: string; seasonId: string; seasonLabel: string; sportLeagueId: string; label: string; points: number; awardedAt: string; }
 interface AdminLeague { id: string; name: string; state: 'draft' | 'auction' | 'active' | 'completed' | 'cancelled'; selectedSports: string[]; commissionerId: string; memberCap: number | null; createdAt: string; isPublic: boolean; hiddenFromPublic?: boolean; waiverType?: 'reserve-standings' | 'faab'; faabStartingBudget?: number; }
+interface AdminWaiverClaim { id: string; claimantDisplayName: string; claimantRank: number; dropTeamId: string | null; addTeamId: string; addTeamName?: string; dropTeamName?: string; status: 'pending' | 'approved' | 'denied'; faabBid?: number; requestedAt: string; denialReason?: string | null; }
 
 const LEAGUE_ACRONYMS = new Set(['nhl', 'nba', 'nfl', 'mlb', 'ucl', 'ncaa', 'mls', 'fifa', 'ufc']);
 function formatLeagueName(id: string): string {
@@ -561,6 +562,28 @@ export default function AdminPage() {
       setLeagueStatuses(s => ({ ...s, [leagueId]: { status: 'success', message: res.message } }));
     } catch (e: unknown) {
       setLeagueStatuses(s => ({ ...s, [leagueId]: { status: 'error', message: e instanceof Error ? e.message : 'Failed' } }));
+    }
+  }
+
+  // Per-league waiver claims panel (admin view)
+  const [leagueWaivers, setLeagueWaivers] = useState<Record<string, AdminWaiverClaim[]>>({});
+  const [leagueWaiversLoading, setLeagueWaiversLoading] = useState<Record<string, boolean>>({});
+  const [expandedWaivers, setExpandedWaivers] = useState<Set<string>>(new Set());
+
+  async function toggleWaivers(leagueId: string) {
+    setExpandedWaivers(prev => {
+      const next = new Set(prev);
+      if (next.has(leagueId)) { next.delete(leagueId); return next; }
+      next.add(leagueId);
+      return next;
+    });
+    if (!leagueWaivers[leagueId]) {
+      setLeagueWaiversLoading(s => ({ ...s, [leagueId]: true }));
+      try {
+        const claims = await api.get<AdminWaiverClaim[]>(`/admin/leagues/${leagueId}/waivers`);
+        setLeagueWaivers(s => ({ ...s, [leagueId]: claims }));
+      } catch { setLeagueWaivers(s => ({ ...s, [leagueId]: [] })); }
+      finally { setLeagueWaiversLoading(s => ({ ...s, [leagueId]: false })); }
     }
   }
 
@@ -1732,6 +1755,67 @@ export default function AdminPage() {
                           {lStatus.status === 'loading' ? 'Working...' : lStatus.message}
                         </p>
                       )}
+
+                      {/* Waiver claims panel */}
+                      <div className="pt-2 border-t border-line/50">
+                        <button
+                          onClick={() => toggleWaivers(league.id)}
+                          className="flex items-center gap-1.5 text-xs font-medium text-copy-2 hover:text-copy transition-colors"
+                        >
+                          <svg
+                            width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                            className={`transition-transform ${expandedWaivers.has(league.id) ? 'rotate-90' : ''}`}
+                          >
+                            <path d="M9 18l6-6-6-6" />
+                          </svg>
+                          Pending Waiver Claims
+                          {leagueWaivers[league.id] && (
+                            <span className="ml-1 bg-field border border-line text-copy-3 rounded-full px-1.5 py-0.5 text-[10px] leading-none">
+                              {leagueWaivers[league.id].filter(c => c.status === 'pending').length}
+                            </span>
+                          )}
+                        </button>
+                        {expandedWaivers.has(league.id) && (
+                          <div className="mt-2">
+                            {leagueWaiversLoading[league.id] ? (
+                              <p className="text-xs text-copy-3 py-2">Loading...</p>
+                            ) : !leagueWaivers[league.id]?.length ? (
+                              <p className="text-xs text-copy-3 py-2">No waiver claims.</p>
+                            ) : (
+                              <div className="space-y-1.5 mt-1">
+                                {leagueWaivers[league.id].filter(c => c.status === 'pending').length === 0 && (
+                                  <p className="text-xs text-copy-3 italic">No pending claims.</p>
+                                )}
+                                {leagueWaivers[league.id].filter(c => c.status === 'pending').map(c => (
+                                  <div key={c.id} className="bg-field border border-line rounded-xl px-3 py-2 text-xs space-y-0.5">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="font-semibold text-copy">{c.claimantDisplayName}</span>
+                                      {c.claimantRank > 0 && <span className="text-copy-3">#{c.claimantRank}</span>}
+                                      {typeof c.faabBid === 'number' && (
+                                        <span className="text-brand font-semibold">${c.faabBid}</span>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-1.5 text-copy-3">
+                                      {c.dropTeamId ? (
+                                        <span className="text-danger">Drop {c.dropTeamName ?? c.dropTeamId}</span>
+                                      ) : (
+                                        <span className="italic">No drop</span>
+                                      )}
+                                      <span>→</span>
+                                      <span className="text-positive">Add {c.addTeamName ?? c.addTeamId}</span>
+                                    </div>
+                                    <p className="text-[10px] text-copy-3">
+                                      {new Date(c.requestedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                      {' '}
+                                      {new Date(c.requestedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
 
                       {/* Open league */}
                       <div className="pt-1 border-t border-line/50">

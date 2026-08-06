@@ -350,9 +350,7 @@ function WaiversTab({
   }
 
   const pending = claims.filter(c => c.status === 'pending');
-  const history = isCommissioner
-    ? claims.filter(c => c.status !== 'pending')
-    : claims.filter(c => c.status === 'approved');
+  const history = claims.filter(c => c.status !== 'pending');
   const myTeamUserId = myTeam?.userId;
   const canSubmit = !!myTeam;
 
@@ -949,21 +947,20 @@ function WaiversTab({
         </div>
       </div>
 
-      {/* My pending claims — visible to the claimant (primary owner or co-manager) */}
-      {!isCommissioner && myTeam && pending.filter(c => c.claimantUserId === myTeamUserId).length > 0 && (() => {
-        const myClaims = pending.filter(c => c.claimantUserId === myTeamUserId);
+      {/* Pending claims — own only */}
+      {myTeam && pending.length > 0 && (() => {
         const seenGroupIds = new Set<string>();
         const groups: WaiverClaim[][] = [];
-        for (const claim of myClaims) {
+        for (const claim of pending) {
           if (!claim.groupId) { groups.push([claim]); continue; }
           if (seenGroupIds.has(claim.groupId)) continue;
           seenGroupIds.add(claim.groupId);
-          groups.push(myClaims.filter(c => c.groupId === claim.groupId).sort((a, b) => (a.priority ?? 1) - (b.priority ?? 1)));
+          groups.push(pending.filter(c => c.groupId === claim.groupId).sort((a, b) => (a.priority ?? 1) - (b.priority ?? 1)));
         }
         return (
           <div>
             <p className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-2">
-              Your Pending Claims · {myClaims.length}
+              Your Pending Claims · {pending.length}
             </p>
             <div className="space-y-3">
               {groups.map((group, gi) => (
@@ -988,46 +985,21 @@ function WaiversTab({
         );
       })()}
 
-      {/* Pending claims — commissioner only */}
-      {isCommissioner && pending.length > 0 && (
-        <div>
-          <p className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-2">
-            Pending · {pending.length}
-          </p>
-          <div className="space-y-2">
-            {pending.map(c => (
-              <ClaimCard
-                key={c.id}
-                claim={c}
-                {...claimCardProps}
-                onWithdraw={c.claimantUserId === myTeam?.userId ? withdraw : undefined}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Claim history */}
+      {/* Claim history — own resolved claims */}
       {history.length > 0 && (
         <div>
-          <p className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-2">History</p>
+          <p className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-2">Your History</p>
           <div className="space-y-2">
             {history.map(c => (
-              <ClaimCard
-                key={c.id}
-                claim={c}
-                {...claimCardProps}
-                onWithdraw={isCommissioner ? withdraw : undefined}
-              />
+              <ClaimCard key={c.id} claim={c} {...claimCardProps} />
             ))}
           </div>
         </div>
       )}
 
-      {/* Empty state for claims */}
       {claims.length === 0 && !showForm && (
         <div className="text-center py-8 border border-dashed border-line rounded-2xl">
-          <p className="text-copy-3 text-sm">No waiver claims yet.</p>
+          <p className="text-copy-3 text-sm">You have no waiver claims yet.</p>
         </div>
       )}
     </div>
