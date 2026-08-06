@@ -97,7 +97,7 @@ function RecentActivityTab({ leagueId, fantasyTeams }: { leagueId: string; fanta
                 const isExpanded = expandedBids.has(tx.id);
                 return (
                   <div key={tx.id}>
-                    <div className="px-5 py-3.5 flex items-start gap-3">
+                    <div className={`px-5 flex items-start gap-3 ${losers.length > 0 ? 'pt-4 pb-2' : 'py-4'}`}>
                       <div className="w-6 h-6 rounded-full bg-warn-bg border border-warn/30 flex items-center justify-center flex-shrink-0 mt-0.5">
                         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="text-warn">
                           <path d="M8 7h12M8 12h12M8 17h12M4 7h.01M4 12h.01M4 17h.01" />
@@ -122,7 +122,7 @@ function RecentActivityTab({ leagueId, fantasyTeams }: { leagueId: string; fanta
                         {losers.length > 0 && (
                           <button
                             onClick={() => toggleBids(tx.id)}
-                            className="mt-1.5 flex items-center gap-1 text-[11px] text-copy-3 hover:text-copy transition-colors"
+                            className="mt-2 flex items-center gap-1.5 text-[11px] text-copy-3 hover:text-copy transition-colors"
                           >
                             <svg
                               width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
@@ -136,15 +136,15 @@ function RecentActivityTab({ leagueId, fantasyTeams }: { leagueId: string; fanta
                       </div>
                     </div>
                     {isExpanded && losers.length > 0 && (
-                      <div className="mx-5 mb-2 bg-field/60 border border-line/50 rounded-xl overflow-hidden divide-y divide-line/30">
+                      <div className="ml-14 mr-5 mb-4 rounded-xl overflow-hidden border border-line/40 divide-y divide-line/30">
                         {losers
                           .sort((a, b) => (b.faabBid ?? 0) - (a.faabBid ?? 0))
                           .map(loser => (
-                            <div key={loser.id} className="flex items-center justify-between px-3 py-2">
+                            <div key={loser.id} className="flex items-center justify-between px-3.5 py-2.5 bg-field/40">
                               <span className="text-xs font-medium text-copy-2">{loser.claimantDisplayName}</span>
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-3">
                                 {loser.faabBid != null && (
-                                  <span className="text-xs text-copy-3 tabular-nums">${loser.faabBid}</span>
+                                  <span className="text-xs font-semibold text-copy-3 tabular-nums">${loser.faabBid}</span>
                                 )}
                                 <span className="text-[11px] text-danger/70 font-medium">
                                   {loser.denialReason ?? 'denied'}
