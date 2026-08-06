@@ -390,7 +390,7 @@ function WaiversTab({
   useEffect(() => {
     Promise.all([
       api.get<WaiverClaim[]>(`/leagues/${leagueId}/waivers`),
-      api.get<WaiverHistoryClaim[]>(`/leagues/${leagueId}/waivers/history`),
+      api.get<WaiverHistoryClaim[]>(`/leagues/${leagueId}/waivers/history`).catch(() => [] as WaiverHistoryClaim[]),
       api.get<TeamWithRecord[]>(`/leagues/${leagueId}/waiver-pool`),
       api.get<SportGroup[]>(`/leagues/${leagueId}/sport-teams`).catch(() => [] as SportGroup[]),
     ]).then(([c, hist, p, groups]) => {
