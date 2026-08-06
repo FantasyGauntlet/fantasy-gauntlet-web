@@ -93,6 +93,14 @@ export interface WaiverClaim {
   groupId: string | null;
 }
 
+export interface WaiverHistoryClaim extends WaiverClaim {
+  addTeamName?: string;
+  addTeamLogoUrl?: string | null;
+  addTeamSportLeagueId?: string | null;
+  dropTeamName?: string;
+  dropTeamLogoUrl?: string | null;
+}
+
 export interface Trade {
   id: string;
   leagueId: string;

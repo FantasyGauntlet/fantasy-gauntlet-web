@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { api } from '@/lib/api';
 import { useTeamProfile } from '@/context/TeamProfileContext';
 import { Spinner, formatLeagueName, formatRecord } from '../_components';
-import type { WaiverClaim, TeamWithRecord, SportGroup, FantasyTeam } from '../_types';
+import type { WaiverClaim, WaiverHistoryClaim, TeamWithRecord, SportGroup, FantasyTeam } from '../_types';
 
 const WAIVER_STATUS_CLS: Record<string, string> = {
   pending:  'bg-warn-bg text-warn border-warn/20',
@@ -351,6 +351,8 @@ function WaiversTab({
   filterPush?: { sport: string | null; v: number };
 }) {
   const [claims, setClaims] = useState<WaiverClaim[]>([]);
+  const [leagueHistory, setLeagueHistory] = useState<WaiverHistoryClaim[]>([]);
+  const [expandedLosingBids, setExpandedLosingBids] = useState<Set<string>>(new Set());
   const [pool, setPool] = useState<TeamWithRecord[]>([]);
   const [allLeagueTeams, setAllLeagueTeams] = useState<TeamWithRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -388,10 +390,12 @@ function WaiversTab({
   useEffect(() => {
     Promise.all([
       api.get<WaiverClaim[]>(`/leagues/${leagueId}/waivers`),
+      api.get<WaiverHistoryClaim[]>(`/leagues/${leagueId}/waivers/history`),
       api.get<TeamWithRecord[]>(`/leagues/${leagueId}/waiver-pool`),
       api.get<SportGroup[]>(`/leagues/${leagueId}/sport-teams`).catch(() => [] as SportGroup[]),
-    ]).then(([c, p, groups]) => {
+    ]).then(([c, hist, p, groups]) => {
       setClaims(c);
+      setLeagueHistory(hist);
       setPool(p);
       const teams = groups.flatMap(g => g.teams.map(t => ({
         id: t.id, name: t.name, shortName: t.shortName,
@@ -1166,6 +1170,131 @@ function WaiversTab({
           </div>
         </div>
       )}
+
+      {/* League-wide transaction history — grouped by team, winner + collapsible losing bids */}
+      {leagueHistory.length > 0 && (() => {
+        // Group by addTeamId, preserving order (backend already sorts by reviewedAt desc then groups by bid)
+        const seenTeams = new Set<string>();
+        const groups: WaiverHistoryClaim[][] = [];
+        for (const c of leagueHistory) {
+          if (seenTeams.has(c.addTeamId)) continue;
+          seenTeams.add(c.addTeamId);
+          const group = leagueHistory.filter(x => x.addTeamId === c.addTeamId);
+          // winner first, then losers by bid desc
+          group.sort((a, b) => {
+            if (a.status === 'approved' && b.status !== 'approved') return -1;
+            if (a.status !== 'approved' && b.status === 'approved') return 1;
+            return (b.faabBid ?? 0) - (a.faabBid ?? 0);
+          });
+          groups.push(group);
+        }
+
+        const sportLabels: Record<string, string> = {
+          nfl: 'NFL', nba: 'NBA', nhl: 'NHL', mlb: 'MLB',
+          'premier-league': 'EPL', ucl: 'UCL',
+          'ncaa-football': 'NCAAF', 'ncaa-basketball': 'NCAAB',
+        };
+
+        return (
+          <div>
+            <p className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-2">Transaction History</p>
+            <div className="bg-card border border-line rounded-2xl overflow-hidden divide-y divide-line/50">
+              {groups.map((group) => {
+                const winner = group.find(c => c.status === 'approved');
+                const losers = group.filter(c => c.status !== 'approved');
+                const key = group[0].addTeamId;
+                const isExpanded = expandedLosingBids.has(key);
+                const sportLabel = sportLabels[group[0].addTeamSportLeagueId ?? ''] ?? (group[0].addTeamSportLeagueId ?? '').toUpperCase();
+
+                return (
+                  <div key={key}>
+                    {/* Winner row */}
+                    <div className="flex items-center gap-3 px-4 py-3">
+                      {/* Team logo */}
+                      <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center">
+                        {group[0].addTeamLogoUrl
+                          ? <img src={group[0].addTeamLogoUrl} alt={group[0].addTeamName ?? ''} className="w-8 h-8 object-contain" />
+                          : <div className="w-8 h-8 rounded-lg bg-field-2 flex items-center justify-center text-copy-3 text-xs font-bold">?</div>
+                        }
+                      </div>
+                      {/* Team + sport */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <p className="text-sm font-semibold text-copy truncate">{group[0].addTeamName ?? group[0].addTeamId}</p>
+                          {sportLabel && (
+                            <span className="text-[10px] font-semibold text-copy-3 bg-field border border-line px-1.5 py-0.5 rounded-full leading-none flex-shrink-0">{sportLabel}</span>
+                          )}
+                        </div>
+                        {winner ? (
+                          <p className="text-xs text-copy-3 mt-0.5">
+                            Added by <span className="font-medium text-copy-2">{winner.claimantDisplayName}</span>
+                            {typeof winner.faabBid === 'number' && (
+                              <span className="ml-1.5 text-brand font-medium">${winner.faabBid}</span>
+                            )}
+                            {winner.dropTeamName && (
+                              <span className="text-copy-3"> · dropped {winner.dropTeamName}</span>
+                            )}
+                          </p>
+                        ) : (
+                          <p className="text-xs text-danger mt-0.5">All bids denied</p>
+                        )}
+                      </div>
+                      {/* Status badge */}
+                      <div className="flex-shrink-0 flex items-center gap-2">
+                        {winner ? (
+                          <span className="text-[11px] font-semibold text-positive bg-positive/10 border border-positive/20 px-2 py-0.5 rounded-full leading-none">Approved</span>
+                        ) : (
+                          <span className="text-[11px] font-semibold text-danger bg-danger/10 border border-danger/20 px-2 py-0.5 rounded-full leading-none">Denied</span>
+                        )}
+                        {/* Expand toggle if there are losing bids */}
+                        {losers.length > 0 && (
+                          <button
+                            onClick={() => setExpandedLosingBids(prev => {
+                              const next = new Set(prev);
+                              if (next.has(key)) next.delete(key); else next.add(key);
+                              return next;
+                            })}
+                            className="flex items-center gap-1 text-[11px] text-copy-3 hover:text-copy transition-colors"
+                          >
+                            <span>{losers.length} lost</span>
+                            <svg
+                              width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                              className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                            >
+                              <polyline points="6 9 12 15 18 9" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    {/* Losing bids — collapsible */}
+                    {isExpanded && losers.length > 0 && (
+                      <div className="bg-field/50 border-t border-line/40 divide-y divide-line/30">
+                        {losers.map(loser => (
+                          <div key={loser.id} className="flex items-center gap-3 px-4 py-2.5 pl-14">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs text-copy-2">
+                                <span className="font-medium">{loser.claimantDisplayName}</span>
+                                {typeof loser.faabBid === 'number' && (
+                                  <span className="ml-1.5 text-copy-3">${loser.faabBid}</span>
+                                )}
+                              </p>
+                              {loser.denialReason && (
+                                <p className="text-[11px] text-copy-3 mt-0.5 italic">{loser.denialReason}</p>
+                              )}
+                            </div>
+                            <span className="text-[11px] font-semibold text-danger/70 flex-shrink-0">✗ {loser.denialReason ?? 'denied'}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
 
       {claims.length === 0 && !showForm && (
         <div className="text-center py-8 border border-dashed border-line rounded-2xl">
