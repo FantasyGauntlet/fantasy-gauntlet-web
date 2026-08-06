@@ -42,13 +42,14 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone, own
       () => setLoading(false),
     );
 
-    // If no cached Firestore doc yet, call REST once — backend writes the doc,
-    // which triggers the onSnapshot above.
+    // Fallback: if onSnapshot hasn't fired within 1.5s (cold cache or blocked security rules),
+    // fetch via REST and set state directly. Backend writes to Firestore on this call too,
+    // so subsequent onSnapshot fires will work if rules allow it.
     const timer = setTimeout(() => {
       if (!seeded) {
         api.get<Standing[]>(`/leagues/${leagueId}/standings`)
-          .catch(() => {})
-          .finally(() => setLoading(false));
+          .then(data => { if (!seeded) { seeded = true; setStandings(data); setLoading(false); } })
+          .catch(() => setLoading(false));
       }
     }, 1500);
 
