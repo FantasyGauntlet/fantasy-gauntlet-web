@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
 import { Spinner, Lightbox } from '../_components';
-import type { WaiverClaim, FantasyTeam } from '../_types';
+import type { WaiverHistoryClaim, FantasyTeam } from '../_types';
 
 function TransactionCounterTab({
   leagueId, fantasyTeams, waiverType, faabStartingBudget, userId,
@@ -14,16 +14,16 @@ function TransactionCounterTab({
   faabStartingBudget: number;
   userId?: string;
 }) {
-  const [claims, setClaims] = useState<WaiverClaim[]>([]);
+  const [claims, setClaims] = useState<WaiverHistoryClaim[]>([]);
   const [loading, setLoading] = useState(true);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    api.get<WaiverClaim[]>(`/leagues/${leagueId}/waivers`)
+    api.get<WaiverHistoryClaim[]>(`/leagues/${leagueId}/waivers/history`)
       .then(setClaims).catch(() => {}).finally(() => setLoading(false));
   }, [leagueId]);
 
-  const approvedClaims = claims.filter((c: WaiverClaim) => c.status === 'approved');
+  const approvedClaims = claims.filter(c => c.status === 'approved');
 
   const moveCounts = new Map<string, number>();
   for (const c of approvedClaims) {
