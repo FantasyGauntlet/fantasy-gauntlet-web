@@ -12,6 +12,65 @@ const WAIVER_STATUS_CLS: Record<string, string> = {
   denied:   'bg-danger-bg text-danger border-danger/20',
 };
 
+type DisplayTeam = {
+  id: string; name: string; shortName: string; sportLeagueId: string;
+  logoUrl: string | null | undefined; sport: string;
+  wins: number; draws: number; losses: number; points: number;
+  isAvailable: boolean; ownerName?: string; ownerLogoUrl?: string | null;
+};
+type RosterStat = { rosteredPct: number | null; trend: 'up' | 'down' | null; pickups30d: number; drops30d: number; delta30d: number | null };
+
+function TrendCard({
+  t, accent, stats, onOpen,
+}: {
+  t: DisplayTeam;
+  accent: 'positive' | 'danger';
+  stats: RosterStat;
+  onOpen: () => void;
+}) {
+  const delta = stats.delta30d ?? 0;
+  return (
+    <div
+      onClick={onOpen}
+      className={`flex-shrink-0 bg-card border rounded-2xl p-3.5 w-[148px] cursor-pointer transition-all ${
+        accent === 'positive'
+          ? 'border-positive/25 hover:border-positive/50'
+          : 'border-danger/25 hover:border-danger/50'
+      }`}
+    >
+      <div className="flex flex-col items-center text-center gap-2">
+        <div className="w-11 h-11 flex items-center justify-center">
+          {t.logoUrl
+            ? <img src={t.logoUrl} alt={t.name} className="w-11 h-11 object-contain" />
+            : <div className="w-11 h-11 rounded-xl bg-field-2 flex items-center justify-center text-copy-3 text-xs font-bold">{t.shortName?.slice(0, 2).toUpperCase() ?? '?'}</div>
+          }
+        </div>
+        <div className="w-full">
+          <p className="text-xs font-semibold text-copy leading-snug line-clamp-2">{t.name}</p>
+          <p className="text-[10px] text-copy-3 mt-0.5">{formatLeagueName(t.sportLeagueId)}</p>
+        </div>
+        <div>
+          <p className={`text-xl font-bold tabular-nums leading-none ${accent === 'positive' ? 'text-positive' : 'text-danger'}`}>
+            {delta >= 0 ? '+' : ''}{delta}%
+          </p>
+          {stats.rosteredPct != null && (
+            <p className="text-[10px] text-copy-3 mt-0.5">{stats.rosteredPct}% rostered</p>
+          )}
+        </div>
+        {t.isAvailable ? (
+          <span className="text-[10px] font-semibold text-positive bg-positive/10 border border-positive/20 px-2.5 py-0.5 rounded-full leading-none">
+            Free
+          </span>
+        ) : (
+          <span className="text-[10px] text-copy-3 bg-field border border-line px-2.5 py-0.5 rounded-full leading-none">
+            Rostered
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ClaimCard({
   claim, isCommissioner, teamMap, reviewing, denyingId, denyReason,
   onApprove, onStartDeny, onDenyReasonChange, onConfirmDeny, onCancelDeny, onWithdraw,
@@ -855,6 +914,71 @@ function WaiversTab({
           </div>
         </div>
       )}
+
+      {/* Trending section */}
+      {(() => {
+        const hot = allDisplayTeams
+          .filter(t => rosterStats[t.id]?.trend === 'up' && rosterStats[t.id]?.delta30d != null)
+          .sort((a, b) => (rosterStats[b.id]?.delta30d ?? 0) - (rosterStats[a.id]?.delta30d ?? 0))
+          .slice(0, 12);
+        const cold = allDisplayTeams
+          .filter(t => rosterStats[t.id]?.trend === 'down' && rosterStats[t.id]?.delta30d != null)
+          .sort((a, b) => (rosterStats[a.id]?.delta30d ?? 0) - (rosterStats[b.id]?.delta30d ?? 0))
+          .slice(0, 12);
+        if (!hot.length && !cold.length) return null;
+        return (
+          <div className="bg-card border border-line rounded-2xl overflow-hidden">
+            <div className="px-4 py-3 border-b border-line flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-semibold text-copy">Trending</h3>
+                <p className="text-xs text-copy-3 mt-0.5">30-day roster % movement</p>
+              </div>
+            </div>
+            {hot.length > 0 && (
+              <div className="px-4 pt-4 pb-3">
+                <p className="text-xs font-semibold text-positive mb-3 flex items-center gap-1.5">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 19V5M5 12l7-7 7 7" />
+                  </svg>
+                  Rising
+                </p>
+                <div className="flex gap-2.5 overflow-x-auto pb-2" style={{ scrollbarWidth: 'thin' }}>
+                  {hot.map(t => (
+                    <TrendCard
+                      key={t.id}
+                      t={t}
+                      accent="positive"
+                      stats={rosterStats[t.id]}
+                      onOpen={() => openProfile({ teamId: t.id, name: t.name, logoUrl: t.logoUrl, sportLeagueId: t.sportLeagueId, wins: t.wins, draws: t.draws, losses: t.losses, points: t.points, ownerDisplayName: t.ownerName })}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+            {cold.length > 0 && (
+              <div className={`px-4 pt-3 pb-4 ${hot.length > 0 ? 'border-t border-line/50' : ''}`}>
+                <p className="text-xs font-semibold text-danger mb-3 flex items-center gap-1.5">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 5v14M5 12l7 7 7-7" />
+                  </svg>
+                  Falling
+                </p>
+                <div className="flex gap-2.5 overflow-x-auto pb-2" style={{ scrollbarWidth: 'thin' }}>
+                  {cold.map(t => (
+                    <TrendCard
+                      key={t.id}
+                      t={t}
+                      accent="danger"
+                      stats={rosterStats[t.id]}
+                      onOpen={() => openProfile({ teamId: t.id, name: t.name, logoUrl: t.logoUrl, sportLeagueId: t.sportLeagueId, wins: t.wins, draws: t.draws, losses: t.losses, points: t.points, ownerDisplayName: t.ownerName })}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Team browser */}
       <div className="bg-card border border-line rounded-2xl overflow-hidden">
