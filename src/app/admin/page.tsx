@@ -524,10 +524,39 @@ export default function AdminPage() {
   const [expandedLeagues, setExpandedLeagues] = useState<Set<string>>(new Set());
   const [leagueStatuses, setLeagueStatuses] = useState<Record<string, { status: 'idle' | 'loading' | 'success' | 'error'; message: string }>>({});
 
+  const [leagueCreationEnabled, setLeagueCreationEnabled] = useState<boolean | null>(null);
+  const [configToggling, setConfigToggling] = useState(false);
+  const [deletingLeague, setDeletingLeague] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+
+  async function deleteLeague(leagueId: string) {
+    setDeletingLeague(leagueId);
+    try {
+      await api.delete(`/admin/leagues/${leagueId}`);
+      setAllLeagues(prev => prev.filter(l => l.id !== leagueId));
+      setDeleteConfirm(null);
+    } catch (e: unknown) {
+      setLeagueStatuses(s => ({ ...s, [leagueId]: { status: 'error', message: e instanceof Error ? e.message : 'Delete failed' } }));
+    } finally {
+      setDeletingLeague(null);
+    }
+  }
+
+  async function toggleLeagueCreation() {
+    if (leagueCreationEnabled === null) return;
+    setConfigToggling(true);
+    try {
+      const res = await api.patch<{ leagueCreationEnabled: boolean }>('/admin/config', { leagueCreationEnabled: !leagueCreationEnabled });
+      setLeagueCreationEnabled(res.leagueCreationEnabled);
+    } catch { /* ignore */ }
+    finally { setConfigToggling(false); }
+  }
+
   useEffect(() => {
     if (tab !== 'leagues' || leaguesLoaded) return;
     setLeaguesLoaded(true);
     api.get<AdminLeague[]>('/admin/leagues').then(setAllLeagues).catch(() => {});
+    api.get<{ leagueCreationEnabled: boolean }>('/admin/config').then(c => setLeagueCreationEnabled(c.leagueCreationEnabled)).catch(() => setLeagueCreationEnabled(true));
   }, [tab, leaguesLoaded]);
 
   function toggleLeague(id: string) {
@@ -1611,6 +1640,23 @@ export default function AdminPage() {
         {/* ── Leagues ── */}
         {tab === 'leagues' && (
           <div className="space-y-3">
+            {/* League creation toggle */}
+            <div className="bg-card border border-line rounded-2xl p-5 flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold text-copy">League Creation</p>
+                <p className="text-xs text-copy-3 mt-0.5">
+                  {leagueCreationEnabled === null ? 'Loading...' : leagueCreationEnabled ? 'Users can create new leagues' : 'New league creation is disabled for all users'}
+                </p>
+              </div>
+              <button
+                onClick={toggleLeagueCreation}
+                disabled={configToggling || leagueCreationEnabled === null}
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none disabled:opacity-50 ${leagueCreationEnabled ? 'bg-brand' : 'bg-field-2'}`}
+              >
+                <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200 ${leagueCreationEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
+              </button>
+            </div>
+
             <div className="bg-card border border-line rounded-2xl p-5">
               <div className="flex items-center gap-3">
                 <h2 className="text-sm font-semibold text-copy flex-1">All Leagues</h2>
@@ -1833,8 +1879,8 @@ export default function AdminPage() {
                         )}
                       </div>
 
-                      {/* Open league */}
-                      <div className="pt-1 border-t border-line/50">
+                      {/* Open league + delete */}
+                      <div className="pt-1 border-t border-line/50 flex items-center justify-between gap-3">
                         <a
                           href={`/leagues/${league.id}`}
                           target="_blank"
@@ -1848,6 +1894,31 @@ export default function AdminPage() {
                             <line x1="10" y1="14" x2="21" y2="3" />
                           </svg>
                         </a>
+                        {deleteConfirm === league.id ? (
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-danger font-medium">Delete permanently?</span>
+                            <button
+                              onClick={() => deleteLeague(league.id)}
+                              disabled={deletingLeague === league.id}
+                              className="text-xs bg-danger text-white font-semibold px-3 py-1.5 rounded-lg disabled:opacity-50 transition-colors hover:bg-danger/80"
+                            >
+                              {deletingLeague === league.id ? '...' : 'Confirm'}
+                            </button>
+                            <button
+                              onClick={() => setDeleteConfirm(null)}
+                              className="text-xs text-copy-3 hover:text-copy px-2 py-1.5 rounded-lg transition-colors"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setDeleteConfirm(league.id)}
+                            className="text-xs text-danger/60 hover:text-danger px-3 py-1.5 rounded-lg hover:bg-danger-bg/40 transition-colors font-medium"
+                          >
+                            Delete League
+                          </button>
+                        )}
                       </div>
                     </div>
                   )}

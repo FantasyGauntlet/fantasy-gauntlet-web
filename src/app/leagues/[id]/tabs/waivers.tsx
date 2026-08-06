@@ -15,6 +15,7 @@ const WAIVER_STATUS_CLS: Record<string, string> = {
 function ClaimCard({
   claim, isCommissioner, teamMap, reviewing, denyingId, denyReason,
   onApprove, onStartDeny, onDenyReasonChange, onConfirmDeny, onCancelDeny, onWithdraw,
+  waiverType, faabRemaining, onEditSave,
 }: {
   claim: WaiverClaim;
   isCommissioner: boolean;
@@ -28,12 +29,19 @@ function ClaimCard({
   onConfirmDeny: (id: string) => void;
   onCancelDeny: () => void;
   onWithdraw?: (id: string) => void;
+  waiverType?: 'reserve-standings' | 'faab';
+  faabRemaining?: number;
+  onEditSave?: (claimId: string, patch: { faabBid?: number }) => Promise<void>;
 }) {
   const { openProfile } = useTeamProfile();
   const dropTeam = claim.dropTeamId ? teamMap.get(claim.dropTeamId) ?? null : null;
   const addTeam  = teamMap.get(claim.addTeamId);
   const isReviewing = reviewing === claim.id;
   const isDenying   = denyingId === claim.id;
+  const [editMode, setEditMode] = useState(false);
+  const [editBid, setEditBid] = useState(claim.faabBid ?? 0);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState('');
 
   return (
     <div className="bg-card border border-line rounded-2xl p-4">
@@ -132,15 +140,70 @@ function ClaimCard({
           )}
         </div>
 
-        {/* Withdraw — own pending claim */}
+        {/* Edit + Withdraw — own pending claim */}
         {onWithdraw && claim.status === 'pending' && !isCommissioner && (
-          <div className="flex-shrink-0">
-            <button
-              onClick={() => onWithdraw(claim.id)}
-              className="text-xs bg-field border border-line text-copy-3 hover:border-danger/40 hover:text-danger px-3 py-1.5 rounded-lg transition-colors font-medium"
-            >
-              Withdraw
-            </button>
+          <div className="flex-shrink-0 flex flex-col gap-1.5 items-end">
+            {editMode ? (
+              <div className="flex flex-col gap-1.5 w-44">
+                {waiverType === 'faab' && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-copy-3">Bid: $</span>
+                    <input
+                      autoFocus
+                      type="number"
+                      min={0}
+                      max={faabRemaining ?? 9999}
+                      value={editBid}
+                      onFocus={e => e.target.select()}
+                      onChange={e => setEditBid(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
+                      className="flex-1 bg-field border border-line-2 rounded-lg px-2 py-1.5 text-xs text-copy focus:outline-none focus:border-brand transition-colors"
+                    />
+                  </div>
+                )}
+                {editError && <p className="text-[10px] text-danger">{editError}</p>}
+                <div className="flex gap-1.5">
+                  <button
+                    onClick={async () => {
+                      if (!onEditSave) return;
+                      setEditSaving(true); setEditError('');
+                      try {
+                        await onEditSave(claim.id, { faabBid: waiverType === 'faab' ? editBid : undefined });
+                        setEditMode(false);
+                      } catch (e: unknown) {
+                        setEditError(e instanceof Error ? e.message : 'Failed to save');
+                      } finally { setEditSaving(false); }
+                    }}
+                    disabled={editSaving}
+                    className="flex-1 text-xs bg-brand text-white px-2 py-1.5 rounded-lg font-medium disabled:opacity-50"
+                  >
+                    {editSaving ? '...' : 'Save'}
+                  </button>
+                  <button
+                    onClick={() => { setEditMode(false); setEditBid(claim.faabBid ?? 0); setEditError(''); }}
+                    className="flex-1 text-xs bg-field border border-line text-copy-2 px-2 py-1.5 rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex gap-1.5">
+                {(waiverType === 'faab' || onEditSave) && (
+                  <button
+                    onClick={() => { setEditMode(true); setEditBid(claim.faabBid ?? 0); }}
+                    className="text-xs bg-field border border-line text-copy-3 hover:border-brand/40 hover:text-brand px-3 py-1.5 rounded-lg transition-colors font-medium"
+                  >
+                    Edit
+                  </button>
+                )}
+                <button
+                  onClick={() => onWithdraw(claim.id)}
+                  className="text-xs bg-field border border-line text-copy-3 hover:border-danger/40 hover:text-danger px-3 py-1.5 rounded-lg transition-colors font-medium"
+                >
+                  Withdraw
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -419,6 +482,11 @@ function WaiversTab({
     }
   }
 
+  async function editClaim(claimId: string, patch: { faabBid?: number }) {
+    const updated = await api.patch<WaiverClaim>(`/leagues/${leagueId}/waivers/${claimId}`, patch);
+    setClaims(c => c.map(x => x.id === claimId ? updated : x));
+  }
+
   async function approve(claimId: string) {
     setReviewing(claimId);
     try {
@@ -452,6 +520,9 @@ function WaiversTab({
     onDenyReasonChange: setDenyReason,
     onConfirmDeny: deny,
     onCancelDeny: () => setDenyingId(null),
+    waiverType,
+    faabRemaining: myTeam?.faabRemaining ?? 0,
+    onEditSave: editClaim,
   };
 
   const nextProcessingLabel = (() => {
