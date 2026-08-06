@@ -136,22 +136,28 @@ function RecentActivityTab({ leagueId, fantasyTeams }: { leagueId: string; fanta
                       </div>
                     </div>
                     {isExpanded && losers.length > 0 && (
-                      <div className="ml-14 mr-5 mb-4 rounded-xl overflow-hidden border border-line/40 divide-y divide-line/30">
-                        {losers
-                          .sort((a, b) => (b.faabBid ?? 0) - (a.faabBid ?? 0))
-                          .map(loser => (
-                            <div key={loser.id} className="flex items-center justify-between px-3.5 py-2.5 bg-field/40">
-                              <span className="text-xs font-medium text-copy-2">{loser.claimantDisplayName}</span>
-                              <div className="flex items-center gap-3">
-                                {loser.faabBid != null && (
-                                  <span className="text-xs font-semibold text-copy-3 tabular-nums">${loser.faabBid}</span>
-                                )}
-                                <span className="text-[11px] text-danger/70 font-medium">
-                                  {loser.denialReason ?? 'denied'}
-                                </span>
+                      <div className="mx-5 mb-5 ml-14">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-copy-3 mb-2 px-1">Competing bids</p>
+                        <div className="rounded-xl overflow-hidden border border-line divide-y divide-line/50">
+                          {losers
+                            .sort((a, b) => (b.faabBid ?? 0) - (a.faabBid ?? 0))
+                            .map(loser => (
+                              <div key={loser.id} className="flex items-center justify-between px-4 py-3 bg-field">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-1.5 h-1.5 rounded-full bg-danger/50 flex-shrink-0" />
+                                  <span className="text-sm font-medium text-copy-2">{loser.claimantDisplayName}</span>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  {loser.faabBid != null && (
+                                    <span className="text-sm font-semibold text-copy-3 tabular-nums">${loser.faabBid}</span>
+                                  )}
+                                  <span className="text-xs text-danger/80 font-medium bg-danger/10 px-2 py-0.5 rounded-full">
+                                    lost
+                                  </span>
+                                </div>
                               </div>
-                            </div>
-                          ))}
+                            ))}
+                        </div>
                       </div>
                     )}
                   </div>
