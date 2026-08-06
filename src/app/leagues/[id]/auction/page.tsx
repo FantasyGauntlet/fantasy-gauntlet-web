@@ -1923,7 +1923,7 @@ export default function AuctionPage() {
                 )}
 
                 {teamPanelList.length > 0 ? (
-                  <div className="grid gap-1.5 max-h-72 overflow-y-auto" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(56px, 1fr))' }}>
+                  <div className="grid gap-1.5 max-h-[520px] overflow-y-auto" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(56px, 1fr))' }}>
                     {teamPanelList.map(team => {
                       const greyed = greyedIds.has(team.id);
                       const inQueue = nominationQueue.includes(team.id);
