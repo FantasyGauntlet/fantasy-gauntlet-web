@@ -131,11 +131,12 @@ function GameCard({ game, isMyHome, isMyAway, showSport = false }: {
 
 // ── Main ───────────────────────────────────────────────────────────────────────
 
-function GameCenterTab({ games: rawGames, schedule, selectedSports, myOwnedTeamIds }: {
+function GameCenterTab({ games: rawGames, schedule, selectedSports, myOwnedTeamIds, allLeagueTeamIds }: {
   games: ScoreboardGame[];
   schedule: ScoreboardGame[];
   selectedSports: string[];
   myOwnedTeamIds: Set<string>;
+  allLeagueTeamIds: Set<string>;
 }) {
   const [expandedSports, setExpandedSports] = useState<Set<string>>(new Set());
 
@@ -232,13 +233,13 @@ function GameCenterTab({ games: rawGames, schedule, selectedSports, myOwnedTeamI
               .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt));
 
             const ownedTodayGames = todaySportGames.filter(g =>
-              myOwnedTeamIds.has(g.homeTeamId) || myOwnedTeamIds.has(g.awayTeamId)
+              allLeagueTeamIds.has(g.homeTeamId) || allLeagueTeamIds.has(g.awayTeamId)
             );
             const ownedUpcomingGames = upcomingSportGames.filter(g =>
-              myOwnedTeamIds.has(g.homeTeamId) || myOwnedTeamIds.has(g.awayTeamId)
+              allLeagueTeamIds.has(g.homeTeamId) || allLeagueTeamIds.has(g.awayTeamId)
             );
 
-            // Default collapsed view: today's owned games, or the single next upcoming owned game
+            // Default collapsed view: today's league-owned games, or the next upcoming one
             const ownedDefaultGames = ownedTodayGames.length > 0
               ? ownedTodayGames
               : ownedUpcomingGames.slice(0, 1);
@@ -300,7 +301,7 @@ function GameCenterTab({ games: rawGames, schedule, selectedSports, myOwnedTeamI
                     </div>
                   ) : totalCount > 0 ? (
                     <div className="bg-card border border-line rounded-xl px-4 py-3 text-center">
-                      <p className="text-copy-3 text-sm">You don't own any teams in this league.</p>
+                      <p className="text-copy-3 text-sm">No league teams playing in this sport.</p>
                       <button
                         onClick={() => toggleSport(sport)}
                         className="text-[11px] text-brand mt-1 hover:underline"
