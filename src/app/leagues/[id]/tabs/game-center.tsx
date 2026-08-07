@@ -141,6 +141,7 @@ function GameCenterTab({ games: rawGames, schedule, selectedSports, myOwnedTeamI
   const [expandedSports, setExpandedSports] = useState<Set<string>>(new Set());
 
   const games = rawGames.filter(isRelevantGame);
+  const cutoff30 = new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10);
 
   function toggleSport(sport: string) {
     setExpandedSports(prev => {
@@ -229,7 +230,12 @@ function GameCenterTab({ games: rawGames, schedule, selectedSports, myOwnedTeamI
               myOwnedTeamIds,
             );
             const upcomingSportGames = schedule
-              .filter(g => g.sportLeagueId === sport)
+              .filter(g => {
+                if (g.sportLeagueId !== sport) return false;
+                const isLeagueGame = allLeagueTeamIds.has(g.homeTeamId) || allLeagueTeamIds.has(g.awayTeamId);
+                if (isLeagueGame) return true;
+                return g.scheduledAt.slice(0, 10) <= cutoff30;
+              })
               .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt));
 
             const ownedTodayGames = todaySportGames.filter(g =>
