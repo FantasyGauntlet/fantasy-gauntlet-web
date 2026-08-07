@@ -1465,6 +1465,96 @@ export default function AuctionPage() {
               )
             )}
 
+            {/* Snake pre-draft team browser — visible during waiting/queue phase */}
+            {isSnake && status === 'waiting' && allAuctionTeams.length > 0 && (
+              <div className="bg-card border border-line rounded-2xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide">Teams</p>
+                  <p className="text-[11px] text-copy-3">Click <span className="font-bold text-brand">+</span> to add teams to your queue</p>
+                </div>
+
+                {/* Sport filter */}
+                {(() => {
+                  const sportCounts = new Map<string, number>();
+                  for (const t of allAuctionTeams) sportCounts.set(t.sportLeagueId, (sportCounts.get(t.sportLeagueId) ?? 0) + 1);
+                  const sports = [...sportCounts.keys()].sort((a, b) => {
+                    const ai = SPORT_ORDER.indexOf(a); const bi = SPORT_ORDER.indexOf(b);
+                    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+                  });
+                  if (sports.length <= 1) return null;
+                  return (
+                    <div className="flex gap-1 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
+                      <button
+                        onClick={() => setSnakePickSport(null)}
+                        className={`flex-shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full transition-colors ${!snakePickSport ? 'bg-brand text-white' : 'bg-field border border-line text-copy-3 hover:text-copy hover:border-line-2'}`}
+                      >
+                        All <span className="opacity-70">({allAuctionTeams.length})</span>
+                      </button>
+                      {sports.map(sport => (
+                        <button
+                          key={sport}
+                          onClick={() => setSnakePickSport(s => s === sport ? null : sport)}
+                          className={`flex-shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full transition-colors ${snakePickSport === sport ? 'bg-brand text-white' : 'bg-field border border-line text-copy-3 hover:text-copy hover:border-line-2'}`}
+                        >
+                          {fln(sport)} <span className="opacity-70">({sportCounts.get(sport)})</span>
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })()}
+
+                {/* Search */}
+                <input
+                  type="text"
+                  placeholder="Search teams…"
+                  value={snakePickSearch}
+                  onChange={e => setSnakePickSearch(e.target.value)}
+                  className="w-full bg-field border border-line-2 rounded-xl px-4 py-2.5 text-copy text-sm placeholder-copy-3 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors"
+                />
+
+                {/* Team list */}
+                <div className="max-h-[520px] overflow-y-auto space-y-1 -mr-1 pr-1">
+                  {(() => {
+                    const q = snakePickSearch.toLowerCase();
+                    const filtered = allAuctionTeams.filter(t =>
+                      (!snakePickSport || t.sportLeagueId === snakePickSport) &&
+                      (!q || t.name.toLowerCase().includes(q) || t.shortName.toLowerCase().includes(q))
+                    ).sort((a, b) => a.name.localeCompare(b.name));
+                    if (filtered.length === 0) return <p className="text-xs text-copy-3 text-center py-4">No teams match</p>;
+                    return filtered.map(team => {
+                      const queuePos = snakePickQueue.indexOf(team.id);
+                      const inQueue = queuePos !== -1;
+                      return (
+                        <div key={team.id} className="group/row flex items-center gap-1">
+                          <div
+                            onClick={() => openProfile({ teamId: team.id, leagueId: id, name: team.name, logoUrl: team.logoUrl, sportLeagueId: team.sportLeagueId })}
+                            className="flex-1 flex items-center gap-3 px-3 py-2 rounded-xl bg-field hover:bg-field-2 cursor-pointer transition-colors"
+                          >
+                            <TeamLogo logoUrl={team.logoUrl} name={team.name} size={7} />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-copy truncate">{team.name}</p>
+                              {!snakePickSport && <p className="text-xs text-copy-3">{fln(team.sportLeagueId)}</p>}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => setSnakePickQueue(q => inQueue ? q.filter(qid => qid !== team.id) : [...q, team.id])}
+                            title={inQueue ? `#${queuePos + 1} in queue — click to remove` : 'Add to draft queue'}
+                            className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold transition-all leading-none ${
+                              inQueue
+                                ? 'bg-brand text-white'
+                                : 'bg-field-2 text-copy-3 opacity-0 group-hover/row:opacity-100 hover:bg-brand/20 hover:text-brand'
+                            }`}
+                          >
+                            {inQueue ? queuePos + 1 : '+'}
+                          </button>
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+              </div>
+            )}
+
             {/* Snake Draft Clock */}
             {isSnake && status === 'active' && (
               <div className="bg-card border border-brand/30 rounded-2xl p-5 space-y-3">
