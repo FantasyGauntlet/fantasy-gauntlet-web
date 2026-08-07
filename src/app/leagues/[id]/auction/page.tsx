@@ -1465,6 +1465,83 @@ export default function AuctionPage() {
               )
             )}
 
+            {/* Snake draft queue — sits above the team browser */}
+            {isSnake && status !== 'closed' && (() => {
+              const validQueue = snakePickQueue.filter(tid => !soldOrPassedIds.has(tid));
+              if (validQueue.length === 0) return null;
+              const isMyTurn = snakePickerUserId === myTeamUserId;
+              return (
+                <div className="bg-card border border-line rounded-2xl p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide">
+                      My Draft Queue
+                      <span className="ml-1.5 text-copy-3/60 font-normal normal-case">({validQueue.length})</span>
+                    </p>
+                    <button
+                      onClick={() => setSnakePickQueue([])}
+                      className="text-[10px] text-copy-3 hover:text-danger transition-colors"
+                    >
+                      Clear all
+                    </button>
+                  </div>
+                  <div className="max-h-[200px] overflow-y-auto space-y-1 -mr-1 pr-1">
+                    {validQueue.map((tid, idx) => {
+                      const t = teamMapRef.current.get(tid);
+                      if (!t) return null;
+                      const isTopPick = isMyTurn && idx === 0;
+                      return (
+                        <div
+                          key={tid}
+                          onClick={() => { if (isMyTurn) setSnakePickSelected(prev => prev === tid ? null : tid); }}
+                          className={`group/qrow flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors ${
+                            isTopPick
+                              ? 'bg-brand/10 border border-brand/20 cursor-pointer'
+                              : isMyTurn
+                              ? 'bg-field cursor-pointer hover:bg-field-2'
+                              : 'bg-field'
+                          }`}
+                        >
+                          <span className={`text-[10px] font-bold tabular-nums w-4 text-right flex-shrink-0 ${isTopPick ? 'text-brand' : 'text-copy-3'}`}>
+                            {idx + 1}
+                          </span>
+                          <TeamLogo logoUrl={t.logoUrl} name={t.name} size={5} />
+                          <span className={`flex-1 text-xs truncate ${isTopPick ? 'text-brand font-medium' : 'text-copy'}`}>{t.name}</span>
+                          <span className="text-[10px] text-copy-3 flex-shrink-0 mr-1">{fln(t.sportLeagueId)}</span>
+                          <div className="flex flex-col opacity-0 group-hover/qrow:opacity-100 transition-opacity">
+                            <button
+                              onClick={e => { e.stopPropagation(); setSnakePickQueue(q => {
+                                const i = q.indexOf(tid); if (i <= 0) return q;
+                                const n = [...q]; [n[i-1], n[i]] = [n[i], n[i-1]]; return n;
+                              }); }}
+                              title="Move up"
+                              className="text-[9px] text-copy-3 hover:text-copy leading-none px-0.5"
+                            >▲</button>
+                            <button
+                              onClick={e => { e.stopPropagation(); setSnakePickQueue(q => {
+                                const i = q.indexOf(tid); if (i >= q.length - 1) return q;
+                                const n = [...q]; [n[i], n[i+1]] = [n[i+1], n[i]]; return n;
+                              }); }}
+                              title="Move down"
+                              className="text-[9px] text-copy-3 hover:text-copy leading-none px-0.5"
+                            >▼</button>
+                          </div>
+                          <button
+                            onClick={e => { e.stopPropagation(); setSnakePickQueue(q => q.filter(qid => qid !== tid)); }}
+                            className="text-copy-3 hover:text-danger opacity-0 group-hover/qrow:opacity-100 transition-opacity text-sm leading-none"
+                          >×</button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {isMyTurn && (
+                    <p className="text-[10px] text-copy-3 mt-2.5 text-center">
+                      Top available pick auto-selected · click any item to override
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
+
             {/* Snake pre-draft team browser — visible during waiting/queue phase */}
             {isSnake && status === 'waiting' && allAuctionTeams.length > 0 && (
               <div className="bg-card border border-line rounded-2xl p-4 space-y-3">
@@ -1733,84 +1810,6 @@ export default function AuctionPage() {
                 </div>
               </div>
             )}
-
-            {/* Snake draft queue — visible to all users throughout the draft */}
-            {isSnake && status !== 'closed' && (() => {
-              const validQueue = snakePickQueue.filter(tid => !soldOrPassedIds.has(tid));
-              if (validQueue.length === 0) return null;
-              const isMyTurn = snakePickerUserId === myTeamUserId;
-              return (
-                <div className="bg-card border border-line rounded-2xl p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide">
-                      My Draft Queue
-                      <span className="ml-1.5 text-copy-3/60 font-normal normal-case">({validQueue.length})</span>
-                    </p>
-                    <button
-                      onClick={() => setSnakePickQueue([])}
-                      className="text-[10px] text-copy-3 hover:text-danger transition-colors"
-                    >
-                      Clear all
-                    </button>
-                  </div>
-                  <div className="space-y-1">
-                    {validQueue.map((tid, idx) => {
-                      const t = teamMapRef.current.get(tid);
-                      if (!t) return null;
-                      const isTopPick = isMyTurn && idx === 0;
-                      const isQueued = snakePickQueue.includes(tid);
-                      return (
-                        <div
-                          key={tid}
-                          onClick={() => { if (isMyTurn) setSnakePickSelected(prev => prev === tid ? null : tid); }}
-                          className={`group/qrow flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors ${
-                            isTopPick
-                              ? 'bg-brand/10 border border-brand/20 cursor-pointer'
-                              : isMyTurn
-                              ? 'bg-field cursor-pointer hover:bg-field-2'
-                              : 'bg-field'
-                          }`}
-                        >
-                          <span className={`text-[10px] font-bold tabular-nums w-4 text-right flex-shrink-0 ${isTopPick ? 'text-brand' : 'text-copy-3'}`}>
-                            {idx + 1}
-                          </span>
-                          <TeamLogo logoUrl={t.logoUrl} name={t.name} size={5} />
-                          <span className={`flex-1 text-xs truncate ${isTopPick ? 'text-brand font-medium' : 'text-copy'}`}>{t.name}</span>
-                          <span className="text-[10px] text-copy-3 flex-shrink-0 mr-1">{fln(t.sportLeagueId)}</span>
-                          <div className="flex flex-col opacity-0 group-hover/qrow:opacity-100 transition-opacity">
-                            <button
-                              onClick={e => { e.stopPropagation(); setSnakePickQueue(q => {
-                                const i = q.indexOf(tid); if (i <= 0) return q;
-                                const n = [...q]; [n[i-1], n[i]] = [n[i], n[i-1]]; return n;
-                              }); }}
-                              title="Move up"
-                              className="text-[9px] text-copy-3 hover:text-copy leading-none px-0.5"
-                            >▲</button>
-                            <button
-                              onClick={e => { e.stopPropagation(); setSnakePickQueue(q => {
-                                const i = q.indexOf(tid); if (i >= q.length - 1) return q;
-                                const n = [...q]; [n[i], n[i+1]] = [n[i+1], n[i]]; return n;
-                              }); }}
-                              title="Move down"
-                              className="text-[9px] text-copy-3 hover:text-copy leading-none px-0.5"
-                            >▼</button>
-                          </div>
-                          <button
-                            onClick={e => { e.stopPropagation(); setSnakePickQueue(q => q.filter(qid => qid !== tid)); }}
-                            className="text-copy-3 hover:text-danger opacity-0 group-hover/qrow:opacity-100 transition-opacity text-sm leading-none"
-                          >×</button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  {isMyTurn && (
-                    <p className="text-[10px] text-copy-3 mt-2.5 text-center">
-                      Top available pick auto-selected · click any item to override
-                    </p>
-                  )}
-                </div>
-              );
-            })()}
 
             {/* Current Lot — auction mode only */}
             {!isSnake && (status === 'active' || lotFlash) && currentLot && (
