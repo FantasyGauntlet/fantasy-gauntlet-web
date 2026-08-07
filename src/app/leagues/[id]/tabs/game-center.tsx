@@ -244,10 +244,18 @@ function GameCenterTab({ games: rawGames, schedule, selectedSports, myOwnedTeamI
             const ownedUpcomingGames = upcomingSportGames.filter(g =>
               allLeagueTeamIds.has(g.homeTeamId) || allLeagueTeamIds.has(g.awayTeamId)
             );
+            const myTodaySportGames = todaySportGames.filter(g =>
+              myOwnedTeamIds.has(g.homeTeamId) || myOwnedTeamIds.has(g.awayTeamId)
+            );
+            const myUpcomingSportGames = upcomingSportGames.filter(g =>
+              myOwnedTeamIds.has(g.homeTeamId) || myOwnedTeamIds.has(g.awayTeamId)
+            );
 
-            // Default collapsed view: today's league-owned games, or the next upcoming one
-            const ownedDefaultGames = ownedTodayGames.length > 0
-              ? ownedTodayGames
+            // Default collapsed view: prioritise the current user's teams, then any league team
+            const ownedDefaultGames =
+              myTodaySportGames.length > 0 ? myTodaySportGames
+              : myUpcomingSportGames.length > 0 ? myUpcomingSportGames.slice(0, 1)
+              : ownedTodayGames.length > 0 ? ownedTodayGames
               : ownedUpcomingGames.slice(0, 1);
 
             const isExpanded = expandedSports.has(sport);
