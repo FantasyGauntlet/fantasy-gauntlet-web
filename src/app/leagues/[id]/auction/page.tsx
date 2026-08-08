@@ -276,6 +276,8 @@ export default function AuctionPage() {
   // Commissioner: set draft order for snake-defined
   const [settingDraftOrder, setSettingDraftOrder] = useState(false);
   const [draftOrderInput, setDraftOrderInput] = useState<string[]>([]);
+  const [teamSortMode, setTeamSortMode] = useState<'odds' | 'alpha'>('odds');
+  const [oddsRankMap, setOddsRankMap] = useState<Map<string, number>>(new Map());
 
   const socketRef = useRef<Socket | null>(null);
   const toastId = useRef(0);
@@ -359,7 +361,8 @@ export default function AuctionPage() {
       api.get<League>(`/leagues/${id}`),
       api.get<FantasyTeam[]>(`/leagues/${id}/teams`),
       api.get<SportGroup[]>(`/leagues/${id}/sport-teams`),
-    ]).then(([l, fts, groups]) => {
+      api.get<{ teamId: string; sportKey: string; probability: number }[]>('/sports/rankings').catch(() => []),
+    ]).then(([l, fts, groups, rankings]) => {
       setLeague(l);
       setScheduledStartAt(l.auctionConfig?.scheduledStartAt ?? null);
       setFantasyTeams(fts);
@@ -370,6 +373,9 @@ export default function AuctionPage() {
       const map = new Map<string, SportTeam>();
       for (const g of groups) for (const t of g.teams) map.set(t.id, t);
       teamMapRef.current = map;
+      const rankMap = new Map<string, number>();
+      rankings.forEach((r, i) => rankMap.set(r.teamId, i));
+      setOddsRankMap(rankMap);
       setDataLoaded(true);
     }).catch(() => router.replace('/dashboard'));
   }, [id, router]);
@@ -1027,16 +1033,29 @@ export default function AuctionPage() {
   const allAuctionTeams = draftPool.size > 0
     ? [...teamMapRef.current.values()].filter(t => draftPool.has(t.id))
     : [...teamMapRef.current.values()];
+
+  const sortTeams = (teams: SportTeam[]) => {
+    if (teamSortMode === 'odds') {
+      return [...teams].sort((a, b) => {
+        const ra = oddsRankMap.has(a.id) ? oddsRankMap.get(a.id)! : 999999;
+        const rb = oddsRankMap.has(b.id) ? oddsRankMap.get(b.id)! : 999999;
+        if (ra !== rb) return ra - rb;
+        return a.name.localeCompare(b.name);
+      });
+    }
+    return [...teams].sort((a, b) => a.name.localeCompare(b.name));
+  };
+
   // For non-hidden modes derive available teams from the remaining queue order.
   // For hidden mode use the pool (order concealed) since the queue isn't sent.
-  const availableTeams = nominationMode !== 'random-hidden'
-    ? upcomingQueue
-        .map(tid => teamMapRef.current.get(tid))
-        .filter((t): t is SportTeam => !!t && !soldOrPassedIds.has(t.id) && t.id !== currentLot?.teamId)
-        .sort((a, b) => a.name.localeCompare(b.name))
-    : allAuctionTeams
-        .filter(t => !soldOrPassedIds.has(t.id) && t.id !== currentLot?.teamId)
-        .sort((a, b) => a.name.localeCompare(b.name));
+  const availableTeams = sortTeams(
+    nominationMode !== 'random-hidden'
+      ? upcomingQueue
+          .map(tid => teamMapRef.current.get(tid))
+          .filter((t): t is SportTeam => !!t && !soldOrPassedIds.has(t.id) && t.id !== currentLot?.teamId)
+      : allAuctionTeams
+          .filter(t => !soldOrPassedIds.has(t.id) && t.id !== currentLot?.teamId)
+  );
   const filteredAvailableTeams = availableFilter
     ? availableTeams.filter(t => t.sportLeagueId === availableFilter)
     : availableTeams;
@@ -1052,7 +1071,7 @@ export default function AuctionPage() {
     // During the draft queue phase the auction hasn't built its queue yet, so show
     // all known sport teams so users can browse and build their nomination queue.
     if (draftQueueEndsAt !== null && status === 'waiting') {
-      return [...allAuctionTeams].sort((a, b) => a.name.localeCompare(b.name));
+      return sortTeams(allAuctionTeams);
     }
     if (teamViewMode === 'drafted') return draftedTeams;
     if (teamViewMode === 'passed') {
@@ -1065,7 +1084,7 @@ export default function AuctionPage() {
       const takenTeams = [...soldOrPassedIds]
         .map(id => teamMapRef.current.get(id))
         .filter((t): t is SportTeam => !!t);
-      return [...availableTeams, ...takenTeams].sort((a, b) => a.name.localeCompare(b.name));
+      return sortTeams([...availableTeams, ...takenTeams]);
     }
     return availableTeams;
   })();
@@ -1580,23 +1599,33 @@ export default function AuctionPage() {
                   );
                 })()}
 
-                {/* Search */}
-                <input
-                  type="text"
-                  placeholder="Search teams…"
-                  value={snakePickSearch}
-                  onChange={e => setSnakePickSearch(e.target.value)}
-                  className="w-full bg-field border border-line-2 rounded-xl px-4 py-2.5 text-copy text-sm placeholder-copy-3 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors"
-                />
+                {/* Search + sort */}
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Search teams…"
+                    value={snakePickSearch}
+                    onChange={e => setSnakePickSearch(e.target.value)}
+                    className="flex-1 bg-field border border-line-2 rounded-xl px-4 py-2.5 text-copy text-sm placeholder-copy-3 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors"
+                  />
+                  <select
+                    value={teamSortMode}
+                    onChange={e => setTeamSortMode(e.target.value as 'odds' | 'alpha')}
+                    className="bg-field border border-line-2 rounded-xl px-3 py-2.5 text-xs text-copy focus:outline-none focus:border-brand transition-colors flex-shrink-0"
+                  >
+                    <option value="odds">By Odds</option>
+                    <option value="alpha">A–Z</option>
+                  </select>
+                </div>
 
                 {/* Team list */}
                 <div className="max-h-[520px] overflow-y-auto space-y-1 -mr-1 pr-1">
                   {(() => {
                     const q = snakePickSearch.toLowerCase();
-                    const filtered = allAuctionTeams.filter(t =>
+                    const filtered = sortTeams(allAuctionTeams.filter(t =>
                       (!snakePickSport || t.sportLeagueId === snakePickSport) &&
                       (!q || t.name.toLowerCase().includes(q) || t.shortName.toLowerCase().includes(q))
-                    ).sort((a, b) => a.name.localeCompare(b.name));
+                    ));
                     if (filtered.length === 0) return <p className="text-xs text-copy-3 text-center py-4">No teams match</p>;
                     return filtered.map(team => {
                       const queuePos = snakePickQueue.indexOf(team.id);
@@ -1743,14 +1772,24 @@ export default function AuctionPage() {
                   );
                 })()}
 
-                {/* Search — always visible */}
-                <input
-                  type="text"
-                  placeholder="Search teams…"
-                  value={snakePickSearch}
-                  onChange={e => setSnakePickSearch(e.target.value)}
-                  className="w-full bg-field border border-line-2 rounded-xl px-4 py-2.5 text-copy text-sm placeholder-copy-3 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors"
-                />
+                {/* Search + sort — always visible */}
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Search teams…"
+                    value={snakePickSearch}
+                    onChange={e => setSnakePickSearch(e.target.value)}
+                    className="flex-1 bg-field border border-line-2 rounded-xl px-4 py-2.5 text-copy text-sm placeholder-copy-3 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors"
+                  />
+                  <select
+                    value={teamSortMode}
+                    onChange={e => setTeamSortMode(e.target.value as 'odds' | 'alpha')}
+                    className="bg-field border border-line-2 rounded-xl px-3 py-2.5 text-xs text-copy focus:outline-none focus:border-brand transition-colors flex-shrink-0"
+                  >
+                    <option value="odds">By Odds</option>
+                    <option value="alpha">A–Z</option>
+                  </select>
+                </div>
 
                 {/* Team list — always visible to all users */}
                 <div className="max-h-[30rem] overflow-y-auto space-y-1 -mr-1 pr-1">
