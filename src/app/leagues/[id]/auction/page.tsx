@@ -1613,7 +1613,7 @@ export default function AuctionPage() {
                     onChange={e => setTeamSortMode(e.target.value as 'odds' | 'alpha')}
                     className="bg-field border border-line-2 rounded-xl px-3 py-2.5 text-xs text-copy focus:outline-none focus:border-brand transition-colors flex-shrink-0"
                   >
-                    <option value="odds">By Odds</option>
+                    <option value="odds">Best Available</option>
                     <option value="alpha">A–Z</option>
                   </select>
                 </div>
@@ -1786,7 +1786,7 @@ export default function AuctionPage() {
                     onChange={e => setTeamSortMode(e.target.value as 'odds' | 'alpha')}
                     className="bg-field border border-line-2 rounded-xl px-3 py-2.5 text-xs text-copy focus:outline-none focus:border-brand transition-colors flex-shrink-0"
                   >
-                    <option value="odds">By Odds</option>
+                    <option value="odds">Best Available</option>
                     <option value="alpha">A–Z</option>
                   </select>
                 </div>
