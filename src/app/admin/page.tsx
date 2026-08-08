@@ -773,6 +773,11 @@ export default function AdminPage() {
   const [availableSports, setAvailableSports] = useState<{ key: string; title: string; active: boolean }[] | null>(null);
   const [availableSportsLoading, setAvailableSportsLoading] = useState(false);
   const [availableSportsFilter, setAvailableSportsFilter] = useState('');
+  const [manualOddsSport, setManualOddsSport] = useState('premier-league');
+  const [manualOddsText, setManualOddsText] = useState('');
+  const [manualOddsSubmitting, setManualOddsSubmitting] = useState(false);
+  const [manualOddsResult, setManualOddsResult] = useState<{ matched: number; unmatched: string[] } | null>(null);
+  const [manualOddsError, setManualOddsError] = useState<string | null>(null);
 
   async function loadAvailableSports() {
     setAvailableSportsLoading(true);
@@ -806,6 +811,25 @@ export default function AdminPage() {
       setOddsRefreshMsg({ ok: false, text: e instanceof Error ? e.message : 'Refresh failed' });
     }
     setOddsRefreshing(false);
+  }
+
+  async function submitManualOdds() {
+    if (!manualOddsText.trim()) return;
+    setManualOddsSubmitting(true);
+    setManualOddsResult(null);
+    setManualOddsError(null);
+    try {
+      const result = await api.post<{ matched: number; unmatched: string[] }>('/admin/odds/manual', {
+        sport: manualOddsSport,
+        rawText: manualOddsText,
+      });
+      setManualOddsResult(result);
+      const rankings = await api.get<OddsRankings | null>('/admin/odds/rankings');
+      setOddsRankings(rankings);
+    } catch (e: unknown) {
+      setManualOddsError(e instanceof Error ? e.message : 'Failed to seed odds');
+    }
+    setManualOddsSubmitting(false);
   }
 
   const tabs: { key: Tab; label: string }[] = [
@@ -2330,6 +2354,52 @@ export default function AdminPage() {
                 )}
               </div>
             )}
+
+            {/* Manual odds entry */}
+            <div className="bg-card border border-line rounded-2xl p-5">
+              <h3 className="text-xs font-semibold text-copy-2 mb-0.5">Paste Odds Manually</h3>
+              <p className="text-[10px] text-copy-3 mb-3">
+                For sports the API can't fetch (Premier League, UCL). One team per line.
+                Formats accepted: <span className="font-mono">Team Name 4.50</span> (decimal),{' '}
+                <span className="font-mono">Team Name +350</span> (American), or just team names in rank order.
+              </p>
+              <div className="flex gap-2 mb-2">
+                <select
+                  value={manualOddsSport}
+                  onChange={e => { setManualOddsSport(e.target.value); setManualOddsResult(null); setManualOddsError(null); }}
+                  className="bg-field border border-line-2 rounded-lg px-3 py-1.5 text-xs text-copy focus:outline-none focus:border-brand transition-colors"
+                >
+                  <option value="premier-league">Premier League</option>
+                  <option value="ucl">UCL</option>
+                  <option value="world-cup">World Cup</option>
+                </select>
+              </div>
+              <textarea
+                value={manualOddsText}
+                onChange={e => { setManualOddsText(e.target.value); setManualOddsResult(null); setManualOddsError(null); }}
+                placeholder={'Manchester City 4.50\nArsenal 6.00\nLiverpool +500\nChelsea 8.00'}
+                rows={8}
+                className="w-full bg-field border border-line-2 rounded-lg px-3 py-2 text-xs font-mono text-copy placeholder-copy-3 focus:outline-none focus:border-brand transition-colors resize-y mb-2"
+              />
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={submitManualOdds}
+                  disabled={manualOddsSubmitting || !manualOddsText.trim()}
+                  className="flex items-center gap-1.5 bg-brand hover:bg-brand-2 disabled:opacity-50 text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors"
+                >
+                  {manualOddsSubmitting ? <><Spinner /> Saving…</> : 'Seed Rankings'}
+                </button>
+                {manualOddsResult && (
+                  <p className="text-xs text-positive">
+                    {manualOddsResult.matched} teams matched
+                    {manualOddsResult.unmatched.length > 0 && (
+                      <span className="text-amber-500"> · {manualOddsResult.unmatched.length} unmatched: {manualOddsResult.unmatched.join(', ')}</span>
+                    )}
+                  </p>
+                )}
+                {manualOddsError && <p className="text-xs text-danger">{manualOddsError}</p>}
+              </div>
+            </div>
 
             {/* Bookmakers */}
             {oddsRankings && oddsRankings.bookmakers.length > 0 && (
