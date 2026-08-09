@@ -504,9 +504,14 @@ export function TeamProfileModal() {
 
     // Fetch Best Available rank if not pre-supplied by the caller
     if (profile.rank == null) {
+      const capturedTeamId = profile.teamId;
+      const capturedSportKey = profile.sportLeagueId;
       api.get<{ teamId: string; sportKey: string }[]>('/sports/rankings')
         .then(rankings => {
-          const idx = rankings.findIndex(r => r.teamId === profile.teamId);
+          const filtered = capturedSportKey
+            ? rankings.filter(r => r.sportKey === capturedSportKey)
+            : rankings;
+          const idx = filtered.findIndex(r => r.teamId === capturedTeamId);
           setTeamRank(idx >= 0 ? idx + 1 : null);
         })
         .catch(() => {});
@@ -733,7 +738,7 @@ export function TeamProfileModal() {
                 )}
 
                 {/* League context stats */}
-                {(profile.wins != null || profile.draftPrice != null) && (
+                {(profile.wins != null || profile.draftPrice != null || teamRank != null) && (
                   <div className="px-5 py-4 border-b border-line">
                     <div className="grid grid-cols-2 gap-3">
                       {profile.wins != null && (
