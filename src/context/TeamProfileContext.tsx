@@ -17,6 +17,7 @@ export interface TeamProfileArgs {
   bonusBreakdown?: { label: string; points: number }[];
   draftPrice?: number | null;
   ownerDisplayName?: string;
+  rank?: number;
 }
 
 interface TeamProfileContextValue {

@@ -752,6 +752,12 @@ export function TeamProfileModal() {
                           <p className="text-sm font-bold text-copy">${auctionStats.avgPrice}</p>
                         </div>
                       )}
+                      {profile.rank != null && (
+                        <div className="bg-field rounded-xl px-3 py-2.5">
+                          <p className="text-[10px] text-copy-3 mb-1">Team Rank</p>
+                          <p className="text-sm font-bold text-copy">#{profile.rank}</p>
+                        </div>
+                      )}
                     </div>
                     {profile.bonusBreakdown && profile.bonusBreakdown.length > 0 && (
                       <div className="mt-3 border-t border-line/50 pt-3 space-y-1.5">

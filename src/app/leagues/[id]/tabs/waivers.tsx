@@ -353,7 +353,8 @@ function WaiversTab({
   const [claims, setClaims] = useState<WaiverClaim[]>([]);
   const [leagueHistory, setLeagueHistory] = useState<WaiverHistoryClaim[]>([]);
   const [expandedLosingBids, setExpandedLosingBids] = useState<Set<string>>(new Set());
-  const [pool, setPool] = useState<TeamWithRecord[]>([]);
+  const [pool, setPool] = useState<TeamWithRecord[]>([]); // available teams only (for claim form)
+  const [allTeamStats, setAllTeamStats] = useState<TeamWithRecord[]>([]); // all teams with stats (for browser)
   const [allLeagueTeams, setAllLeagueTeams] = useState<TeamWithRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [rosterStats, setRosterStats] = useState<Record<string, { rosteredPct: number | null; trend: 'up' | 'down' | null; pickups30d: number; drops30d: number; delta30d: number | null }>>({});
@@ -393,12 +394,14 @@ function WaiversTab({
       api.get<WaiverClaim[]>(`/leagues/${leagueId}/waivers`),
       api.get<WaiverHistoryClaim[]>(`/leagues/${leagueId}/waivers/history`).catch(() => [] as WaiverHistoryClaim[]),
       api.get<TeamWithRecord[]>(`/leagues/${leagueId}/waiver-pool`),
+      api.get<TeamWithRecord[]>(`/leagues/${leagueId}/waiver-pool?includeAll=true`).catch(() => [] as TeamWithRecord[]),
       api.get<SportGroup[]>(`/leagues/${leagueId}/sport-teams`).catch(() => [] as SportGroup[]),
       api.get<{ teamId: string; sportKey: string }[]>('/sports/rankings').catch(() => [] as { teamId: string; sportKey: string }[]),
-    ]).then(([c, hist, p, groups, rankings]) => {
+    ]).then(([c, hist, p, allStats, groups, rankings]) => {
       setClaims(c);
       setLeagueHistory(hist);
       setPool(p);
+      setAllTeamStats(allStats);
       const teams = groups.flatMap(g => g.teams.map(t => ({
         id: t.id, name: t.name, shortName: t.shortName,
         sportLeagueId: t.sportLeagueId, logoUrl: t.logoUrl,
@@ -429,13 +432,13 @@ function WaiversTab({
     return m;
   }, [fantasyTeams]);
 
-  // Comprehensive map: all league teams as base, pool overrides with real stats
+  // Comprehensive map: all league teams as base, all stats override (includes rostered teams)
   const comprehensiveTeamMap = useMemo(() => {
     const m = new Map<string, TeamWithRecord>();
     for (const t of allLeagueTeams) m.set(t.id, t);
-    for (const t of pool) m.set(t.id, t);
+    for (const t of allTeamStats) m.set(t.id, t);
     return m;
-  }, [allLeagueTeams, pool]);
+  }, [allLeagueTeams, allTeamStats]);
 
   const myTeam = fantasyTeams.find(ft =>
     !ft.isPlaceholder && (ft.userId === userId || (ft.coOwnerIds ?? []).includes(userId ?? '')),
@@ -1055,7 +1058,7 @@ function WaiversTab({
             <div
               key={t.id}
               className="flex items-center gap-3 px-4 py-3 hover:bg-field/40 transition-colors cursor-pointer"
-              onClick={() => openProfile({ teamId: t.id, name: t.name, logoUrl: t.logoUrl, sportLeagueId: t.sportLeagueId, wins: t.wins, draws: t.draws, losses: t.losses, points: t.points, ownerDisplayName: t.ownerName })}
+              onClick={() => openProfile({ teamId: t.id, name: t.name, logoUrl: t.logoUrl, sportLeagueId: t.sportLeagueId, wins: t.wins, draws: t.draws, losses: t.losses, points: t.points, ownerDisplayName: t.ownerName, rank: teamRank })}
             >
               {/* Logo */}
               <div className="w-9 h-9 flex-shrink-0 flex items-center justify-center">
