@@ -28,32 +28,26 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone, own
   useEffect(() => {
     if (!db) return;
     setLoading(true);
-    let seeded = false;
 
+    // Always call the REST endpoint on mount — it validates the Firestore cache against
+    // the current member count and rewrites it if stale. onSnapshot picks up the update.
+    api.get<Standing[]>(`/leagues/${leagueId}/standings`)
+      .then(data => { setStandings(data); setLoading(false); })
+      .catch(() => setLoading(false));
+
+    // Real-time listener for live score pushes during active seasons
     const unsub = onSnapshot(
       doc(db, 'standingsCache', leagueId),
       snap => {
         if (snap.exists()) {
-          seeded = true;
           setStandings((snap.data() as { standings: Standing[] }).standings);
           setLoading(false);
         }
       },
-      () => setLoading(false),
+      () => {},
     );
 
-    // Fallback: if onSnapshot hasn't fired within 1.5s (cold cache or blocked security rules),
-    // fetch via REST and set state directly. Backend writes to Firestore on this call too,
-    // so subsequent onSnapshot fires will work if rules allow it.
-    const timer = setTimeout(() => {
-      if (!seeded) {
-        api.get<Standing[]>(`/leagues/${leagueId}/standings`)
-          .then(data => { if (!seeded) { seeded = true; setStandings(data); setLoading(false); } })
-          .catch(() => setLoading(false));
-      }
-    }, 1500);
-
-    return () => { unsub(); clearTimeout(timer); };
+    return () => { unsub(); };
   }, [leagueId]);
 
   if (loading) return <div className="flex justify-center py-12"><Spinner /></div>;
