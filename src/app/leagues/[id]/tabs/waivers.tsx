@@ -968,7 +968,7 @@ function WaiversTab({
                       t={t}
                       accent="positive"
                       stats={rosterStats[t.id]}
-                      onOpen={() => openProfile({ teamId: t.id, name: t.name, logoUrl: t.logoUrl, sportLeagueId: t.sportLeagueId, wins: t.wins, draws: t.draws, losses: t.losses, points: t.points, ownerDisplayName: t.ownerName })}
+                      onOpen={() => openProfile({ teamId: t.id, leagueId, name: t.name, logoUrl: t.logoUrl, sportLeagueId: t.sportLeagueId, wins: t.wins, draws: t.draws, losses: t.losses, points: t.points, ownerDisplayName: t.ownerName })}
                     />
                   ))}
                 </div>
