@@ -502,19 +502,31 @@ export function TeamProfileModal() {
     setParsedRows(null); setPollData(null); setActiveTab('overview');
     setAuctionBreakdownOpen(false);
 
-    // Fetch Best Available rank if not pre-supplied by the caller
+    // Fetch Best Available rank if not pre-supplied by the caller.
+    // Rank is cross-sport within the league's selectedSports, matching waivers ordering.
     if (profile.rank == null) {
       const capturedTeamId = profile.teamId;
+      const capturedLeagueId = profile.leagueId;
       const capturedSportKey = profile.sportLeagueId;
-      api.get<{ teamId: string; sportKey: string }[]>('/sports/rankings')
-        .then(rankings => {
-          const filtered = capturedSportKey
-            ? rankings.filter(r => r.sportKey === capturedSportKey)
-            : rankings;
-          const idx = filtered.findIndex(r => r.teamId === capturedTeamId);
-          setTeamRank(idx >= 0 ? idx + 1 : null);
-        })
-        .catch(() => {});
+      Promise.all([
+        api.get<{ teamId: string; sportKey: string }[]>('/sports/rankings'),
+        capturedLeagueId
+          ? api.get<{ selectedSports: string[] }>(`/leagues/${capturedLeagueId}`)
+          : Promise.resolve(null),
+      ]).then(([rankings, league]) => {
+        const sportSet = league?.selectedSports?.length
+          ? new Set(league.selectedSports)
+          : capturedSportKey
+            ? new Set([capturedSportKey])
+            : null;
+        const filtered = sportSet ? rankings.filter(r => sportSet.has(r.sportKey)) : rankings;
+        let rank = 1;
+        for (const r of filtered) {
+          if (r.teamId === capturedTeamId) { setTeamRank(rank); return; }
+          rank++;
+        }
+        setTeamRank(null);
+      }).catch(() => {});
     }
 
     // Reset standings view to the default for this sport
