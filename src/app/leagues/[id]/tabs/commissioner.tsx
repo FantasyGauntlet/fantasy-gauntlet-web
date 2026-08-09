@@ -50,6 +50,8 @@ function CommissionerTab({
   const [waiverHour, setWaiverHour] = useState(league.waiverSettings?.processingHour ?? 11);
   const [waiverSettingsSaving, setWaiverSettingsSaving] = useState(false);
   const [processingWaivers, setProcessingWaivers] = useState(false);
+  const [waiversPaused, setWaiversPaused] = useState(league.waiversPaused ?? false);
+  const [waiversPausedSaving, setWaiversPausedSaving] = useState(false);
 
   const [leagueName, setLeagueName] = useState(league.name ?? '');
   const [leagueNameSaving, setLeagueNameSaving] = useState(false);
@@ -230,6 +232,20 @@ function CommissionerTab({
       setActionError(e instanceof Error ? e.message : 'Failed to save waiver settings');
     } finally {
       setWaiverSettingsSaving(false);
+    }
+  }
+
+  async function toggleWaiversPaused() {
+    const next = !waiversPaused;
+    setWaiversPausedSaving(true);
+    try {
+      const updated = await api.patch<League>(`/leagues/${leagueId}/settings`, { waiversPaused: next });
+      setLeague(updated);
+      setWaiversPaused(next);
+    } catch (e: unknown) {
+      setActionError(e instanceof Error ? e.message : 'Failed to update waiver pause state');
+    } finally {
+      setWaiversPausedSaving(false);
     }
   }
 
@@ -662,7 +678,7 @@ function CommissionerTab({
             </button>
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-3 mb-4">
           <div>
             <label className="block text-xs font-medium text-copy-2 mb-1.5">Processing Day</label>
             <select value={waiverDay} onChange={e => setWaiverDay(e.target.value)} className={inputCls}>
@@ -681,6 +697,25 @@ function CommissionerTab({
               ))}
             </select>
           </div>
+        </div>
+        <div className="flex items-center justify-between pt-3 border-t border-line">
+          <div>
+            <p className="text-xs font-medium text-copy-2">Pause Waivers</p>
+            <p className="text-xs text-copy-3 mt-0.5">
+              {waiversPaused
+                ? 'Waivers are paused — claims cannot be submitted or processed.'
+                : 'Waivers are active — claims can be submitted and will process on schedule.'}
+            </p>
+          </div>
+          <button
+            onClick={toggleWaiversPaused}
+            disabled={waiversPausedSaving}
+            className={`relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none disabled:opacity-50 ${waiversPaused ? 'bg-danger' : 'bg-field-2'}`}
+            role="switch"
+            aria-checked={waiversPaused}
+          >
+            <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transition-transform duration-200 ${waiversPaused ? 'translate-x-5' : 'translate-x-0'}`} />
+          </button>
         </div>
       </div>}
 

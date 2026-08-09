@@ -27,6 +27,7 @@ export interface League {
   bottomZone?: number | null;
   maxWildcard?: number;
   waiverSettings?: { processingDay: string; processingHour: number } | null;
+  waiversPaused?: boolean;
   waiverType?: 'reserve-standings' | 'faab';
   faabStartingBudget?: number;
   leagueGroupId?: string;
