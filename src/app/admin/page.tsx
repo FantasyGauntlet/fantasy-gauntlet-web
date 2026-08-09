@@ -528,13 +528,16 @@ export default function AdminPage() {
   const [configToggling, setConfigToggling] = useState(false);
   const [deletingLeague, setDeletingLeague] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [deleteInput, setDeleteInput] = useState('');
+
+  function closeDeleteModal() { setDeleteConfirm(null); setDeleteInput(''); }
 
   async function deleteLeague(leagueId: string) {
     setDeletingLeague(leagueId);
     try {
       await api.delete(`/admin/leagues/${leagueId}`);
       setAllLeagues(prev => prev.filter(l => l.id !== leagueId));
-      setDeleteConfirm(null);
+      closeDeleteModal();
     } catch (e: unknown) {
       setLeagueStatuses(s => ({ ...s, [leagueId]: { status: 'error', message: e instanceof Error ? e.message : 'Delete failed' } }));
     } finally {
@@ -848,6 +851,58 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen bg-base">
       <NavBar />
+
+      {/* Delete league modal */}
+      {deleteConfirm && (() => {
+        const league = allLeagues.find(l => l.id === deleteConfirm);
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <div className="bg-card border border-line rounded-2xl p-6 w-full max-w-md shadow-2xl">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-9 h-9 rounded-xl bg-danger/10 flex items-center justify-center flex-shrink-0">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-danger">
+                    <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="font-semibold text-copy">Delete League</h3>
+                  <p className="text-xs text-copy-3">This cannot be undone</p>
+                </div>
+              </div>
+              <p className="text-sm text-copy-2 mb-4">
+                This will permanently delete <span className="font-semibold text-copy">{league?.name ?? deleteConfirm}</span> along with all members, rosters, and data.
+              </p>
+              <label className="block text-xs font-medium text-copy-2 mb-1.5">
+                Type <span className="font-mono font-bold text-danger">delete</span> to confirm
+              </label>
+              <input
+                value={deleteInput}
+                onChange={e => setDeleteInput(e.target.value)}
+                placeholder="delete"
+                autoFocus
+                onKeyDown={e => e.key === 'Enter' && deleteInput === 'delete' && deleteLeague(deleteConfirm)}
+                className="w-full bg-field border border-line-2 rounded-xl px-4 py-2.5 text-copy text-sm placeholder-copy-3 focus:outline-none focus:border-danger focus:ring-1 focus:ring-danger transition-colors mb-4"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={closeDeleteModal}
+                  className="flex-1 bg-field hover:bg-field-2 border border-line text-copy-2 font-medium py-2.5 rounded-xl transition-colors text-sm"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => deleteLeague(deleteConfirm)}
+                  disabled={deleteInput !== 'delete' || deletingLeague === deleteConfirm}
+                  className="flex-1 bg-danger hover:bg-danger/80 disabled:opacity-40 text-white font-semibold py-2.5 rounded-xl transition-colors text-sm"
+                >
+                  {deletingLeague === deleteConfirm ? 'Deleting…' : 'Delete League'}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       <main className="max-w-3xl mx-auto px-4 py-8">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-copy">Admin Panel</h1>
@@ -1918,31 +1973,12 @@ export default function AdminPage() {
                             <line x1="10" y1="14" x2="21" y2="3" />
                           </svg>
                         </a>
-                        {deleteConfirm === league.id ? (
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-danger font-medium">Delete permanently?</span>
-                            <button
-                              onClick={() => deleteLeague(league.id)}
-                              disabled={deletingLeague === league.id}
-                              className="text-xs bg-danger text-white font-semibold px-3 py-1.5 rounded-lg disabled:opacity-50 transition-colors hover:bg-danger/80"
-                            >
-                              {deletingLeague === league.id ? '...' : 'Confirm'}
-                            </button>
-                            <button
-                              onClick={() => setDeleteConfirm(null)}
-                              className="text-xs text-copy-3 hover:text-copy px-2 py-1.5 rounded-lg transition-colors"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => setDeleteConfirm(league.id)}
-                            className="text-xs text-danger/60 hover:text-danger px-3 py-1.5 rounded-lg hover:bg-danger-bg/40 transition-colors font-medium"
-                          >
-                            Delete League
-                          </button>
-                        )}
+                        <button
+                          onClick={() => { setDeleteConfirm(league.id); setDeleteInput(''); }}
+                          className="text-xs text-danger/60 hover:text-danger px-3 py-1.5 rounded-lg hover:bg-danger-bg/40 transition-colors font-medium"
+                        >
+                          Delete League
+                        </button>
                       </div>
                     </div>
                   )}
