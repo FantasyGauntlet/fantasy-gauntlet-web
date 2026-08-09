@@ -473,6 +473,7 @@ export function TeamProfileModal() {
   const [auctionStats, setAuctionStats] = useState<AuctionStats | null>(null);
   const [rosterStats, setRosterStats] = useState<RosterStats | null>(null);
   const [news, setNews] = useState<TeamNews | null>(null);
+  const [teamRank, setTeamRank] = useState<number | null>(null);
   const [loadingForm, setLoadingForm] = useState(false);
   const [loadingStats, setLoadingStats] = useState(false);
   const [loadingRosterStats, setLoadingRosterStats] = useState(false);
@@ -490,14 +491,26 @@ export function TeamProfileModal() {
   useEffect(() => {
     if (!profile) {
       setForm(null); setAuctionStats(null); setRosterStats(null); setNews(null);
+      setTeamRank(null);
       setParsedRows(null); setPollData(null); setActiveTab('overview');
       setAuctionBreakdownOpen(false);
       return;
     }
 
     setForm(null); setAuctionStats(null); setRosterStats(null); setNews(null);
+    setTeamRank(profile.rank ?? null);
     setParsedRows(null); setPollData(null); setActiveTab('overview');
     setAuctionBreakdownOpen(false);
+
+    // Fetch Best Available rank if not pre-supplied by the caller
+    if (profile.rank == null) {
+      api.get<{ teamId: string; sportKey: string }[]>('/sports/rankings')
+        .then(rankings => {
+          const idx = rankings.findIndex(r => r.teamId === profile.teamId);
+          setTeamRank(idx >= 0 ? idx + 1 : null);
+        })
+        .catch(() => {});
+    }
 
     // Reset standings view to the default for this sport
     const viewOpts = STANDINGS_VIEW_OPTIONS[profile.sportLeagueId ?? ''] ?? [];
@@ -752,10 +765,10 @@ export function TeamProfileModal() {
                           <p className="text-sm font-bold text-copy">${auctionStats.avgPrice}</p>
                         </div>
                       )}
-                      {profile.rank != null && (
+                      {teamRank != null && (
                         <div className="bg-field rounded-xl px-3 py-2.5">
                           <p className="text-[10px] text-copy-3 mb-1">Team Rank</p>
-                          <p className="text-sm font-bold text-copy">#{profile.rank}</p>
+                          <p className="text-sm font-bold text-copy">#{teamRank}</p>
                         </div>
                       )}
                     </div>
