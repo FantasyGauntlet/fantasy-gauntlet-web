@@ -251,7 +251,12 @@ export default function AuctionPage() {
   });
   useEffect(() => {
     if (!id) return;
+    snakePickQueueRef.current = snakePickQueue;
     try { localStorage.setItem(`fg_snake_queue_${id}`, JSON.stringify(snakePickQueue)); } catch { /* ignore */ }
+    // Sync queue to server so auto-pick on timer expiry uses our preferred order
+    if (socketRef.current?.connected) {
+      socketRef.current.emit('update_snake_queue', { teamIds: snakePickQueue });
+    }
   }, [snakePickQueue, id]);
   const [auctionErrorMsg, setAuctionErrorMsg] = useState('');
   const [scheduledStartAt, setScheduledStartAt] = useState<string | null>(null);
@@ -280,6 +285,7 @@ export default function AuctionPage() {
   const [oddsRankMap, setOddsRankMap] = useState<Map<string, number>>(new Map());
 
   const socketRef = useRef<Socket | null>(null);
+  const snakePickQueueRef = useRef<string[]>([]);
   const toastId = useRef(0);
   // Tracks the primary-owner userId for the current user's team (same as user.uid for primary
   // owners, but the primary owner's uid for co-owners — needed in stale-closure-safe handlers)
@@ -404,6 +410,10 @@ export default function AuctionPage() {
 
       socket.on('auction_state', (data: any) => {
         if (data?.onlineUserIds) setOnlineUsers(new Set(data.onlineUserIds as string[]));
+        // Sync snake queue to server on every (re)connect so auto-pick uses our preferred order
+        if (snakePickQueueRef.current.length > 0) {
+          socket.emit('update_snake_queue', { teamIds: snakePickQueueRef.current });
+        }
         const session = data?.session;
         if (!session) {
           setStatus('waiting');
@@ -1555,6 +1565,11 @@ export default function AuctionPage() {
                   {isMyTurn && (
                     <p className="text-[10px] text-copy-3 mt-2.5 text-center">
                       Top available pick auto-selected · click any item to override
+                    </p>
+                  )}
+                  {!isMyTurn && (
+                    <p className="text-[10px] text-copy-3/70 mt-2.5 text-center">
+                      If your time expires, your top available queue pick will be auto-selected
                     </p>
                   )}
                 </div>

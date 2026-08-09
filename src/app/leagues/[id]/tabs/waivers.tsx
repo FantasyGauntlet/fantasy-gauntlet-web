@@ -361,8 +361,9 @@ function WaiversTab({
   // Team browser filters
   const [browseSport, setBrowseSport] = useState('all');
   const [browseSearch, setBrowseSearch] = useState('');
-  const [browseSort, setBrowseSort] = useState<'points' | 'alpha' | 'rostered'>('points');
+  const [browseSort, setBrowseSort] = useState<'best' | 'points' | 'alpha' | 'rostered'>('best');
   const [browseAvailability, setBrowseAvailability] = useState<'available' | 'all'>('available');
+  const [bestRankMap, setBestRankMap] = useState<Map<string, number>>(new Map());
 
   // Waiver claim form
   const [showForm, setShowForm] = useState(false);
@@ -393,7 +394,8 @@ function WaiversTab({
       api.get<WaiverHistoryClaim[]>(`/leagues/${leagueId}/waivers/history`).catch(() => [] as WaiverHistoryClaim[]),
       api.get<TeamWithRecord[]>(`/leagues/${leagueId}/waiver-pool`),
       api.get<SportGroup[]>(`/leagues/${leagueId}/sport-teams`).catch(() => [] as SportGroup[]),
-    ]).then(([c, hist, p, groups]) => {
+      api.get<{ teamId: string; sportKey: string }[]>('/sports/rankings').catch(() => [] as { teamId: string; sportKey: string }[]),
+    ]).then(([c, hist, p, groups, rankings]) => {
       setClaims(c);
       setLeagueHistory(hist);
       setPool(p);
@@ -403,6 +405,14 @@ function WaiversTab({
         sport: g.sport, wins: 0, draws: 0, losses: 0, points: 0,
       })));
       setAllLeagueTeams(teams);
+      // Build best-available rank map filtered to this league's selected sports
+      const sportSet = new Set(selectedSports);
+      const rankMap = new Map<string, number>();
+      let rank = 1;
+      for (const r of rankings) {
+        if (sportSet.has(r.sportKey)) { rankMap.set(r.teamId, rank++); }
+      }
+      setBestRankMap(rankMap);
       // Fetch % rostered + trend for all teams in one shot
       const batchPayload = teams.map(t => ({ id: t.id, sportLeagueId: t.sportLeagueId }));
       api.post<Record<string, { rosteredPct: number | null; trend: 'up' | 'down' | null; pickups30d: number; drops30d: number; delta30d: number | null }>>('/sports/roster-stats/batch', { teams: batchPayload })
@@ -453,6 +463,12 @@ function WaiversTab({
       const q = browseSearch.trim().toLowerCase();
       list = list.filter(t => t.name.toLowerCase().includes(q) || t.shortName.toLowerCase().includes(q));
     }
+    if (browseSort === 'best') return [...list].sort((a, b) => {
+      const ra = bestRankMap.get(a.id) ?? 999999;
+      const rb = bestRankMap.get(b.id) ?? 999999;
+      if (ra !== rb) return ra - rb;
+      return a.name.localeCompare(b.name);
+    });
     if (browseSort === 'points') return [...list].sort((a, b) => b.points - a.points);
     if (browseSort === 'rostered') return [...list].sort((a, b) => {
       const aP = rosterStats[a.id]?.rosteredPct ?? -1;
@@ -460,7 +476,7 @@ function WaiversTab({
       return bP - aP;
     });
     return [...list].sort((a, b) => a.name.localeCompare(b.name));
-  }, [allDisplayTeams, browseAvailability, browseSport, browseSearch, browseSort, rosterStats]);
+  }, [allDisplayTeams, browseAvailability, browseSport, browseSearch, browseSort, rosterStats, bestRankMap]);
 
   const myRosterTeams = useMemo(() =>
     (myTeam?.ownedTeamIds ?? []).map(id => comprehensiveTeamMap.get(id)).filter(Boolean) as TeamWithRecord[],
@@ -996,9 +1012,10 @@ function WaiversTab({
             </div>
             <select
               value={browseSort}
-              onChange={e => setBrowseSort(e.target.value as 'points' | 'alpha' | 'rostered')}
+              onChange={e => setBrowseSort(e.target.value as 'best' | 'points' | 'alpha' | 'rostered')}
               className="bg-field border border-line-2 text-xs text-copy rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-brand transition-colors"
             >
+              <option value="best">Best Available</option>
               <option value="rostered">% Rostered</option>
               <option value="points">Most Points</option>
               <option value="alpha">A–Z</option>
@@ -1033,6 +1050,7 @@ function WaiversTab({
             </div>
           ) : filteredTeams.map(t => {
             const stats = rosterStats[t.id];
+            const teamRank = bestRankMap.get(t.id);
             return (
             <div
               key={t.id}
@@ -1080,8 +1098,14 @@ function WaiversTab({
                 </div>
               </div>
 
-              {/* Points + action */}
+              {/* Team rank + Points + action */}
               <div className="flex items-center gap-3 flex-shrink-0">
+                {teamRank != null && (
+                  <div className="w-10 text-right">
+                    <p className="text-sm font-bold text-copy tabular-nums">#{teamRank}</p>
+                    <p className="text-[10px] text-copy-3 leading-none">rank</p>
+                  </div>
+                )}
                 <div className="w-12 text-right">
                   {t.points > 0 && (
                     <>
