@@ -32,17 +32,23 @@ export default function LeaguePage() {
   const [mountedTabs, setMountedTabs] = useState<Set<Tab>>(() => new Set<Tab>(['standings']));
   const [loading, setLoading] = useState(true);
   const [openDropdown, setOpenDropdown] = useState<'teams' | 'league' | null>(null);
+  const [dropdownAnchor, setDropdownAnchor] = useState<{ left: number; top: number } | null>(null);
   const [scoreboard, setScoreboard] = useState<ScoreboardGame[]>([]);
   const [schedule, setSchedule] = useState<ScoreboardGame[]>([]);
   const [scheduleLoaded, setScheduleLoaded] = useState(false);
   const [waiverFilterPush, setWaiverFilterPush] = useState<{ sport: string | null; v: number }>({ sport: null, v: 0 });
   const [startAuctionError, setStartAuctionError] = useState<string | null>(null);
   const tabBarRef = useRef<HTMLDivElement>(null);
+  const dropdownPanelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handleOutsideClick(e: MouseEvent | TouchEvent) {
-      if (tabBarRef.current && !tabBarRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      const inTabBar = tabBarRef.current?.contains(target);
+      const inDropdown = dropdownPanelRef.current?.contains(target);
+      if (!inTabBar && !inDropdown) {
         setOpenDropdown(null);
+        setDropdownAnchor(null);
       }
     }
     document.addEventListener('mousedown', handleOutsideClick);
@@ -57,6 +63,7 @@ export default function LeaguePage() {
     setMountedTabs((prev: Set<Tab>) => prev.has(next) ? prev : new Set<Tab>([...prev, next]));
     setTab(next);
     setOpenDropdown(null);
+    setDropdownAnchor(null);
   }, []);
 
   useEffect(() => {
@@ -176,6 +183,14 @@ export default function LeaguePage() {
   const isCommissioner = league.commissionerId === user?.uid;
   const stateMeta = STATE_META[league.state] ?? STATE_META.completed;
 
+  const teamsSubTabs: { key: Tab; label: string }[] = [
+    { key: 'waivers',             label: 'Waivers' },
+    { key: 'transaction-counter', label: 'Transaction Counter' },
+    { key: 'auction-summary',     label: 'Auction Summary' },
+  ];
+  const isTeamsTab = teamsSubTabs.some(t => t.key === tab);
+  const activeTeamsLabel = teamsSubTabs.find(t => t.key === tab)?.label ?? 'Teams';
+
   const leagueSubTabs: { key: Tab; label: string }[] = [
     { key: 'home',        label: 'League Home' },
     { key: 'activity',    label: 'Recent Activity' },
@@ -241,13 +256,14 @@ export default function LeaguePage() {
         </div>
       </div>
 
-      {/* Tab bar */}
-      <div ref={tabBarRef} className="flex gap-0.5 mb-6 border-b border-line overflow-x-auto scrollbar-none">
+      {/* Tab bar — no overflow scroll; tabs sized to fit mobile. Dropdowns rendered
+          via position:fixed below so they are never clipped by any ancestor. */}
+      <div ref={tabBarRef} className="flex gap-0.5 mb-6 border-b border-line">
         {(['standings', 'roster'] as Tab[]).map(t => (
           <button
             key={t}
             onClick={() => switchTab(t)}
-            className={`flex-shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-medium transition-colors -mb-px border-b-2 capitalize ${
+            className={`px-2.5 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-medium transition-colors -mb-px border-b-2 capitalize ${
               tab === t
                 ? 'border-brand text-brand'
                 : 'border-transparent text-copy-3 hover:text-copy-2 hover:border-line-2'
@@ -257,63 +273,44 @@ export default function LeaguePage() {
           </button>
         ))}
 
-        {/* Teams dropdown */}
-        {(() => {
-          const teamsSubTabs: { key: Tab; label: string }[] = [
-            { key: 'waivers', label: 'Waivers' },
-            { key: 'transaction-counter', label: 'Transaction Counter' },
-            { key: 'auction-summary', label: 'Auction Summary' },
-          ];
-          const isTeamsTab = teamsSubTabs.some(t => t.key === tab);
-          const activeTeamsLabel = teamsSubTabs.find(t => t.key === tab)?.label ?? 'Teams';
-          return (
-            <div className="relative -mb-px flex-shrink-0">
-              <button
-                onClick={() => setOpenDropdown(openDropdown === 'teams' ? null : 'teams')}
-                className={`whitespace-nowrap px-4 py-2.5 text-sm font-medium transition-colors flex items-center gap-1 border-b-2 ${
-                  isTeamsTab || openDropdown === 'teams'
-                    ? 'border-brand text-brand'
-                    : 'border-transparent text-copy-3 hover:text-copy-2 hover:border-line-2'
-                }`}
-              >
-                {activeTeamsLabel}
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform ${openDropdown === 'teams' ? 'rotate-180' : ''}`}>
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
-              </button>
-              {openDropdown === 'teams' && (
-                <div className="absolute left-0 top-full pt-1 z-50 min-w-[200px]">
-                  <div className="bg-card border border-line rounded-xl shadow-xl py-1 overflow-hidden">
-                    {teamsSubTabs.map(t => (
-                      <button
-                        key={t.key}
-                        onClick={() => switchTab(t.key)}
-                        className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
-                          tab === t.key
-                            ? 'bg-brand-dim text-brand font-medium'
-                            : 'text-copy-2 hover:bg-field hover:text-copy'
-                        }`}
-                      >
-                        {t.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })()}
+        {/* Teams dropdown trigger */}
+        <div className="relative -mb-px">
+          <button
+            onClick={(e) => {
+              if (openDropdown === 'teams') {
+                setOpenDropdown(null);
+                setDropdownAnchor(null);
+              } else {
+                const rect = e.currentTarget.getBoundingClientRect();
+                setDropdownAnchor({ left: rect.left, top: rect.bottom });
+                setOpenDropdown('teams');
+              }
+            }}
+            className={`px-2.5 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-medium transition-colors flex items-center gap-1 border-b-2 ${
+              isTeamsTab || openDropdown === 'teams'
+                ? 'border-brand text-brand'
+                : 'border-transparent text-copy-3 hover:text-copy-2 hover:border-line-2'
+            }`}
+          >
+            <span className="sm:hidden">Teams</span>
+            <span className="hidden sm:inline">{activeTeamsLabel}</span>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`flex-shrink-0 transition-transform ${openDropdown === 'teams' ? 'rotate-180' : ''}`}>
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+        </div>
 
         {league.state === 'active' && (
           <button
             onClick={() => switchTab('games')}
-            className={`flex-shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-medium transition-colors -mb-px border-b-2 relative ${
+            className={`px-2.5 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-medium transition-colors -mb-px border-b-2 relative ${
               tab === 'games'
                 ? 'border-brand text-brand'
                 : 'border-transparent text-copy-3 hover:text-copy-2 hover:border-line-2'
             }`}
           >
-            Game Center
+            <span className="sm:hidden">Games</span>
+            <span className="hidden sm:inline">Game Center</span>
             {hasLiveGames && (
               <span className="absolute top-1.5 right-0.5">
                 <span className="relative flex h-2 w-2">
@@ -325,42 +322,63 @@ export default function LeaguePage() {
           </button>
         )}
 
-        {/* League dropdown tab */}
-        <div className="relative -mb-px flex-shrink-0">
+        {/* League dropdown trigger */}
+        <div className="relative -mb-px">
           <button
-            onClick={() => setOpenDropdown(openDropdown === 'league' ? null : 'league')}
-            className={`whitespace-nowrap px-4 py-2.5 text-sm font-medium transition-colors flex items-center gap-1 border-b-2 ${
+            onClick={(e) => {
+              if (openDropdown === 'league') {
+                setOpenDropdown(null);
+                setDropdownAnchor(null);
+              } else {
+                const rect = e.currentTarget.getBoundingClientRect();
+                setDropdownAnchor({ left: rect.left, top: rect.bottom });
+                setOpenDropdown('league');
+              }
+            }}
+            className={`px-2.5 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-medium transition-colors flex items-center gap-1 border-b-2 ${
               isLeagueTab || openDropdown === 'league'
                 ? 'border-brand text-brand'
                 : 'border-transparent text-copy-3 hover:text-copy-2 hover:border-line-2'
             }`}
           >
-            {activeLeagueLabel}
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform ${openDropdown === 'league' ? 'rotate-180' : ''}`}>
+            <span className="sm:hidden">League</span>
+            <span className="hidden sm:inline">{activeLeagueLabel}</span>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`flex-shrink-0 transition-transform ${openDropdown === 'league' ? 'rotate-180' : ''}`}>
               <polyline points="6 9 12 15 18 9" />
             </svg>
           </button>
-          {openDropdown === 'league' && (
-            <div className="absolute left-0 top-full pt-1 z-50 min-w-[200px]">
-              <div className="bg-card border border-line rounded-xl shadow-xl py-1 overflow-hidden">
-                {leagueSubTabs.map(t => (
-                  <button
-                    key={t.key}
-                    onClick={() => switchTab(t.key)}
-                    className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
-                      tab === t.key
-                        ? 'bg-brand-dim text-brand font-medium'
-                        : 'text-copy-2 hover:bg-field hover:text-copy'
-                    }`}
-                  >
-                    {t.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       </div>
+
+      {/* Dropdown panels — position:fixed so they escape any overflow context */}
+      {dropdownAnchor && (openDropdown === 'teams' || openDropdown === 'league') && (
+        <div
+          ref={dropdownPanelRef}
+          style={{
+            position: 'fixed',
+            left: Math.min(dropdownAnchor.left, window.innerWidth - 216),
+            top: dropdownAnchor.top + 4,
+            zIndex: 9999,
+            minWidth: 200,
+          }}
+        >
+          <div className="bg-card border border-line rounded-xl shadow-xl py-1 overflow-hidden">
+            {(openDropdown === 'teams' ? teamsSubTabs : leagueSubTabs).map(t => (
+              <button
+                key={t.key}
+                onClick={() => switchTab(t.key)}
+                className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
+                  tab === t.key
+                    ? 'bg-brand-dim text-brand font-medium'
+                    : 'text-copy-2 hover:bg-field hover:text-copy'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {mountedTabs.has('standings') && (
         <div className={tab !== 'standings' ? 'hidden' : ''}>
