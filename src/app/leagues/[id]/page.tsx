@@ -34,6 +34,7 @@ export default function LeaguePage() {
   const [openDropdown, setOpenDropdown] = useState<'teams' | 'league' | null>(null);
   const [dropdownAnchor, setDropdownAnchor] = useState<{ left: number; top: number } | null>(null);
   const [scoreboard, setScoreboard] = useState<ScoreboardGame[]>([]);
+  const [scoreboardLoading, setScoreboardLoading] = useState(false);
   const [schedule, setSchedule] = useState<ScoreboardGame[]>([]);
   const [scheduleLoaded, setScheduleLoaded] = useState(false);
   const [waiverFilterPush, setWaiverFilterPush] = useState<{ sport: string | null; v: number }>({ sport: null, v: 0 });
@@ -87,23 +88,29 @@ export default function LeaguePage() {
   useEffect(() => {
     if (league?.state !== 'active' || !league.selectedSports.length) return;
     const sports = league.selectedSports.join(',');
-    function fetch() {
-      api.get<ScoreboardGame[]>(`/sports/scoreboard?sports=${sports}`)
-        .then(setScoreboard).catch(() => {});
+    const teamIds = fantasyTeams.flatMap(ft => ft.ownedTeamIds).join(',');
+    const qs = teamIds ? `sports=${sports}&teamIds=${teamIds}` : `sports=${sports}`;
+    setScoreboardLoading(true);
+    function fetchScoreboard() {
+      api.get<ScoreboardGame[]>(`/sports/scoreboard?${qs}`)
+        .then(data => { setScoreboard(data); setScoreboardLoading(false); })
+        .catch(() => { setScoreboardLoading(false); });
     }
-    fetch();
-    const interval = setInterval(fetch, 60_000);
+    fetchScoreboard();
+    const interval = setInterval(fetchScoreboard, 60_000);
     return () => clearInterval(interval);
-  }, [league?.state, league?.selectedSports]);
+  }, [league?.state, league?.selectedSports, fantasyTeams]);
 
   useEffect(() => {
     if (!mountedTabs.has('games') || scheduleLoaded) return;
     if (!league?.selectedSports.length || league.state !== 'active') return;
     setScheduleLoaded(true);
     const sports = league.selectedSports.join(',');
-    api.get<ScoreboardGame[]>(`/sports/schedule?sports=${sports}&days=120`)
+    const teamIds = fantasyTeams.flatMap(ft => ft.ownedTeamIds).join(',');
+    const qs = teamIds ? `sports=${sports}&teamIds=${teamIds}` : `sports=${sports}`;
+    api.get<ScoreboardGame[]>(`/sports/schedule?${qs}&days=120`)
       .then(setSchedule).catch(() => {});
-  }, [mountedTabs, scheduleLoaded, league?.selectedSports, league?.state]);
+  }, [mountedTabs, scheduleLoaded, league?.selectedSports, league?.state, fantasyTeams]);
 
   const liveTeamIds = useMemo(() => {
     const ids = new Set<string>();
@@ -439,7 +446,7 @@ export default function LeaguePage() {
       )}
       {mountedTabs.has('games') && (
         <div className={tab !== 'games' ? 'hidden' : ''}>
-          <GameCenterTab games={scoreboard} schedule={schedule} selectedSports={league.selectedSports} myOwnedTeamIds={myOwnedTeamIds} allLeagueTeamIds={allLeagueTeamIds} />
+          <GameCenterTab games={scoreboard} schedule={schedule} selectedSports={league.selectedSports} myOwnedTeamIds={myOwnedTeamIds} allLeagueTeamIds={allLeagueTeamIds} loading={scoreboardLoading} fantasyTeams={fantasyTeams} userId={user?.uid ?? ''} />
         </div>
       )}
       {mountedTabs.has('home') && (

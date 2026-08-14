@@ -127,9 +127,9 @@ export default function NotificationBell() {
         )}
       </button>
 
-      {/* Dropdown */}
+      {/* Dropdown — fixed on mobile so it doesn't clip off the left edge */}
       {open && (
-        <div className="absolute right-0 top-10 w-80 bg-card border border-line rounded-2xl shadow-2xl z-50 overflow-hidden">
+        <div className="fixed left-3 right-3 top-12 sm:absolute sm:left-auto sm:right-0 sm:top-10 sm:w-80 bg-card border border-line rounded-2xl shadow-2xl z-50 overflow-hidden">
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-line">
             <div className="flex items-center gap-2">

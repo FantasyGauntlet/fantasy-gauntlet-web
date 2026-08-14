@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { SPORT_ORDER, formatLeagueName } from '../_components';
-import type { ScoreboardGame } from '../_types';
+import type { FantasyTeam, ScoreboardGame } from '../_types';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -12,7 +12,6 @@ function formatGameTime(scheduledAt: string): string {
   const now = new Date();
   const tomorrow = new Date(now.getTime() + 86_400_000);
   if (isNaN(d.getTime())) {
-    // Salvage the date from malformed strings like "2026-09-10TZ"
     const fallback = new Date(`${scheduledAt.slice(0, 10)}T12:00:00Z`);
     if (isNaN(fallback.getTime())) return 'TBD';
     if (fallback.toDateString() === now.toDateString()) return 'Today';
@@ -32,7 +31,6 @@ function formatDateHeader(dateKey: string): string {
   return d.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
 }
 
-// Keep live games always; drop finished games from a previous local date.
 function isRelevantGame(g: ScoreboardGame): boolean {
   if (g.isLive || !g.isFinished) return true;
   if (!g.scheduledAt) return true;
@@ -46,6 +44,7 @@ function sortGamesByRelevance(gs: ScoreboardGame[], myOwnedTeamIds: Set<string>)
   return [...gs].sort((a, b) => {
     if (owned(a) !== owned(b)) return owned(a) - owned(b);
     if (rank(a) !== rank(b)) return rank(a) - rank(b);
+    if (!a.scheduledAt || !b.scheduledAt) return 0;
     return a.scheduledAt.localeCompare(b.scheduledAt);
   });
 }
@@ -129,19 +128,62 @@ function GameCard({ game, isMyHome, isMyAway, showSport = false }: {
   );
 }
 
+function SkeletonCard() {
+  return (
+    <div className="bg-card border border-line rounded-xl overflow-hidden animate-pulse">
+      <div className="h-8 bg-field/60 border-b border-line" />
+      <div className="py-2 px-3 space-y-2">
+        <div className="flex items-center gap-2.5">
+          <div className="w-6 h-6 rounded bg-field-2 flex-shrink-0" />
+          <div className="h-4 bg-field-2 rounded flex-1" />
+        </div>
+        <div className="flex items-center gap-2.5">
+          <div className="w-6 h-6 rounded bg-field-2 flex-shrink-0" />
+          <div className="h-4 bg-field-2 rounded flex-1 max-w-[60%]" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main ───────────────────────────────────────────────────────────────────────
 
-function GameCenterTab({ games: rawGames, schedule, selectedSports, myOwnedTeamIds, allLeagueTeamIds }: {
+function GameCenterTab({
+  games: rawGames,
+  schedule,
+  selectedSports,
+  myOwnedTeamIds,
+  allLeagueTeamIds,
+  loading = false,
+  fantasyTeams = [],
+  userId = '',
+}: {
   games: ScoreboardGame[];
   schedule: ScoreboardGame[];
   selectedSports: string[];
   myOwnedTeamIds: Set<string>;
   allLeagueTeamIds: Set<string>;
+  loading?: boolean;
+  fantasyTeams?: FantasyTeam[];
+  userId?: string;
 }) {
   const [expandedSports, setExpandedSports] = useState<Set<string>>(new Set());
+  const [viewingFtId, setViewingFtId] = useState<string>('__me__');
+
+  // Resolve the team IDs for whichever manager is being viewed
+  const viewingTeamIds: Set<string> = viewingFtId === '__me__'
+    ? myOwnedTeamIds
+    : new Set(fantasyTeams.find(ft => ft.id === viewingFtId)?.ownedTeamIds ?? []);
+
+  const viewingLabel = viewingFtId === '__me__'
+    ? 'My Teams'
+    : (fantasyTeams.find(ft => ft.id === viewingFtId)?.displayName ?? 'Their Teams');
+
+  const otherManagers = fantasyTeams.filter(ft =>
+    ft.userId !== userId && !ft.isPlaceholder
+  );
 
   const games = rawGames.filter(isRelevantGame);
-  const cutoff30 = new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10);
 
   function toggleSport(sport: string) {
     setExpandedSports(prev => {
@@ -152,21 +194,37 @@ function GameCenterTab({ games: rawGames, schedule, selectedSports, myOwnedTeamI
   }
 
   const myGames = games.filter(g =>
-    myOwnedTeamIds.has(g.homeTeamId) || myOwnedTeamIds.has(g.awayTeamId)
+    viewingTeamIds.has(g.homeTeamId) || viewingTeamIds.has(g.awayTeamId)
   );
   const myLiveCount  = myGames.filter(g => g.isLive).length;
   const allLiveCount = games.filter(g => g.isLive).length;
 
-  // All sports to show: union of selectedSports + sports that have games today
+  // All sports: union of selectedSports + sports that appear in games or schedule
   const allSports = [...new Set([
     ...selectedSports,
     ...games.map(g => g.sportLeagueId),
+    ...schedule.map(g => g.sportLeagueId),
   ])].sort((a, b) => {
     const ai = SPORT_ORDER.indexOf(a), bi = SPORT_ORDER.indexOf(b);
     return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
   });
 
   const hasContent = games.length > 0 || schedule.length > 0 || selectedSports.length > 0;
+
+  if (loading && !hasContent) {
+    return (
+      <div className="space-y-8">
+        <section>
+          <div className="flex items-center gap-2.5 mb-3">
+            <div className="h-3 w-28 bg-field-2 rounded animate-pulse" />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+            {[1, 2, 3].map(i => <SkeletonCard key={i} />)}
+          </div>
+        </section>
+      </div>
+    );
+  }
 
   if (!hasContent) {
     return (
@@ -182,26 +240,50 @@ function GameCenterTab({ games: rawGames, schedule, selectedSports, myOwnedTeamI
 
       {/* ── Your Teams Today ── */}
       <section>
-        <div className="flex items-center gap-2.5 mb-3">
-          <h2 className="text-xs font-semibold text-copy-3 uppercase tracking-widest">Your Teams Today</h2>
-          {myLiveCount > 0 && (
-            <span className="flex items-center gap-1 text-[11px] font-semibold text-positive">
-              <LiveDot /> {myLiveCount} live
-            </span>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2.5">
+            <h2 className="text-xs font-semibold text-copy-3 uppercase tracking-widest">
+              {viewingFtId === '__me__' ? 'Your Teams Today' : `${viewingLabel} Today`}
+            </h2>
+            {myLiveCount > 0 && (
+              <span className="flex items-center gap-1 text-[11px] font-semibold text-positive">
+                <LiveDot /> {myLiveCount} live
+              </span>
+            )}
+          </div>
+
+          {/* Manager toggle */}
+          {otherManagers.length > 0 && (
+            <select
+              value={viewingFtId}
+              onChange={e => setViewingFtId(e.target.value)}
+              className="text-xs bg-field border border-line text-copy-2 rounded-lg px-2 py-1 max-w-[140px] truncate"
+            >
+              <option value="__me__">My Teams</option>
+              {otherManagers.map(ft => (
+                <option key={ft.id} value={ft.id}>{ft.displayName}</option>
+              ))}
+            </select>
           )}
         </div>
 
-        {myGames.length === 0 ? (
+        {loading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+            {[1, 2].map(i => <SkeletonCard key={i} />)}
+          </div>
+        ) : myGames.length === 0 ? (
           <div className="bg-card border border-line rounded-xl px-4 py-5 text-center">
-            <p className="text-copy-3 text-sm">None of your teams play today.</p>
+            <p className="text-copy-3 text-sm">
+              {viewingFtId === '__me__' ? 'None of your teams play today.' : `${viewingLabel} have no games today.`}
+            </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
             {myGames.map(g => (
               <GameCard
                 key={g.eventId} game={g}
-                isMyHome={myOwnedTeamIds.has(g.homeTeamId)}
-                isMyAway={myOwnedTeamIds.has(g.awayTeamId)}
+                isMyHome={viewingTeamIds.has(g.homeTeamId)}
+                isMyAway={viewingTeamIds.has(g.awayTeamId)}
                 showSport
               />
             ))}
@@ -227,48 +309,46 @@ function GameCenterTab({ games: rawGames, schedule, selectedSports, myOwnedTeamI
           {allSports.map(sport => {
             const todaySportGames = sortGamesByRelevance(
               games.filter(g => g.sportLeagueId === sport),
-              myOwnedTeamIds,
+              viewingTeamIds,
             );
             const upcomingSportGames = schedule
-              .filter(g => {
-                if (g.sportLeagueId !== sport) return false;
-                const isLeagueGame = allLeagueTeamIds.has(g.homeTeamId) || allLeagueTeamIds.has(g.awayTeamId);
-                if (isLeagueGame) return true;
-                return g.scheduledAt.slice(0, 10) <= cutoff30;
-              })
+              .filter(g => g.sportLeagueId === sport)
               .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt));
 
+            // Collapsed default: show only the viewing user's games
+            const myTodaySportGames = todaySportGames.filter(g =>
+              viewingTeamIds.has(g.homeTeamId) || viewingTeamIds.has(g.awayTeamId)
+            );
+            const myUpcomingSportGames = upcomingSportGames.filter(g =>
+              viewingTeamIds.has(g.homeTeamId) || viewingTeamIds.has(g.awayTeamId)
+            );
+
+            // Collapsed: show user's games only; fall back to any league team if none
             const ownedTodayGames = todaySportGames.filter(g =>
               allLeagueTeamIds.has(g.homeTeamId) || allLeagueTeamIds.has(g.awayTeamId)
             );
             const ownedUpcomingGames = upcomingSportGames.filter(g =>
               allLeagueTeamIds.has(g.homeTeamId) || allLeagueTeamIds.has(g.awayTeamId)
             );
-            const myTodaySportGames = todaySportGames.filter(g =>
-              myOwnedTeamIds.has(g.homeTeamId) || myOwnedTeamIds.has(g.awayTeamId)
-            );
-            const myUpcomingSportGames = upcomingSportGames.filter(g =>
-              myOwnedTeamIds.has(g.homeTeamId) || myOwnedTeamIds.has(g.awayTeamId)
-            );
-
-            // Default collapsed view: prioritise the current user's teams, then any league team
-            const ownedDefaultGames =
+            const collapsedGames =
               myTodaySportGames.length > 0 ? myTodaySportGames
               : myUpcomingSportGames.length > 0 ? myUpcomingSportGames.slice(0, 1)
               : ownedTodayGames.length > 0 ? ownedTodayGames
               : ownedUpcomingGames.slice(0, 1);
 
             const isExpanded = expandedSports.has(sport);
-            const totalCount = todaySportGames.length + upcomingSportGames.length;
 
-            // Group upcoming games by date for expanded view
-            const upcomingByDate = new Map<string, ScoreboardGame[]>();
-            for (const g of upcomingSportGames) {
+            // Full schedule (expanded) = only the viewing user's games
+            const fullScheduleTodayGames = myTodaySportGames;
+            const fullScheduleByDate = new Map<string, ScoreboardGame[]>();
+            for (const g of myUpcomingSportGames) {
               const dateKey = g.scheduledAt.slice(0, 10);
-              if (!upcomingByDate.has(dateKey)) upcomingByDate.set(dateKey, []);
-              upcomingByDate.get(dateKey)!.push(g);
+              if (!fullScheduleByDate.has(dateKey)) fullScheduleByDate.set(dateKey, []);
+              fullScheduleByDate.get(dateKey)!.push(g);
             }
 
+            const totalCount = todaySportGames.length + upcomingSportGames.length;
+            const hasMyGames = myTodaySportGames.length > 0 || myUpcomingSportGames.length > 0;
             const liveCount = todaySportGames.filter(g => g.isLive).length;
 
             return (
@@ -291,37 +371,30 @@ function GameCenterTab({ games: rawGames, schedule, selectedSports, myOwnedTeamI
                       </span>
                     )}
                   </div>
-                  {totalCount > 0 && (
+                  {hasMyGames && (
                     <button
                       onClick={() => toggleSport(sport)}
                       className="text-[11px] font-medium text-brand hover:text-brand-2 transition-colors flex-shrink-0"
                     >
-                      {isExpanded ? 'Show less' : `Full schedule`}
+                      {isExpanded ? 'Show less' : 'Full schedule'}
                     </button>
                   )}
                 </div>
 
                 {!isExpanded ? (
-                  // Collapsed: show owned team games only
-                  ownedDefaultGames.length > 0 ? (
+                  collapsedGames.length > 0 ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-                      {ownedDefaultGames.map(g => (
+                      {collapsedGames.map(g => (
                         <GameCard
                           key={g.eventId} game={g}
-                          isMyHome={myOwnedTeamIds.has(g.homeTeamId)}
-                          isMyAway={myOwnedTeamIds.has(g.awayTeamId)}
+                          isMyHome={viewingTeamIds.has(g.homeTeamId)}
+                          isMyAway={viewingTeamIds.has(g.awayTeamId)}
                         />
                       ))}
                     </div>
                   ) : totalCount > 0 ? (
                     <div className="bg-card border border-line rounded-xl px-4 py-3 text-center">
                       <p className="text-copy-3 text-sm">No league teams playing in this sport.</p>
-                      <button
-                        onClick={() => toggleSport(sport)}
-                        className="text-[11px] text-brand mt-1 hover:underline"
-                      >
-                        View full schedule
-                      </button>
                     </div>
                   ) : (
                     <div className="bg-card border border-line rounded-xl px-4 py-3 text-center">
@@ -329,23 +402,23 @@ function GameCenterTab({ games: rawGames, schedule, selectedSports, myOwnedTeamI
                     </div>
                   )
                 ) : (
-                  // Expanded: all today's games + upcoming grouped by date
+                  // Expanded: only the viewing user's games, grouped by date
                   <div className="space-y-4">
-                    {todaySportGames.length > 0 && (
+                    {fullScheduleTodayGames.length > 0 && (
                       <div>
                         <p className="text-[11px] font-semibold text-copy-3 uppercase tracking-wide mb-2">Today</p>
                         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-                          {todaySportGames.map(g => (
+                          {fullScheduleTodayGames.map(g => (
                             <GameCard
                               key={g.eventId} game={g}
-                              isMyHome={myOwnedTeamIds.has(g.homeTeamId)}
-                              isMyAway={myOwnedTeamIds.has(g.awayTeamId)}
+                              isMyHome={viewingTeamIds.has(g.homeTeamId)}
+                              isMyAway={viewingTeamIds.has(g.awayTeamId)}
                             />
                           ))}
                         </div>
                       </div>
                     )}
-                    {[...upcomingByDate.entries()].map(([dateKey, dateGames]) => (
+                    {[...fullScheduleByDate.entries()].map(([dateKey, dateGames]) => (
                       <div key={dateKey}>
                         <p className="text-[11px] font-semibold text-copy-3 uppercase tracking-wide mb-2">
                           {formatDateHeader(dateKey)}
@@ -354,16 +427,16 @@ function GameCenterTab({ games: rawGames, schedule, selectedSports, myOwnedTeamI
                           {dateGames.map(g => (
                             <GameCard
                               key={g.eventId} game={g}
-                              isMyHome={myOwnedTeamIds.has(g.homeTeamId)}
-                              isMyAway={myOwnedTeamIds.has(g.awayTeamId)}
+                              isMyHome={viewingTeamIds.has(g.homeTeamId)}
+                              isMyAway={viewingTeamIds.has(g.awayTeamId)}
                             />
                           ))}
                         </div>
                       </div>
                     ))}
-                    {todaySportGames.length === 0 && upcomingByDate.size === 0 && (
+                    {fullScheduleTodayGames.length === 0 && fullScheduleByDate.size === 0 && (
                       <div className="bg-card border border-line rounded-xl px-4 py-3 text-center">
-                        <p className="text-copy-3 text-sm">No schedule available yet.</p>
+                        <p className="text-copy-3 text-sm">No upcoming games for your teams in this sport.</p>
                       </div>
                     )}
                   </div>
