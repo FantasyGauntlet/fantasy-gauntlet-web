@@ -27,7 +27,7 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
   return (
     <div className="min-h-screen bg-base">
       <NavBar />
-      <main className="max-w-2xl mx-auto px-4 py-8">{children}</main>
+      <main className="max-w-2xl mx-auto px-3 sm:px-4 py-4 sm:py-8">{children}</main>
     </div>
   );
 }

@@ -48,13 +48,13 @@ export default function NavBar() {
   return (
     <>
       <header className="sticky top-0 z-50 border-b border-line bg-card/90 backdrop-blur-sm">
-        <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
+        <div className="max-w-6xl mx-auto px-3 sm:px-4 h-12 sm:h-14 flex items-center justify-between gap-2 sm:gap-4">
 
           {/* Brand */}
           <div className="flex items-center gap-6">
             <Link href="/dashboard" className="flex items-center gap-2 group">
-              <img src="/logo.png" alt="Fantasy Gauntlet" className="w-8 h-8 object-contain rounded-lg" />
-              <span className="font-bold text-sm text-copy group-hover:text-brand transition-colors">
+              <img src="/logo.png" alt="Fantasy Gauntlet" className="w-8 h-8 object-contain rounded-lg flex-shrink-0" />
+              <span className="hidden xs:inline font-bold text-sm text-copy group-hover:text-brand transition-colors whitespace-nowrap">
                 Fantasy Gauntlet
               </span>
             </Link>
@@ -111,7 +111,7 @@ export default function NavBar() {
                   </Link>
                   <button
                     onClick={signOut}
-                    className="text-xs text-copy-3 hover:text-copy px-2.5 py-1.5 rounded-md hover:bg-field transition-colors"
+                    className="hidden sm:block text-xs text-copy-3 hover:text-copy px-2.5 py-1.5 rounded-md hover:bg-field transition-colors"
                   >
                     Sign out
                   </button>

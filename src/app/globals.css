@@ -65,11 +65,25 @@
 }
 
 /* ── Base styles ──────────────────────────────────────────────────────────── */
+html,
+body {
+  overflow-x: hidden;
+}
+
 body {
   background-color: var(--color-base);
   color: var(--color-copy);
   font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
+}
+
+/* ── Utility: hide scrollbar visually but keep scroll functionality ────────── */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
 }
 
 /* ── Smooth theme transitions ─────────────────────────────────────────────── */

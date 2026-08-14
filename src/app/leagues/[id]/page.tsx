@@ -242,12 +242,12 @@ export default function LeaguePage() {
       </div>
 
       {/* Tab bar */}
-      <div ref={tabBarRef} className="flex gap-0.5 mb-6 border-b border-line">
+      <div ref={tabBarRef} className="flex gap-0.5 mb-6 border-b border-line overflow-x-auto scrollbar-none">
         {(['standings', 'roster'] as Tab[]).map(t => (
           <button
             key={t}
             onClick={() => switchTab(t)}
-            className={`px-4 py-2.5 text-sm font-medium transition-colors -mb-px border-b-2 capitalize ${
+            className={`flex-shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-medium transition-colors -mb-px border-b-2 capitalize ${
               tab === t
                 ? 'border-brand text-brand'
                 : 'border-transparent text-copy-3 hover:text-copy-2 hover:border-line-2'
@@ -267,10 +267,10 @@ export default function LeaguePage() {
           const isTeamsTab = teamsSubTabs.some(t => t.key === tab);
           const activeTeamsLabel = teamsSubTabs.find(t => t.key === tab)?.label ?? 'Teams';
           return (
-            <div className="relative -mb-px">
+            <div className="relative -mb-px flex-shrink-0">
               <button
                 onClick={() => setOpenDropdown(openDropdown === 'teams' ? null : 'teams')}
-                className={`px-4 py-2.5 text-sm font-medium transition-colors flex items-center gap-1 border-b-2 ${
+                className={`whitespace-nowrap px-4 py-2.5 text-sm font-medium transition-colors flex items-center gap-1 border-b-2 ${
                   isTeamsTab || openDropdown === 'teams'
                     ? 'border-brand text-brand'
                     : 'border-transparent text-copy-3 hover:text-copy-2 hover:border-line-2'
@@ -307,7 +307,7 @@ export default function LeaguePage() {
         {league.state === 'active' && (
           <button
             onClick={() => switchTab('games')}
-            className={`px-4 py-2.5 text-sm font-medium transition-colors -mb-px border-b-2 relative ${
+            className={`flex-shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-medium transition-colors -mb-px border-b-2 relative ${
               tab === 'games'
                 ? 'border-brand text-brand'
                 : 'border-transparent text-copy-3 hover:text-copy-2 hover:border-line-2'
@@ -326,10 +326,10 @@ export default function LeaguePage() {
         )}
 
         {/* League dropdown tab */}
-        <div className="relative -mb-px">
+        <div className="relative -mb-px flex-shrink-0">
           <button
             onClick={() => setOpenDropdown(openDropdown === 'league' ? null : 'league')}
-            className={`px-4 py-2.5 text-sm font-medium transition-colors flex items-center gap-1 border-b-2 ${
+            className={`whitespace-nowrap px-4 py-2.5 text-sm font-medium transition-colors flex items-center gap-1 border-b-2 ${
               isLeagueTab || openDropdown === 'league'
                 ? 'border-brand text-brand'
                 : 'border-transparent text-copy-3 hover:text-copy-2 hover:border-line-2'
