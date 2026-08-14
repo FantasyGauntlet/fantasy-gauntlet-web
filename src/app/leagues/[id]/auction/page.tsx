@@ -1652,15 +1652,18 @@ export default function AuctionPage() {
                                 </svg>
                                 <span className={`text-[10px] font-bold tabular-nums w-4 text-right flex-shrink-0 ${isTopPick ? 'text-brand' : 'text-copy-3'}`}>{idx + 1}</span>
                                 <TeamLogo logoUrl={t.logoUrl} name={t.name} size={5} />
-                                <span className={`flex-1 text-xs truncate ${isTopPick ? 'text-brand font-medium' : 'text-copy'}`}>{t.name}</span>
-                                {rank !== null && (
-                                  <span className={`text-[10px] font-bold tabular-nums flex-shrink-0 ${rank <= 5 ? 'text-positive' : rank <= 15 ? 'text-warn' : 'text-copy-3/50'}`}>#{rank}</span>
-                                )}
-                                <span className="text-[10px] text-copy-3 flex-shrink-0">{fln(t.sportLeagueId)}</span>
-                                <button
-                                  onClick={e => { e.stopPropagation(); setSnakePickQueue(q => q.filter(qid => qid !== tid)); }}
-                                  className="text-copy-3 hover:text-danger opacity-0 group-hover/qrow:opacity-100 transition-opacity text-sm leading-none ml-0.5"
-                                >×</button>
+                                <span className={`flex-1 text-xs truncate min-w-0 ${isTopPick ? 'text-brand font-medium' : 'text-copy'}`}>{t.name}</span>
+                                {/* Fixed-width right section: rank + sport + delete */}
+                                <div className="flex items-center gap-1.5 flex-shrink-0 w-[7.5rem]">
+                                  <span className={`text-[10px] font-bold tabular-nums w-6 text-right flex-shrink-0 ${rank !== null && rank <= 5 ? 'text-positive' : rank !== null && rank <= 15 ? 'text-warn' : 'text-copy-3/40'}`}>
+                                    {rank !== null ? `#${rank}` : ''}
+                                  </span>
+                                  <span className="text-[10px] text-copy-3 flex-1 truncate">{fln(t.sportLeagueId)}</span>
+                                  <button
+                                    onClick={e => { e.stopPropagation(); setSnakePickQueue(q => q.filter(qid => qid !== tid)); }}
+                                    className="flex-shrink-0 w-4 text-center text-copy-3 hover:text-danger opacity-0 group-hover/qrow:opacity-100 transition-opacity text-sm leading-none"
+                                  >×</button>
+                                </div>
                               </div>
                             );
                           })}
