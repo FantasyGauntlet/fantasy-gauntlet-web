@@ -77,7 +77,6 @@ function TeamLogo({ logo, name, shortName }: { logo: string | null; name: string
   );
 }
 
-// ESPN-style compact row for the "All Leagues" list view
 function MatchRow({ game, isMyHome, isMyAway }: {
   game: ScoreboardGame; isMyHome: boolean; isMyAway: boolean;
 }) {
@@ -85,60 +84,58 @@ function MatchRow({ game, isMyHome, isMyAway }: {
   const showScore = game.isLive || game.isFinished;
 
   return (
-    <div className={`flex items-center px-3 py-2.5 border-b border-line/40 last:border-0 ${isOwned ? 'bg-brand/5' : ''}`}>
-      {/* Away team — right-aligned so both teams converge on the @ */}
-      <div className={`flex items-center gap-1.5 flex-1 min-w-0 justify-end ${isMyAway ? 'font-semibold text-copy' : 'text-copy-2'}`}>
-        {showScore && game.awayScore != null && (
-          <span className={`text-sm font-bold tabular-nums flex-shrink-0 ${isMyAway ? 'text-copy' : 'text-copy-3'}`}>
-            {game.awayScore}
-          </span>
-        )}
-        <span className="text-sm truncate text-right">{game.awayShortName || game.awayName}</span>
+    <div className={`relative flex items-center px-3 py-[9px] border-b border-line/30 last:border-0 ${isOwned ? 'bg-brand/[0.04]' : ''}`}>
+      {/* Left accent for owned teams */}
+      {isOwned && <div className="absolute left-0 inset-y-0 w-[3px] bg-brand" />}
+
+      {/* Away — right-aligned, nudged right of left border */}
+      <div className="flex items-center gap-1.5 flex-1 min-w-0 justify-end">
+        <span className={`text-sm truncate text-right leading-none ${isMyAway ? 'font-semibold text-copy' : 'text-copy-2'}`}>
+          {game.awayShortName || game.awayName}
+        </span>
         <TeamLogo logo={game.awayLogo} name={game.awayName} shortName={game.awayShortName} />
       </div>
 
-      <span className="text-[10px] text-copy-3/40 flex-shrink-0 px-2">@</span>
-
-      {/* Home team — left-aligned */}
-      <div className={`flex items-center gap-1.5 flex-1 min-w-0 ${isMyHome ? 'font-semibold text-copy' : 'text-copy-2'}`}>
-        <TeamLogo logo={game.homeLogo} name={game.homeName} shortName={game.homeShortName} />
-        <span className="text-sm truncate">{game.homeShortName || game.homeName}</span>
-        {showScore && game.homeScore != null && (
-          <span className={`text-sm font-bold tabular-nums ml-auto pl-1 flex-shrink-0 ${isMyHome ? 'text-copy' : 'text-copy-3'}`}>
-            {game.homeScore}
-          </span>
-        )}
-      </div>
-
-      {/* Status */}
-      <div className="flex-shrink-0 text-right w-14 sm:w-16 ml-2">
-        {game.isLive ? (
-          <div className="flex items-center justify-end gap-1">
-            <LiveDot />
-            <span className="text-positive font-bold text-[11px]">{game.statusDisplay || 'LIVE'}</span>
-          </div>
-        ) : game.isFinished ? (
-          <span className="text-[11px] text-copy-3">Final</span>
+      {/* Center: score or time — fixed width so every row aligns */}
+      <div className="flex-shrink-0 flex items-center justify-center gap-0.5 w-[5.5rem]">
+        {showScore ? (
+          <>
+            <span className="text-xs font-bold tabular-nums w-5 text-right text-copy">
+              {game.awayScore ?? '—'}
+            </span>
+            <span className="flex items-center justify-center w-4">
+              {game.isLive
+                ? <LiveDot />
+                : <span className="text-copy-3/40 text-[11px]">–</span>}
+            </span>
+            <span className="text-xs font-bold tabular-nums w-5 text-left text-copy">
+              {game.homeScore ?? '—'}
+            </span>
+          </>
         ) : (
-          <span className="text-[11px] text-copy-3">{formatMatchTime(game.scheduledAt)}</span>
+          <span className="text-[11px] text-copy-3 tabular-nums">{formatMatchTime(game.scheduledAt)}</span>
         )}
       </div>
 
-      {isOwned && <span className="text-brand text-[11px] flex-shrink-0 ml-1.5">★</span>}
-    </div>
-  );
-}
+      {/* Home — left-aligned */}
+      <div className="flex items-center gap-1.5 flex-1 min-w-0">
+        <TeamLogo logo={game.homeLogo} name={game.homeName} shortName={game.homeShortName} />
+        <span className={`text-sm truncate leading-none ${isMyHome ? 'font-semibold text-copy' : 'text-copy-2'}`}>
+          {game.homeShortName || game.homeName}
+        </span>
+      </div>
 
-function MatchList({ games, viewingTeamIds }: { games: ScoreboardGame[]; viewingTeamIds: Set<string> }) {
-  return (
-    <div className="rounded-xl border border-line overflow-hidden bg-card">
-      {games.map(g => (
-        <MatchRow
-          key={g.eventId} game={g}
-          isMyHome={viewingTeamIds.has(g.homeTeamId)}
-          isMyAway={viewingTeamIds.has(g.awayTeamId)}
-        />
-      ))}
+      {/* Right: status + owned star */}
+      <div className="flex-shrink-0 flex items-center justify-end gap-1 w-[4.5rem]">
+        {game.isLive ? (
+          <span className="text-positive text-[10px] font-semibold text-right leading-tight">
+            {game.statusDisplay || 'LIVE'}
+          </span>
+        ) : game.isFinished ? (
+          <span className="text-copy-3/50 text-[10px]">Final</span>
+        ) : null}
+        {isOwned && <span className="text-brand text-[10px] leading-none">★</span>}
+      </div>
     </div>
   );
 }
@@ -232,13 +229,97 @@ function SkeletonCard() {
 
 function SkeletonRow() {
   return (
-    <div className="flex items-center gap-2 px-3 py-3 border-b border-line/40 last:border-0 animate-pulse">
+    <div className="flex items-center gap-2 px-3 py-[9px] border-b border-line/30 last:border-0 animate-pulse">
+      <div className="h-3.5 bg-field-2 rounded flex-1" />
+      <div className="w-5 h-5 rounded bg-field-2 flex-shrink-0" />
+      <div className="flex gap-0.5 w-[5.5rem] justify-center">
+        <div className="h-3 w-5 bg-field-2 rounded" />
+        <div className="h-3 w-4 bg-field-2 rounded" />
+        <div className="h-3 w-5 bg-field-2 rounded" />
+      </div>
       <div className="w-5 h-5 rounded bg-field-2 flex-shrink-0" />
       <div className="h-3.5 bg-field-2 rounded flex-1" />
-      <span className="text-[10px] text-transparent mx-0.5">@</span>
-      <div className="w-5 h-5 rounded bg-field-2 flex-shrink-0" />
-      <div className="h-3.5 bg-field-2 rounded flex-1 max-w-[40%]" />
-      <div className="h-3 w-10 bg-field-2 rounded flex-shrink-0 ml-2" />
+      <div className="h-3 w-10 bg-field-2 rounded flex-shrink-0" />
+    </div>
+  );
+}
+
+// ── Sport section card — header + rows in one rounded card ─────────────────────
+
+function SportSection({
+  sport,
+  todayGames,
+  scheduleByDate,
+  isExpanded,
+  hasMySchedule,
+  viewingTeamIds,
+  onToggle,
+}: {
+  sport: string;
+  todayGames: ScoreboardGame[];
+  scheduleByDate: Map<string, ScoreboardGame[]>;
+  isExpanded: boolean;
+  hasMySchedule: boolean;
+  viewingTeamIds: Set<string>;
+  onToggle: () => void;
+}) {
+  const liveCount = todayGames.filter(g => g.isLive).length;
+
+  return (
+    <div className="rounded-xl border border-line overflow-hidden bg-card">
+      {/* Header */}
+      <div className="flex items-center justify-between px-3 py-2 bg-field/50 border-b border-line/60">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold text-copy-2">{formatLeagueName(sport)}</span>
+          {liveCount > 0 && (
+            <span className="flex items-center gap-1 text-[10px] font-semibold text-positive">
+              <LiveDot /> {liveCount} live
+            </span>
+          )}
+        </div>
+        {hasMySchedule && (
+          <button
+            onClick={onToggle}
+            className="text-[11px] font-medium text-brand hover:text-brand-2 transition-colors flex-shrink-0"
+          >
+            {isExpanded ? 'Show less ↑' : 'My schedule ↓'}
+          </button>
+        )}
+      </div>
+
+      {/* Body */}
+      {!isExpanded ? (
+        todayGames.length > 0 ? (
+          todayGames.map(g => (
+            <MatchRow
+              key={g.eventId} game={g}
+              isMyHome={viewingTeamIds.has(g.homeTeamId)}
+              isMyAway={viewingTeamIds.has(g.awayTeamId)}
+            />
+          ))
+        ) : (
+          <p className="px-4 py-3 text-center text-[11px] text-copy-3">No games today.</p>
+        )
+      ) : (
+        scheduleByDate.size > 0 ? (
+          [...scheduleByDate.entries()].map(([dateKey, dateGames]) => (
+            <div key={dateKey}>
+              <p className="px-3 py-1.5 text-[10px] font-semibold text-copy-3 uppercase tracking-wider bg-field/30 border-b border-line/30">
+                {formatDateHeader(dateKey)}
+              </p>
+              {dateGames.map(g => (
+                <MatchRow
+                  key={g.eventId} game={g}
+                  isMyHome={viewingTeamIds.has(g.homeTeamId)}
+                  isMyAway={viewingTeamIds.has(g.awayTeamId)}
+                />
+              ))}
+            </div>
+          ))
+        ) : (
+          <p className="px-4 py-3 text-center text-[11px] text-copy-3">No upcoming games for your teams.</p>
+        )
+      )}
     </div>
   );
 }
@@ -306,7 +387,7 @@ function GameCenterTab({
 
   if (loading && !hasContent) {
     return (
-      <div className="space-y-8">
+      <div className="space-y-6">
         <section>
           <div className="h-3 w-28 bg-field-2 rounded animate-pulse mb-3" />
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
@@ -314,8 +395,8 @@ function GameCenterTab({
           </div>
         </section>
         <section>
-          <div className="h-3 w-20 bg-field-2 rounded animate-pulse mb-3" />
           <div className="rounded-xl border border-line overflow-hidden bg-card">
+            <div className="h-9 bg-field/60 border-b border-line animate-pulse" />
             {[1, 2, 3, 4, 5].map(i => <SkeletonRow key={i} />)}
           </div>
         </section>
@@ -333,7 +414,7 @@ function GameCenterTab({
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
 
       {/* ── Your Teams Today ── */}
       <section>
@@ -389,7 +470,7 @@ function GameCenterTab({
 
       {/* ── All Leagues ── */}
       <section>
-        <div className="flex items-center gap-2.5 mb-4">
+        <div className="flex items-center gap-2.5 mb-3">
           <h2 className="text-xs font-semibold text-copy-3 uppercase tracking-widest">All Leagues</h2>
           {allLiveCount > 0 && (
             <span className="flex items-center gap-1 text-[11px] font-semibold text-positive">
@@ -398,7 +479,7 @@ function GameCenterTab({
           )}
         </div>
 
-        <div className="space-y-5">
+        <div className="space-y-3">
           {allSports.map(sport => {
             const todaySportGames = sortGamesByRelevance(
               games.filter(g => g.sportLeagueId === sport),
@@ -419,64 +500,20 @@ function GameCenterTab({
               scheduleByDate.get(dateKey)!.push(g);
             }
 
-            const isExpanded = expandedSports.has(sport);
-            const hasMySchedule = myUpcomingSportGames.length > 0;
-            const liveCount = todaySportGames.filter(g => g.isLive).length;
             const totalCount = todaySportGames.length + upcomingSportGames.length;
+            if (totalCount === 0 && !selectedSports.includes(sport)) return null;
 
             return (
-              <div key={sport}>
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-xs font-semibold text-copy-3 uppercase tracking-wide">
-                      {formatLeagueName(sport)}
-                    </h3>
-                    {liveCount > 0 && (
-                      <span className="flex items-center gap-1 text-[11px] font-semibold text-positive">
-                        <LiveDot /> {liveCount} live
-                      </span>
-                    )}
-                  </div>
-                  {hasMySchedule && (
-                    <button
-                      onClick={() => toggleSport(sport)}
-                      className="text-[11px] font-medium text-brand hover:text-brand-2 transition-colors flex-shrink-0"
-                    >
-                      {isExpanded ? 'Show less ↑' : 'My schedule ↓'}
-                    </button>
-                  )}
-                </div>
-
-                {!isExpanded ? (
-                  todaySportGames.length > 0 ? (
-                    <MatchList games={todaySportGames} viewingTeamIds={viewingTeamIds} />
-                  ) : totalCount > 0 ? (
-                    <div className="bg-card border border-line rounded-xl px-4 py-3 text-center">
-                      <p className="text-copy-3 text-sm">No games today.</p>
-                    </div>
-                  ) : (
-                    <div className="bg-card border border-line rounded-xl px-4 py-3 text-center">
-                      <p className="text-copy-3 text-sm">No schedule available yet.</p>
-                    </div>
-                  )
-                ) : (
-                  <div className="space-y-4">
-                    {[...scheduleByDate.entries()].map(([dateKey, dateGames]) => (
-                      <div key={dateKey}>
-                        <p className="text-[11px] font-semibold text-copy-3 uppercase tracking-wide mb-1.5 px-0.5">
-                          {formatDateHeader(dateKey)}
-                        </p>
-                        <MatchList games={dateGames} viewingTeamIds={viewingTeamIds} />
-                      </div>
-                    ))}
-                    {scheduleByDate.size === 0 && (
-                      <div className="bg-card border border-line rounded-xl px-4 py-3 text-center">
-                        <p className="text-copy-3 text-sm">No upcoming games for your teams in this sport.</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
+              <SportSection
+                key={sport}
+                sport={sport}
+                todayGames={todaySportGames}
+                scheduleByDate={scheduleByDate}
+                isExpanded={expandedSports.has(sport)}
+                hasMySchedule={myUpcomingSportGames.length > 0}
+                viewingTeamIds={viewingTeamIds}
+                onToggle={() => toggleSport(sport)}
+              />
             );
           })}
         </div>
