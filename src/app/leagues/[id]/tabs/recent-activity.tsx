@@ -5,7 +5,7 @@ import { api } from '@/lib/api';
 import { Spinner, timeAgo } from '../_components';
 import type { TxEvent, SportTeam, SportGroup, FantasyTeam, WaiverHistoryClaim } from '../_types';
 
-function RecentActivityTab({ leagueId, fantasyTeams }: { leagueId: string; fantasyTeams: FantasyTeam[] }) {
+function RecentActivityTab({ leagueId, fantasyTeams, isActive = true }: { leagueId: string; fantasyTeams: FantasyTeam[]; isActive?: boolean }) {
   const [transactions, setTransactions] = useState<TxEvent[]>([]);
   const [allSportTeams, setAllSportTeams] = useState<SportTeam[]>([]);
   const [waiverHistory, setWaiverHistory] = useState<WaiverHistoryClaim[]>([]);
@@ -13,6 +13,10 @@ function RecentActivityTab({ leagueId, fantasyTeams }: { leagueId: string; fanta
   const [showAll, setShowAll] = useState(false);
   const [expandedBids, setExpandedBids] = useState<Set<string>>(new Set());
   const [teamFilter, setTeamFilter] = useState<string>('');
+
+  useEffect(() => {
+    if (!isActive) setTeamFilter('');
+  }, [isActive]);
 
   useEffect(() => {
     Promise.all([

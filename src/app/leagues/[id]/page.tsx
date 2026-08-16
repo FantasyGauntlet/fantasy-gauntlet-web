@@ -462,7 +462,7 @@ export default function LeaguePage() {
       )}
       {mountedTabs.has('activity') && (
         <div className={tab !== 'activity' ? 'hidden' : ''}>
-          <RecentActivityTab leagueId={id} fantasyTeams={fantasyTeams} />
+          <RecentActivityTab leagueId={id} fantasyTeams={fantasyTeams} isActive={tab === 'activity'} />
         </div>
       )}
       {mountedTabs.has('user-management') && isCommissioner && (
