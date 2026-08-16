@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Fragment } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { api } from '@/lib/api';
 import { db } from '@/lib/firebase';
@@ -79,9 +79,8 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone, own
             const inTopZone = !!topZone && s.rank <= topZone;
             const inBottomZone = !!bottomZone && s.rank > standings.length - bottomZone;
             return (
-              <>
+              <Fragment key={s.userId}>
                 <tr
-                  key={s.userId}
                   onClick={() => setExpanded(isExpanded ? null : s.userId)}
                   className={`border-b border-line/50 cursor-pointer hover:bg-field/40 transition-colors ${
                     isMe ? 'bg-brand-dim/30' : inTopZone ? 'bg-positive-bg/20' : inBottomZone ? 'bg-danger-bg/20' : ''
@@ -243,7 +242,7 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone, own
                   </tr>
                   );
                 })()}
-              </>
+              </Fragment>
             );
           })}
         </tbody>

@@ -35,12 +35,12 @@ const DEFAULT_PREFS: NotificationPrefs = {
   auctionStarting: true,
   auctionEnded:    true,
   auctionResults:  true,
-  rankChanged:     true,
+  rankChanged:     false,
   leagueInvite:    true,
   waiverUpdated:   true,
   finalStandings:  true,
-  nominationTurn:  true,
-  snakePickTurn:   true,
+  nominationTurn:  false,
+  snakePickTurn:   false,
 };
 
 function Toggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {

@@ -392,9 +392,11 @@ export default function AuctionPage() {
     if (!dataLoaded || !user) return;
 
     let socket: Socket;
+    let cancelled = false;
 
     (async () => {
       const token = await user.getIdToken();
+      if (cancelled) return;
       socket = io(`${WS_URL}/auction`, {
         auth: { token },
         query: { leagueId: id },
@@ -721,7 +723,7 @@ export default function AuctionPage() {
       });
 
       socket.on('team_sold', (data: any) => {
-        setNominationQueue(q => q.filter(id => id !== data.teamId));
+        setNominationQueue(q => q.filter(qid => qid !== data.teamId));
         setLotFlash('sold');
         const info = teamInfo(data.teamId);
         const sold: SoldLot = {
@@ -766,7 +768,7 @@ export default function AuctionPage() {
       });
 
       socket.on('team_passed', (data: any) => {
-        setNominationQueue(q => q.filter(id => id !== data.teamId));
+        setNominationQueue(q => q.filter(qid => qid !== data.teamId));
         setLotFlash('passed');
         const info = teamInfo(data.teamId);
         const passed: SoldLot = {
@@ -895,7 +897,12 @@ export default function AuctionPage() {
       });
     })();
 
-    return () => { socket?.disconnect(); socketRef.current = null; };
+    return () => {
+      cancelled = true;
+      if (lotFlashTimerRef.current) { clearTimeout(lotFlashTimerRef.current); lotFlashTimerRef.current = null; }
+      socket?.disconnect();
+      socketRef.current = null;
+    };
   }, [dataLoaded, user, id]);
 
   // ── Clock tick (drives room-open gate, scheduled-start countdown, and draft queue) ───
@@ -1006,7 +1013,7 @@ export default function AuctionPage() {
     const t = teamMapRef.current.get(tid);
     if (!t) continue;
     const cap = getMaxForSport(t.sportLeagueId);
-    const count = myOwnedIds.filter(id => teamMapRef.current.get(id)?.sportLeagueId === t.sportLeagueId).length;
+    const count = myOwnedIds.filter(oid => teamMapRef.current.get(oid)?.sportLeagueId === t.sportLeagueId).length;
     if (count >= cap) sportCapReached.add(t.sportLeagueId);
   }
 
@@ -1945,7 +1952,7 @@ export default function AuctionPage() {
                             <TeamLogo logoUrl={t.logoUrl} name={t.name} size={5} />
                             <span className="flex-1 text-xs text-copy truncate">{t.name}</span>
                             <span className="text-[10px] text-copy-3">{fln(t.sportLeagueId)}</span>
-                            <button onClick={e => { e.stopPropagation(); setNominationQueue(q => q.filter(id => id !== tid)); }}
+                            <button onClick={e => { e.stopPropagation(); setNominationQueue(q => q.filter(qid => qid !== tid)); }}
                               className="text-copy-3 hover:text-danger opacity-0 group-hover:opacity-100 transition-opacity ml-1 text-sm leading-none">×</button>
                           </div>
                         );
@@ -2122,7 +2129,7 @@ export default function AuctionPage() {
                           </div>
                           {nominationMode === 'manual' && !greyed && (
                             <button
-                              onClick={e => { e.stopPropagation(); setNominationQueue(q => inQueue ? q.filter(id => id !== team.id) : [...q, team.id]); }}
+                              onClick={e => { e.stopPropagation(); setNominationQueue(q => inQueue ? q.filter(qid => qid !== team.id) : [...q, team.id]); }}
                               title={inQueue ? 'Remove from queue' : 'Add to queue'}
                               className={`absolute top-0.5 right-0.5 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold transition-all leading-none
                                 ${inQueue ? 'bg-brand text-white opacity-100' : 'bg-field-2 text-copy-3 opacity-0 group-hover:opacity-100 hover:bg-brand hover:text-white'}`}

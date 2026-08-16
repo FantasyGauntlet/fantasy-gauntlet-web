@@ -85,21 +85,21 @@ function MatchRow({ game, isMyHome, isMyAway }: {
   const showScore = game.isLive || game.isFinished;
 
   return (
-    <div className={`flex items-center gap-1.5 sm:gap-2 px-3 py-2.5 border-b border-line/40 last:border-0 ${isOwned ? 'bg-brand/5' : ''}`}>
-      {/* Away team */}
-      <div className={`flex items-center gap-1.5 flex-1 min-w-0 ${isMyAway ? 'font-semibold text-copy' : 'text-copy-2'}`}>
-        <TeamLogo logo={game.awayLogo} name={game.awayName} shortName={game.awayShortName} />
-        <span className="text-sm truncate">{game.awayShortName || game.awayName}</span>
+    <div className={`flex items-center px-3 py-2.5 border-b border-line/40 last:border-0 ${isOwned ? 'bg-brand/5' : ''}`}>
+      {/* Away team — right-aligned so both teams converge on the @ */}
+      <div className={`flex items-center gap-1.5 flex-1 min-w-0 justify-end ${isMyAway ? 'font-semibold text-copy' : 'text-copy-2'}`}>
         {showScore && game.awayScore != null && (
-          <span className={`text-sm font-bold tabular-nums ml-auto pl-1 flex-shrink-0 ${isMyAway ? 'text-copy' : 'text-copy-3'}`}>
+          <span className={`text-sm font-bold tabular-nums flex-shrink-0 ${isMyAway ? 'text-copy' : 'text-copy-3'}`}>
             {game.awayScore}
           </span>
         )}
+        <span className="text-sm truncate text-right">{game.awayShortName || game.awayName}</span>
+        <TeamLogo logo={game.awayLogo} name={game.awayName} shortName={game.awayShortName} />
       </div>
 
-      <span className="text-[10px] text-copy-3/40 flex-shrink-0">@</span>
+      <span className="text-[10px] text-copy-3/40 flex-shrink-0 px-2">@</span>
 
-      {/* Home team */}
+      {/* Home team — left-aligned */}
       <div className={`flex items-center gap-1.5 flex-1 min-w-0 ${isMyHome ? 'font-semibold text-copy' : 'text-copy-2'}`}>
         <TeamLogo logo={game.homeLogo} name={game.homeName} shortName={game.homeShortName} />
         <span className="text-sm truncate">{game.homeShortName || game.homeName}</span>
@@ -111,7 +111,7 @@ function MatchRow({ game, isMyHome, isMyAway }: {
       </div>
 
       {/* Status */}
-      <div className="flex-shrink-0 text-right w-14 sm:w-16">
+      <div className="flex-shrink-0 text-right w-14 sm:w-16 ml-2">
         {game.isLive ? (
           <div className="flex items-center justify-end gap-1">
             <LiveDot />
@@ -124,7 +124,7 @@ function MatchRow({ game, isMyHome, isMyAway }: {
         )}
       </div>
 
-      {isOwned && <span className="text-brand text-[11px] flex-shrink-0">★</span>}
+      {isOwned && <span className="text-brand text-[11px] flex-shrink-0 ml-1.5">★</span>}
     </div>
   );
 }
@@ -250,7 +250,6 @@ function GameCenterTab({
   schedule,
   selectedSports,
   myOwnedTeamIds,
-  allLeagueTeamIds,
   loading = false,
   fantasyTeams = [],
   userId = '',
@@ -259,7 +258,6 @@ function GameCenterTab({
   schedule: ScoreboardGame[];
   selectedSports: string[];
   myOwnedTeamIds: Set<string>;
-  allLeagueTeamIds: Set<string>;
   loading?: boolean;
   fantasyTeams?: FantasyTeam[];
   userId?: string;

@@ -126,10 +126,6 @@ export default function LeaguePage() {
       .flatMap(ft => ft.ownedTeamIds)
   ), [fantasyTeams, user?.uid]);
 
-  const allLeagueTeamIds = useMemo(() => new Set(
-    fantasyTeams.flatMap(ft => ft.ownedTeamIds)
-  ), [fantasyTeams]);
-
   const hasLiveGames = scoreboard.some(g => g.isLive);
 
   async function startAuction() {
@@ -446,7 +442,7 @@ export default function LeaguePage() {
       )}
       {mountedTabs.has('games') && (
         <div className={tab !== 'games' ? 'hidden' : ''}>
-          <GameCenterTab games={scoreboard} schedule={schedule} selectedSports={league.selectedSports} myOwnedTeamIds={myOwnedTeamIds} allLeagueTeamIds={allLeagueTeamIds} loading={scoreboardLoading} fantasyTeams={fantasyTeams} userId={user?.uid ?? ''} />
+          <GameCenterTab games={scoreboard} schedule={schedule} selectedSports={league.selectedSports} myOwnedTeamIds={myOwnedTeamIds} loading={scoreboardLoading} fantasyTeams={fantasyTeams} userId={user?.uid ?? ''} />
         </div>
       )}
       {mountedTabs.has('home') && (

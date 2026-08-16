@@ -20,7 +20,7 @@ function CommissionerTab({
     minOpeningBid:          league.auctionConfig?.minOpeningBid          ?? 1,
     minBidIncrement:        league.auctionConfig?.minBidIncrement        ?? 1,
     nominationMode:         league.auctionConfig?.nominationMode         ?? 'random-hidden',
-    countdownSeconds:       league.auctionConfig?.countdownSeconds       ?? 15,
+    countdownSeconds:       league.auctionConfig?.countdownSeconds       ?? 60,
     maxWildcard:            league.auctionConfig?.maxWildcard            ?? league.maxWildcard ?? 0,
     noBidPenaltyPct:        league.auctionConfig?.noBidPenaltyPct        ?? 2.5,
     nominationTimerSeconds:      league.auctionConfig?.nominationTimerSeconds      ?? 30,
