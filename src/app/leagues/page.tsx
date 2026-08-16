@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 const SPORT_LABELS: Record<string, string> = {
   nfl: 'NFL', nba: 'NBA', nhl: 'NHL', mlb: 'MLB',
   'premier-league': 'PL', ucl: 'UCL', mls: 'MLS', ncaa: 'NCAA',
+  'ncaa-football': 'NCAA Football', 'ncaa-basketball': 'NCAA Basketball',
 };
 
 const STATE_STYLES: Record<string, string> = {
