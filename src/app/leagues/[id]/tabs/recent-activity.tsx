@@ -12,6 +12,7 @@ function RecentActivityTab({ leagueId, fantasyTeams }: { leagueId: string; fanta
   const [loading, setLoading] = useState(true);
   const [showAll, setShowAll] = useState(false);
   const [expandedBids, setExpandedBids] = useState<Set<string>>(new Set());
+  const [teamFilter, setTeamFilter] = useState<string>('');
 
   useEffect(() => {
     Promise.all([
@@ -36,8 +37,20 @@ function RecentActivityTab({ leagueId, fantasyTeams }: { leagueId: string; fanta
   const sportTeamById = useMemo(() => new Map(allSportTeams.map(t => [t.id, t])), [allSportTeams]);
   const ftById = useMemo(() => new Map(fantasyTeams.map(ft => [ft.id, ft])), [fantasyTeams]);
 
+  const filteredTransactions = useMemo(() => {
+    if (!teamFilter) return transactions;
+    const ft = ftById.get(teamFilter);
+    if (!ft) return transactions;
+    return transactions.filter(tx => {
+      if (tx.type === 'trade') {
+        return tx.proposerFantasyTeamId === teamFilter || tx.receiverFantasyTeamId === teamFilter;
+      }
+      return tx.claimantUserId === ft.userId;
+    });
+  }, [transactions, teamFilter, ftById]);
+
   const PAGE = 10;
-  const visible = showAll ? transactions : transactions.slice(0, PAGE);
+  const visible = showAll ? filteredTransactions : filteredTransactions.slice(0, PAGE);
 
   return (
     <div className="bg-card border border-line rounded-2xl overflow-hidden">
@@ -47,14 +60,32 @@ function RecentActivityTab({ leagueId, fantasyTeams }: { leagueId: string; fanta
           <p className="text-xs text-copy-3 mt-0.5">All accepted trades and approved waiver pickups this season.</p>
         </div>
         {transactions.length > 0 && (
-          <span className="text-xs text-copy-3">{transactions.length} total</span>
+          <div className="flex items-center gap-3">
+            <select
+              value={teamFilter}
+              onChange={e => { setTeamFilter(e.target.value); setShowAll(false); }}
+              className="text-xs bg-field border border-line text-copy-2 rounded-lg px-2 py-1.5 focus:outline-none focus:border-brand transition-colors"
+            >
+              <option value="">All teams</option>
+              {fantasyTeams
+                .filter(ft => !ft.isPlaceholder)
+                .map(ft => <option key={ft.id} value={ft.id}>{ft.displayName}</option>)}
+            </select>
+            <span className="text-xs text-copy-3 flex-shrink-0">
+              {teamFilter
+                ? `${filteredTransactions.length} of ${transactions.length}`
+                : `${transactions.length} total`}
+            </span>
+          </div>
         )}
       </div>
       {loading ? (
         <div className="flex justify-center py-10"><Spinner size="sm" /></div>
-      ) : transactions.length === 0 ? (
+      ) : filteredTransactions.length === 0 ? (
         <div className="text-center py-12">
-          <p className="text-copy-3 text-sm">No transactions yet.</p>
+          <p className="text-copy-3 text-sm">
+            {teamFilter ? 'No transactions for this team.' : 'No transactions yet.'}
+          </p>
         </div>
       ) : (
         <>
@@ -165,13 +196,13 @@ function RecentActivityTab({ leagueId, fantasyTeams }: { leagueId: string; fanta
               }
             })}
           </div>
-          {transactions.length > PAGE && (
+          {filteredTransactions.length > PAGE && (
             <div className="px-5 py-3 border-t border-line text-center">
               <button
                 onClick={() => setShowAll(v => !v)}
                 className="text-sm text-brand hover:text-brand-2 font-medium transition-colors"
               >
-                {showAll ? 'Show less' : `Show all ${transactions.length} transactions`}
+                {showAll ? 'Show less' : `Show all ${filteredTransactions.length} transactions`}
               </button>
             </div>
           )}
