@@ -7,7 +7,7 @@ import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
 import { STATE_META, Spinner } from './_components';
 import { VALID_TABS } from './_types';
-import type { League, Member, FantasyTeam, Tab, ScoreboardGame } from './_types';
+import type { League, Member, FantasyTeam, Tab, ScoreboardGame, Standing } from './_types';
 import { StandingsTab } from './tabs/standings';
 import { RosterTab } from './tabs/roster';
 import { WaiversTab } from './tabs/waivers';
@@ -32,9 +32,19 @@ export default function LeaguePage() {
   const [mountedTabs, setMountedTabs] = useState<Set<Tab>>(() => new Set<Tab>(['standings']));
   const [loading, setLoading] = useState(true);
   const [openDropdown, setOpenDropdown] = useState<'teams' | 'league' | null>(null);
+  const [activityUnread, setActivityUnread] = useState(() => {
+    try {
+      const seen = localStorage.getItem(`fg_activity_seen_${id}`);
+      const ts = localStorage.getItem(`fg_activity_ts_${id}`);
+      if (!ts) return false;
+      if (!seen) return true;
+      return new Date(ts) > new Date(seen);
+    } catch { return false; }
+  });
   const [dropdownAnchor, setDropdownAnchor] = useState<{ left: number; top: number } | null>(null);
   const [scoreboard, setScoreboard] = useState<ScoreboardGame[]>([]);
   const [scoreboardLoading, setScoreboardLoading] = useState(false);
+  const [myStanding, setMyStanding] = useState<Standing | null>(null);
   const [schedule, setSchedule] = useState<ScoreboardGame[]>([]);
   const [scheduleLoaded, setScheduleLoaded] = useState(false);
   const [waiverFilterPush, setWaiverFilterPush] = useState<{ sport: string | null; v: number }>({ sport: null, v: 0 });
@@ -65,7 +75,11 @@ export default function LeaguePage() {
     setTab(next);
     setOpenDropdown(null);
     setDropdownAnchor(null);
-  }, []);
+    if (next === 'activity') {
+      setActivityUnread(false);
+      try { localStorage.setItem(`fg_activity_seen_${id}`, new Date().toISOString()); } catch {}
+    }
+  }, [id]);
 
   useEffect(() => {
     Promise.all([
@@ -74,9 +88,16 @@ export default function LeaguePage() {
       api.get<FantasyTeam[]>(`/leagues/${id}/teams`),
     ]).then(([l, m, ft]) => {
       setLeague(l); setMembers(m); setFantasyTeams(ft);
+      if (l.state === 'active' || l.state === 'completed') {
+        api.get<Standing[]>(`/leagues/${id}/standings`)
+          .then(standings => {
+            const mine = standings.find(s => s.userId === user?.uid);
+            if (mine) setMyStanding(mine);
+          }).catch(() => {});
+      }
     }).catch(() => router.replace('/dashboard'))
       .finally(() => setLoading(false));
-  }, [id, router]);
+  }, [id, router, user?.uid]);
 
   // Read initial tab from URL search param (set by NavBar dropdown links)
   useEffect(() => {
@@ -127,6 +148,8 @@ export default function LeaguePage() {
   ), [fantasyTeams, user?.uid]);
 
   const hasLiveGames = scoreboard.some(g => g.isLive);
+
+  const myTeam = fantasyTeams.find(ft => !ft.isPlaceholder && (ft.userId === user?.uid || (ft.coOwnerIds ?? []).includes(user?.uid ?? '')));
 
   async function startAuction() {
     try {
@@ -259,6 +282,33 @@ export default function LeaguePage() {
         </div>
       </div>
 
+      {/* Hero strip — my team at a glance */}
+      {myTeam && myStanding && (league.state === 'active' || league.state === 'completed') && (
+        <div className="mb-5 flex items-center gap-3 px-4 py-3 bg-card border border-line rounded-xl">
+          {myTeam.logoUrl ? (
+            <img src={myTeam.logoUrl} alt={myTeam.displayName} className="w-9 h-9 rounded-full object-cover flex-shrink-0 border border-line" />
+          ) : (
+            <div className="w-9 h-9 rounded-full bg-field border border-line flex items-center justify-center flex-shrink-0">
+              <span className="text-sm font-bold text-copy-3">{myTeam.displayName.charAt(0).toUpperCase()}</span>
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-copy truncate">{myTeam.displayName}</p>
+            <p className="text-xs text-copy-3 mt-0.5">
+              Rank <span className="font-semibold text-copy-2">#{myStanding.rank}</span>
+              <span className="mx-1.5 opacity-40">·</span>
+              <span className="font-semibold text-copy-2">{myStanding.totalPoints.toFixed(1)}</span> pts
+            </p>
+          </div>
+          <button
+            onClick={() => switchTab('standings')}
+            className="text-xs text-brand hover:text-brand-2 font-medium flex-shrink-0 transition-colors"
+          >
+            Full standings →
+          </button>
+        </div>
+      )}
+
       {/* Tab bar — no overflow scroll; tabs sized to fit mobile. Dropdowns rendered
           via position:fixed below so they are never clipped by any ancestor. */}
       <div ref={tabBarRef} className="flex gap-0.5 mb-6 border-b border-line">
@@ -344,8 +394,13 @@ export default function LeaguePage() {
                 : 'border-transparent text-copy-3 hover:text-copy-2 hover:border-line-2'
             }`}
           >
-            <span className="sm:hidden">League</span>
-            <span className="hidden sm:inline">{activeLeagueLabel}</span>
+            <span className="relative">
+              <span className="sm:hidden">League</span>
+              <span className="hidden sm:inline">{activeLeagueLabel}</span>
+              {activityUnread && (
+                <span className="absolute -top-0.5 -right-2 w-1.5 h-1.5 rounded-full bg-brand" />
+              )}
+            </span>
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`flex-shrink-0 transition-transform ${openDropdown === 'league' ? 'rotate-180' : ''}`}>
               <polyline points="6 9 12 15 18 9" />
             </svg>

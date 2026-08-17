@@ -246,6 +246,58 @@ function SkeletonRow() {
 
 // ── Sport section card — header + rows in one rounded card ─────────────────────
 
+function SportIcon({ sport }: { sport: string }) {
+  const k = sport.toLowerCase();
+  const cls = 'flex-shrink-0 text-copy-3';
+  if (k.includes('nfl') || (k.includes('football') && !k.includes('soccer'))) {
+    return (
+      <svg className={cls} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <ellipse cx="12" cy="12" rx="9" ry="5.5" transform="rotate(-40 12 12)" />
+        <line x1="9" y1="9.5" x2="15" y2="14.5" /><line x1="9" y1="12" x2="12" y2="14.2" /><line x1="12" y1="9.8" x2="15" y2="12" />
+      </svg>
+    );
+  }
+  if (k.includes('nba') || k.includes('basketball')) {
+    return (
+      <svg className={cls} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+        <circle cx="12" cy="12" r="9" />
+        <path d="M4.5 9h15M4.5 15h15" />
+        <path d="M12 3c-2.5 3-2.5 15 0 18M12 3c2.5 3 2.5 15 0 18" />
+      </svg>
+    );
+  }
+  if (k.includes('mlb') || k.includes('baseball')) {
+    return (
+      <svg className={cls} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+        <circle cx="12" cy="12" r="9" />
+        <path d="M9 4.5c.5 2.5.5 12.5 0 15M15 4.5c-.5 2.5-.5 12.5 0 15" />
+      </svg>
+    );
+  }
+  if (k.includes('nhl') || k.includes('hockey')) {
+    return (
+      <svg className={cls} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M7 4v10a5 5 0 0010 0V4" />
+        <line x1="7" y1="4" x2="11" y2="4" />
+        <ellipse cx="12" cy="20" rx="5" ry="1.5" />
+      </svg>
+    );
+  }
+  if (k.includes('mls') || k.includes('premier') || k.includes('ucl') || k.includes('fifa') || k.includes('soccer')) {
+    return (
+      <svg className={cls} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 3l2.5 4-2.5 1.5L9.5 7zM12 21l2.5-4-2.5-1.5-2.5 1.5zM3.5 8.5l4 .5.5 3-2.5 2.5-3.5-.5M20.5 8.5l-4 .5-.5 3 2.5 2.5 3.5-.5" />
+      </svg>
+    );
+  }
+  return (
+    <svg className={cls} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+      <circle cx="12" cy="12" r="9" />
+    </svg>
+  );
+}
+
 function SportSection({
   sport,
   todayGames,
@@ -270,6 +322,7 @@ function SportSection({
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 bg-field/50 border-b border-line/60">
         <div className="flex items-center gap-2">
+          <SportIcon sport={sport} />
           <span className="text-xs font-semibold text-copy-2">{formatLeagueName(sport)}</span>
           {liveCount > 0 && (
             <span className="flex items-center gap-1 text-[10px] font-semibold text-positive">

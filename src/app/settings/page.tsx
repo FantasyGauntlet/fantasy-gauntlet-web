@@ -6,6 +6,7 @@ import { auth } from '@/lib/firebase';
 import { api } from '@/lib/api';
 import { initPush } from '@/lib/push';
 import { useAuth } from '@/context/AuthContext';
+import { useToast } from '@/context/ToastContext';
 
 interface NotificationPrefs {
   auctionStarting: boolean;
@@ -58,16 +59,15 @@ function Toggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
 
 export default function SettingsPage() {
   const { user } = useAuth();
+  const { toast } = useToast();
 
-  const [displayName, setDisplayName]     = useState('');
-  const [nameInput, setNameInput]         = useState('');
-  const [nameSaving, setNameSaving]       = useState(false);
-  const [nameMsg, setNameMsg]             = useState<{ ok: boolean; text: string } | null>(null);
+  const [displayName, setDisplayName] = useState('');
+  const [nameInput, setNameInput]     = useState('');
+  const [nameSaving, setNameSaving]   = useState(false);
 
   const [pushPrefs, setPushPrefs]   = useState<NotificationPrefs>(DEFAULT_PREFS);
   const [emailPrefs, setEmailPrefs] = useState<NotificationPrefs>(DEFAULT_PREFS);
-  const [prefsSaving, setPrefsSaving]     = useState(false);
-  const [prefsMsg, setPrefsMsg]           = useState<{ ok: boolean; text: string } | null>(null);
+  const [prefsSaving, setPrefsSaving] = useState(false);
 
   const [pushPermission, setPushPermission] = useState<NotificationPermission | null>(null);
   const [enablingPush, setEnablingPush]     = useState(false);
@@ -93,14 +93,13 @@ export default function SettingsPage() {
     const name = nameInput.trim();
     if (!name || name === displayName) return;
     setNameSaving(true);
-    setNameMsg(null);
     try {
       await api.patch('/users/me', { displayName: name });
       if (auth?.currentUser) await updateProfile(auth.currentUser, { displayName: name });
       setDisplayName(name);
-      setNameMsg({ ok: true, text: 'Name updated.' });
+      toast('success', 'Name updated.');
     } catch (err: unknown) {
-      setNameMsg({ ok: false, text: err instanceof Error ? err.message : 'Failed to save' });
+      toast('error', err instanceof Error ? err.message : 'Failed to save name');
     } finally {
       setNameSaving(false);
     }
@@ -108,12 +107,11 @@ export default function SettingsPage() {
 
   async function savePrefs() {
     setPrefsSaving(true);
-    setPrefsMsg(null);
     try {
       await api.patch('/users/me/notifications', { push: pushPrefs, email: emailPrefs });
-      setPrefsMsg({ ok: true, text: 'Preferences saved.' });
+      toast('success', 'Preferences saved.');
     } catch (err: unknown) {
-      setPrefsMsg({ ok: false, text: err instanceof Error ? err.message : 'Failed to save' });
+      toast('error', err instanceof Error ? err.message : 'Failed to save preferences');
     } finally {
       setPrefsSaving(false);
     }
@@ -164,9 +162,6 @@ export default function SettingsPage() {
             />
             <p className="text-xs text-copy-3 mt-1">Email cannot be changed here.</p>
           </div>
-          {nameMsg && (
-            <p className={`text-xs ${nameMsg.ok ? 'text-brand' : 'text-danger'}`}>{nameMsg.text}</p>
-          )}
           <button
             type="submit"
             disabled={nameSaving || !nameInput.trim() || nameInput.trim() === displayName}
@@ -244,11 +239,8 @@ export default function SettingsPage() {
           </table>
         </div>
 
-        <div className="px-6 py-4 border-t border-line bg-field/20 flex items-center justify-between">
-          {prefsMsg && (
-            <p className={`text-xs ${prefsMsg.ok ? 'text-brand' : 'text-danger'}`}>{prefsMsg.text}</p>
-          )}
-          <div className="ml-auto">
+        <div className="px-6 py-4 border-t border-line bg-field/20 flex items-center justify-end">
+          <div>
             <button
               onClick={savePrefs}
               disabled={prefsSaving}

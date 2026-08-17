@@ -190,8 +190,14 @@ function LeagueHomeTab({
         </div>
         <div className="divide-y divide-line/30 max-h-72 overflow-y-auto">
           {messages.length === 0 ? (
-            <div className="text-center py-10">
-              <p className="text-copy-3 text-sm">No messages yet — say something!</p>
+            <div className="text-center py-10 px-6">
+              <div className="w-10 h-10 rounded-xl bg-field border border-line flex items-center justify-center mx-auto mb-3">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-copy-3">
+                  <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+                </svg>
+              </div>
+              <p className="text-copy-2 text-sm font-medium">No messages yet</p>
+              <p className="text-copy-3 text-xs mt-1">Say something to kick off the conversation.</p>
             </div>
           ) : messages.map(msg => {
             const isOwn = msg.authorUserId === userId;
@@ -346,9 +352,16 @@ function LeagueHomeTab({
           </form>
         )}
         {announcements.length === 0 ? (
-          <div className="text-center py-10">
-            <p className="text-copy-3 text-sm">No announcements yet.</p>
-            {isCommissioner && <p className="text-xs text-copy-3 mt-1">Post custom rules or notes for your league.</p>}
+          <div className="text-center py-10 px-6">
+            <div className="w-10 h-10 rounded-xl bg-field border border-line flex items-center justify-center mx-auto mb-3">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-copy-3">
+                <path d="M22 8.5c0 2.5-4.5 8.5-10 8.5S2 11 2 8.5a10 10 0 0120 0z" /><path d="M12 17v4M8 21h8" />
+              </svg>
+            </div>
+            <p className="text-copy-2 text-sm font-medium">No announcements yet</p>
+            {isCommissioner
+              ? <p className="text-copy-3 text-xs mt-1">Post rules, reminders, or notes for your league members.</p>
+              : <p className="text-copy-3 text-xs mt-1">Your commissioner hasn&apos;t posted anything yet.</p>}
           </div>
         ) : (
           <div className="divide-y divide-line/30">

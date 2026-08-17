@@ -13,6 +13,10 @@ function RecentActivityTab({ leagueId, fantasyTeams, isActive = true }: { league
   const [showAll, setShowAll] = useState(false);
   const [expandedBids, setExpandedBids] = useState<Set<string>>(new Set());
   const [teamFilter, setTeamFilter] = useState<string>('');
+  const [viewMode, setViewMode] = useState<'list' | 'timeline'>(() => {
+    try { return (localStorage.getItem('fg_activity_view') as 'list' | 'timeline') ?? 'list'; }
+    catch { return 'list'; }
+  });
 
   useEffect(() => {
     if (!isActive) setTeamFilter('');
@@ -27,6 +31,10 @@ function RecentActivityTab({ leagueId, fantasyTeams, isActive = true }: { league
       setTransactions(txs);
       setAllSportTeams(groups.flatMap(g => g.teams));
       setWaiverHistory(hist);
+      if (txs.length > 0) {
+        const latest = txs.reduce((max, t) => t.date > max ? t.date : max, txs[0].date);
+        try { localStorage.setItem(`fg_activity_ts_${leagueId}`, latest); } catch {}
+      }
     }).finally(() => setLoading(false));
   }, [leagueId]);
 
@@ -56,6 +64,16 @@ function RecentActivityTab({ leagueId, fantasyTeams, isActive = true }: { league
   const PAGE = 10;
   const visible = showAll ? filteredTransactions : filteredTransactions.slice(0, PAGE);
 
+  const timelineGroups = useMemo(() => {
+    const groups = new Map<string, typeof filteredTransactions>();
+    for (const tx of filteredTransactions) {
+      const key = new Date(tx.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(tx);
+    }
+    return [...groups.entries()];
+  }, [filteredTransactions]);
+
   return (
     <div className="bg-card border border-line rounded-2xl overflow-hidden">
       <div className="px-5 py-4 border-b border-line flex items-center justify-between">
@@ -64,7 +82,7 @@ function RecentActivityTab({ leagueId, fantasyTeams, isActive = true }: { league
           <p className="text-xs text-copy-3 mt-0.5">All accepted trades and approved waiver pickups this season.</p>
         </div>
         {transactions.length > 0 && (
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <select
               value={teamFilter}
               onChange={e => { setTeamFilter(e.target.value); setShowAll(false); }}
@@ -75,21 +93,110 @@ function RecentActivityTab({ leagueId, fantasyTeams, isActive = true }: { league
                 .filter(ft => !ft.isPlaceholder)
                 .map(ft => <option key={ft.id} value={ft.id}>{ft.displayName}</option>)}
             </select>
-            <span className="text-xs text-copy-3 flex-shrink-0">
+            <span className="text-xs text-copy-3 flex-shrink-0 hidden sm:inline">
               {teamFilter
                 ? `${filteredTransactions.length} of ${transactions.length}`
                 : `${transactions.length} total`}
             </span>
+            <div className="flex items-center gap-0.5 bg-field border border-line rounded-lg p-0.5">
+              <button
+                onClick={() => { setViewMode('list'); try { localStorage.setItem('fg_activity_view', 'list'); } catch {} }}
+                title="List view"
+                className={`p-1.5 rounded transition-colors ${viewMode === 'list' ? 'bg-card text-copy shadow-sm' : 'text-copy-3 hover:text-copy-2'}`}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" />
+                  <line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" />
+                </svg>
+              </button>
+              <button
+                onClick={() => { setViewMode('timeline'); try { localStorage.setItem('fg_activity_view', 'timeline'); } catch {} }}
+                title="Timeline view"
+                className={`p-1.5 rounded transition-colors ${viewMode === 'timeline' ? 'bg-card text-copy shadow-sm' : 'text-copy-3 hover:text-copy-2'}`}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="12" y1="2" x2="12" y2="22" /><circle cx="12" cy="7" r="2" fill="currentColor" stroke="none" /><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none" /><circle cx="12" cy="17" r="2" fill="currentColor" stroke="none" />
+                  <line x1="12" y1="7" x2="20" y2="7" /><line x1="12" y1="12" x2="20" y2="12" /><line x1="12" y1="17" x2="20" y2="17" />
+                </svg>
+              </button>
+            </div>
           </div>
         )}
       </div>
       {loading ? (
         <div className="flex justify-center py-10"><Spinner size="sm" /></div>
       ) : filteredTransactions.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-copy-3 text-sm">
-            {teamFilter ? 'No transactions for this team.' : 'No transactions yet.'}
+        <div className="text-center py-12 px-6">
+          <div className="w-10 h-10 rounded-xl bg-field border border-line flex items-center justify-center mx-auto mb-3">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-copy-3">
+              <path d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4" />
+            </svg>
+          </div>
+          <p className="text-copy-2 text-sm font-medium">
+            {teamFilter ? 'No transactions for this team' : 'No transactions yet'}
           </p>
+          <p className="text-copy-3 text-xs mt-1">
+            {teamFilter ? 'Try a different team filter.' : 'Accepted trades and approved waivers will appear here.'}
+          </p>
+        </div>
+      ) : viewMode === 'timeline' ? (
+        <div className="px-5 py-4 space-y-6">
+          {timelineGroups.map(([dateLabel, txs]) => (
+            <div key={dateLabel} className="relative pl-5">
+              <div className="absolute left-0 top-0 bottom-0 w-px bg-line/60" />
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-copy-3 mb-3 -ml-5 pl-5 relative before:absolute before:left-[-4.5px] before:top-[4px] before:w-2 before:h-2 before:rounded-full before:bg-line before:border-2 before:border-card">
+                {dateLabel}
+              </p>
+              <div className="space-y-3">
+                {txs.map(tx => {
+                  const isTrade = tx.type === 'trade';
+                  const proposerFt = isTrade ? ftById.get(tx.proposerFantasyTeamId) : null;
+                  const receiverFt = isTrade ? ftById.get(tx.receiverFantasyTeamId) : null;
+                  const offeredNames = isTrade ? tx.offeredSportTeamIds.map(txid => sportTeamById.get(txid)?.name ?? txid) : [];
+                  const requestedNames = isTrade ? tx.requestedSportTeamIds.map(txid => sportTeamById.get(txid)?.name ?? txid) : [];
+                  const addTeamName = !isTrade ? (sportTeamById.get(tx.addTeamId)?.name ?? tx.addTeamId) : '';
+                  const dropTeamName = !isTrade && tx.dropTeamId ? (sportTeamById.get(tx.dropTeamId)?.name ?? tx.dropTeamId) : null;
+                  return (
+                    <div key={tx.id} className="flex gap-3">
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 -ml-8 ${isTrade ? 'bg-info-bg border border-info/30' : 'bg-warn-bg border border-warn/30'}`}>
+                        {isTrade ? (
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="text-info">
+                            <path d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4" />
+                          </svg>
+                        ) : (
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="text-warn">
+                            <path d="M8 7h12M8 12h12M8 17h12M4 7h.01M4 12h.01M4 17h.01" />
+                          </svg>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0 bg-field/40 rounded-xl px-3 py-2.5 border border-line/40">
+                        <p className="text-xs text-copy-3 mb-0.5">{timeAgo(tx.date)}</p>
+                        {isTrade ? (
+                          <p className="text-sm text-copy leading-snug">
+                            <span className="font-semibold">{proposerFt?.displayName ?? '—'}</span>
+                            <span className="text-copy-3"> traded </span>
+                            <span className="text-danger font-medium">{offeredNames.join(', ')}</span>
+                            <span className="text-copy-3"> for </span>
+                            <span className="text-positive font-medium">{requestedNames.join(', ')}</span>
+                            <span className="text-copy-3"> with </span>
+                            <span className="font-semibold">{receiverFt?.displayName ?? '—'}</span>
+                          </p>
+                        ) : (
+                          <p className="text-sm text-copy leading-snug">
+                            <span className="font-semibold">{tx.claimantDisplayName}</span>
+                            <span className="text-copy-3"> added </span>
+                            <span className="text-positive font-medium">{addTeamName}</span>
+                            {tx.faabBid != null && <span className="inline-block text-xs font-bold text-copy-3 bg-field border border-line rounded px-1.5 py-0.5 ml-1.5 align-middle">${tx.faabBid}</span>}
+                            {dropTeamName && <><span className="text-copy-3"> · dropped </span><span className="text-danger font-medium">{dropTeamName}</span></>}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </div>
       ) : (
         <>

@@ -585,8 +585,14 @@ function RosterTab({
             </div>
           )}
           {!loadingTeams && rosterRenderItems.length === 0 && (
-            <div className="px-5 py-8 text-center">
-              <p className="text-copy-3 text-sm">No teams yet</p>
+            <div className="px-5 py-10 text-center">
+              <div className="w-10 h-10 rounded-xl bg-field border border-line flex items-center justify-center mx-auto mb-3">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-copy-3">
+                  <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
+                </svg>
+              </div>
+              <p className="text-copy-2 text-sm font-medium">No teams yet</p>
+              <p className="text-copy-3 text-xs mt-1">Teams will appear once the draft or auction completes.</p>
             </div>
           )}
           {!loadingTeams && rosterRenderItems.map((item, idx) => {

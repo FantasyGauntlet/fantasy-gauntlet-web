@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Fragment } from 'react';
+import { useState, useEffect, useRef, Fragment } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { api } from '@/lib/api';
 import { db } from '@/lib/firebase';
@@ -14,6 +14,24 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone, own
   const [expanded, setExpanded] = useState<string | null>(null);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const { openProfile } = useTeamProfile();
+
+  const storageKey = `fg_standings_${leagueId}`;
+  const [prevRanks] = useState<Record<string, number>>(() => {
+    try { return JSON.parse(localStorage.getItem(storageKey) ?? '{}'); }
+    catch { return {}; }
+  });
+  const storedRef = useRef(false);
+
+  useEffect(() => {
+    if (standings.length === 0 || storedRef.current) return;
+    storedRef.current = true;
+    const t = setTimeout(() => {
+      const snap: Record<string, number> = {};
+      standings.forEach(s => { snap[s.userId] = s.rank; });
+      try { localStorage.setItem(storageKey, JSON.stringify(snap)); } catch {}
+    }, 8000);
+    return () => clearTimeout(t);
+  }, [standings.length, storageKey]);
 
   const logoByUserId = new Map(fantasyTeams.map(ft => [ft.userId, ft.logoUrl ?? null]));
   const coOwnerNamesByUserId = new Map(fantasyTeams.map(ft => [ft.userId, ft.coOwnerDisplayNames ?? []]));
@@ -83,13 +101,23 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone, own
                 <tr
                   onClick={() => setExpanded(isExpanded ? null : s.userId)}
                   className={`border-b border-line/50 cursor-pointer hover:bg-field/40 transition-colors ${
-                    isMe ? 'bg-brand-dim/30' : inTopZone ? 'bg-positive-bg/20' : inBottomZone ? 'bg-danger-bg/20' : ''
+                    isMe ? 'bg-brand/[0.06]' : inTopZone ? 'bg-positive-bg/20' : inBottomZone ? 'bg-danger-bg/20' : ''
                   }`}
                 >
-                  <td className={`px-4 py-3.5 ${inTopZone ? 'border-l-2 border-l-positive' : inBottomZone ? 'border-l-2 border-l-danger' : 'border-l-2 border-l-transparent'}`}>
-                    <span className={`text-sm font-bold ${inTopZone ? 'text-positive' : inBottomZone ? 'text-danger' : 'text-copy-2'}`}>
-                      #{s.rank}
-                    </span>
+                  <td className={`px-4 py-3.5 ${isMe ? 'border-l-2 border-l-brand' : inTopZone ? 'border-l-2 border-l-positive' : inBottomZone ? 'border-l-2 border-l-danger' : 'border-l-2 border-l-transparent'}`}>
+                    <div className="flex items-center gap-1.5">
+                      <span className={`text-sm font-bold ${isMe ? 'text-brand' : inTopZone ? 'text-positive' : inBottomZone ? 'text-danger' : 'text-copy-2'}`}>
+                        #{s.rank}
+                      </span>
+                      {(() => {
+                        const prev = prevRanks[s.userId];
+                        if (!prev || prev === s.rank) return null;
+                        const diff = prev - s.rank;
+                        return diff > 0
+                          ? <span className="text-[10px] font-bold text-positive leading-none">↑{diff}</span>
+                          : <span className="text-[10px] font-bold text-danger leading-none">↓{Math.abs(diff)}</span>;
+                      })()}
+                    </div>
                   </td>
                   <td className="px-4 py-3.5">
                     <div className="flex items-center gap-2.5">

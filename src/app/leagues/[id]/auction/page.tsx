@@ -85,10 +85,15 @@ function TeamLogo({ logoUrl, name, size = 10 }: { logoUrl: string | null; name: 
 function TimerRing({ remaining, total, paused }: { remaining: number; total: number; paused?: boolean }) {
   const pct = total > 0 ? Math.max(0, Math.min(1, remaining / total)) : 0;
   const offset = TIMER_CIRC * (1 - pct);
-  const strokeColor = paused ? '#8b5cf6' : (pct > 0.5 ? '#22c55e' : pct > 0.25 ? '#f59e0b' : '#ef4444');
-  const textCls = paused ? 'text-copy-2' : (pct > 0.5 ? 'text-positive' : pct > 0.25 ? 'text-warn' : 'text-danger');
+  const isUrgent = !paused && remaining <= 5;
+  const isWarning = !paused && remaining <= 10 && remaining > 5;
+  const strokeColor = paused ? '#8b5cf6' : isUrgent ? '#ef4444' : isWarning ? '#f59e0b' : '#22c55e';
+  const textCls = paused ? 'text-copy-2' : isUrgent ? 'text-danger' : isWarning ? 'text-warn' : 'text-positive';
   return (
     <div className="relative w-24 h-24 flex items-center justify-center flex-shrink-0">
+      {isUrgent && (
+        <div className="absolute inset-0 rounded-full bg-danger/10 animate-ping" style={{ animationDuration: '1s' }} />
+      )}
       <svg width="96" height="96" className="absolute inset-0 -rotate-90">
         <circle cx="48" cy="48" r={TIMER_R} fill="none" stroke="var(--color-line)" strokeWidth="5" />
         <circle
@@ -105,7 +110,7 @@ function TimerRing({ remaining, total, paused }: { remaining: number; total: num
           <span className="text-[10px] font-bold text-copy-3 leading-none">{remaining}s</span>
         </span>
       ) : (
-        <span className={`relative z-10 text-2xl font-bold tabular-nums ${textCls}`}>{remaining}</span>
+        <span className={`relative z-10 text-2xl font-bold tabular-nums transition-colors ${textCls} ${isUrgent ? 'animate-pulse' : ''}`}>{remaining}</span>
       )}
     </div>
   );
