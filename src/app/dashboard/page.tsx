@@ -301,31 +301,16 @@ export default function DashboardPage() {
         <div className="grid grid-cols-3 gap-3">
           <div className="relative bg-card border border-line rounded-xl p-4 overflow-hidden">
             <div className="absolute inset-y-0 left-0 w-[3px] bg-brand/50" />
-            <div className="mb-2 text-brand">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M6 9H4.5a2.5 2.5 0 010-5H6M18 9h1.5a2.5 2.5 0 000-5H18M3 4h18M6 9v10a1 1 0 001 1h10a1 1 0 001-1V9M9 12h6" />
-              </svg>
-            </div>
             <p className="text-2xl font-bold text-copy tabular-nums">{activeLeagues.length}</p>
             <p className="text-copy-3 text-xs mt-0.5 font-medium">My Leagues</p>
           </div>
           <div className="relative bg-card border border-line rounded-xl p-4 overflow-hidden">
             <div className="absolute inset-y-0 left-0 w-[3px] bg-positive/60" />
-            <div className="mb-2 text-positive">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            </div>
             <p className="text-2xl font-bold text-copy tabular-nums">{activeCount}</p>
             <p className="text-copy-3 text-xs mt-0.5 font-medium">In Season</p>
           </div>
           <div className="relative bg-card border border-line rounded-xl p-4 overflow-hidden">
             <div className="absolute inset-y-0 left-0 w-[3px] bg-warn/60" />
-            <div className="mb-2 text-warn">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
-              </svg>
-            </div>
             <p className="text-2xl font-bold text-copy tabular-nums">{draftingCount}</p>
             <p className="text-copy-3 text-xs mt-0.5 font-medium">Drafting</p>
           </div>
