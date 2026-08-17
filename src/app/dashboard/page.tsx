@@ -104,6 +104,79 @@ function SkeletonCard() {
   );
 }
 
+// ─── League row (compact list view) ──────────────────────────────────────────
+
+function LeagueRow({ league, muted = false, starred = false, onToggleStar }: { league: League; muted?: boolean; starred?: boolean; onToggleStar?: () => void }) {
+  const meta = STATE_META[league.state] ?? STATE_META.completed;
+  const isDrafting = league.state === 'draft' || league.state === 'auction';
+  const countdown = isDrafting ? draftCountdown(league.scheduledStartAt) : null;
+  const season = formatSeason(league.startDate, league.endDate);
+  return (
+    <Link
+      href={`/leagues/${league.id}`}
+      onMouseEnter={() => prefetchLeague(league.id)}
+      className={`group flex items-center gap-3 px-4 py-3 transition-colors ${muted ? 'hover:bg-field/50' : 'hover:bg-card-hover'}`}
+    >
+      {onToggleStar && (
+        <button
+          onClick={e => { e.preventDefault(); onToggleStar(); }}
+          title={starred ? 'Unstar league' : 'Star league'}
+          className={`flex-shrink-0 p-0.5 transition-colors ${starred ? 'text-amber-400 hover:text-amber-300' : 'text-copy-3 opacity-0 group-hover:opacity-100 hover:text-amber-400'}`}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill={starred ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+          </svg>
+        </button>
+      )}
+      <div className="flex-1 min-w-0 flex items-center gap-2">
+        <span className={`font-semibold text-sm truncate transition-colors ${muted ? 'text-copy-2 group-hover:text-copy' : 'text-copy group-hover:text-brand'}`}>
+          {league.name}
+        </span>
+        {league.myRank != null && league.state === 'active' && (
+          <span className="text-[11px] text-copy-3 flex-shrink-0">
+            #{league.myRank}{league.totalMembers ? ` / ${league.totalMembers}` : ''}
+          </span>
+        )}
+      </div>
+      <span className={`flex-shrink-0 text-xs font-medium px-2 py-0.5 rounded-full border inline-flex items-center gap-1 ${meta.cls}`}>
+        <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70 flex-shrink-0" />
+        {meta.label}
+      </span>
+      {league.selectedSports && league.selectedSports.length > 0 && (
+        <div className="hidden sm:flex items-center gap-1 flex-shrink-0">
+          {league.selectedSports.slice(0, 2).map(s => (
+            <span key={s} className="text-[11px] bg-field border border-line text-copy-3 px-1.5 py-0.5 rounded">
+              {formatSport(s)}
+            </span>
+          ))}
+          {league.selectedSports.length > 2 && (
+            <span className="text-[11px] text-copy-3" title={league.selectedSports.slice(2).map(formatSport).join(', ')}>
+              +{league.selectedSports.length - 2}
+            </span>
+          )}
+        </div>
+      )}
+      <div className="hidden sm:flex items-center gap-3 text-xs text-copy-3 flex-shrink-0">
+        <span className="flex items-center gap-1">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" />
+            <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
+          </svg>
+          {league.memberCount}{league.maxMembers ? ` / ${league.maxMembers}` : ''}
+        </span>
+        {countdown ? (
+          <span className="text-warn font-medium">{countdown}</span>
+        ) : season ? (
+          <span>{season}</span>
+        ) : null}
+      </div>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-copy-3 flex-shrink-0 opacity-0 group-hover:opacity-60 transition-opacity">
+        <polyline points="9 18 15 12 9 6" />
+      </svg>
+    </Link>
+  );
+}
+
 // ─── League card ──────────────────────────────────────────────────────────────
 
 function LeagueCard({ league, muted = false, starred = false, onToggleStar }: { league: League; muted?: boolean; starred?: boolean; onToggleStar?: () => void }) {
@@ -253,6 +326,10 @@ export default function DashboardPage() {
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
   const [showPast, setShowPast] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>(() => {
+    try { return (localStorage.getItem('fg_league_view') as 'grid' | 'list') ?? 'grid'; }
+    catch { return 'grid'; }
+  });
   const [starred, setStarred] = useState<Set<string>>(() => {
     try { return new Set(JSON.parse(localStorage.getItem('fg_starred_leagues') ?? '[]')); }
     catch { return new Set<string>(); }
@@ -265,6 +342,11 @@ export default function DashboardPage() {
       try { localStorage.setItem('fg_starred_leagues', JSON.stringify([...next])); } catch { /* ignore */ }
       return next;
     });
+  }
+
+  function switchView(mode: 'grid' | 'list') {
+    setViewMode(mode);
+    try { localStorage.setItem('fg_league_view', mode); } catch { /* ignore */ }
   }
 
   const activeLeagues = leagues.filter(l => l.state !== 'completed' && l.state !== 'cancelled');
@@ -426,12 +508,44 @@ export default function DashboardPage() {
           {/* Active leagues */}
           {activeLeagues.length > 0 && (
             <div>
-              <h2 className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-3">My Leagues</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {sortedActiveLeagues.map(league => (
-                  <LeagueCard key={league.id} league={league} starred={starred.has(league.id)} onToggleStar={() => toggleStar(league.id)} />
-                ))}
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-xs font-semibold text-copy-3 uppercase tracking-widest">My Leagues</h2>
+                <div className="flex items-center gap-0.5 bg-field border border-line rounded-lg p-0.5">
+                  <button
+                    onClick={() => switchView('grid')}
+                    title="Grid view"
+                    className={`p-1.5 rounded transition-colors ${viewMode === 'grid' ? 'bg-card text-copy shadow-sm' : 'text-copy-3 hover:text-copy-2'}`}
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" />
+                      <rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => switchView('list')}
+                    title="List view"
+                    className={`p-1.5 rounded transition-colors ${viewMode === 'list' ? 'bg-card text-copy shadow-sm' : 'text-copy-3 hover:text-copy-2'}`}
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" />
+                      <line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" />
+                    </svg>
+                  </button>
+                </div>
               </div>
+              {viewMode === 'grid' ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {sortedActiveLeagues.map(league => (
+                    <LeagueCard key={league.id} league={league} starred={starred.has(league.id)} onToggleStar={() => toggleStar(league.id)} />
+                  ))}
+                </div>
+              ) : (
+                <div className="border border-line rounded-2xl overflow-hidden bg-card divide-y divide-line/40">
+                  {sortedActiveLeagues.map(league => (
+                    <LeagueRow key={league.id} league={league} starred={starred.has(league.id)} onToggleStar={() => toggleStar(league.id)} />
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -457,9 +571,15 @@ export default function DashboardPage() {
                 </svg>
               </button>
               {showPast && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {pastLeagues.map(league => <LeagueCard key={league.id} league={league} muted />)}
-                </div>
+                viewMode === 'grid' ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {pastLeagues.map(league => <LeagueCard key={league.id} league={league} muted />)}
+                  </div>
+                ) : (
+                  <div className="border border-line rounded-2xl overflow-hidden bg-card divide-y divide-line/40">
+                    {pastLeagues.map(league => <LeagueRow key={league.id} league={league} muted />)}
+                  </div>
+                )
               )}
             </div>
           )}
