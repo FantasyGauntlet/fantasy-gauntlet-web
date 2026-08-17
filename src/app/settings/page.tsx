@@ -11,7 +11,6 @@ interface NotificationPrefs {
   auctionStarting: boolean;
   auctionEnded:    boolean;
   auctionResults:  boolean;
-  rankChanged:     boolean;
   leagueInvite:    boolean;
   waiverUpdated:   boolean;
   finalStandings:  boolean;
@@ -23,7 +22,6 @@ const EVENT_LABELS: Record<keyof NotificationPrefs, string> = {
   auctionStarting: 'Auction starting',
   auctionEnded:    'Auction completed',
   auctionResults:  'Your auction results',
-  rankChanged:     'Rank changes',
   leagueInvite:    'League invitations',
   waiverUpdated:   'Waiver claim results',
   finalStandings:  'Final standings',
@@ -35,7 +33,6 @@ const DEFAULT_PREFS: NotificationPrefs = {
   auctionStarting: true,
   auctionEnded:    true,
   auctionResults:  true,
-  rankChanged:     false,
   leagueInvite:    true,
   waiverUpdated:   true,
   finalStandings:  true,

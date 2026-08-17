@@ -60,7 +60,11 @@ export default function NotificationBell() {
       limit(50),
     );
     const unsub = onSnapshot(q, snap => {
-      setNotifications(snap.docs.map(d => d.data() as AppNotification));
+      setNotifications(
+        snap.docs
+          .map(d => d.data() as AppNotification)
+          .filter(n => n.type !== 'rankChanged'),
+      );
     }, () => { /* silent on error */ });
     return unsub;
   }, [user]);
