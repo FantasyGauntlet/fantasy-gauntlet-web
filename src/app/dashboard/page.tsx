@@ -25,6 +25,9 @@ interface League {
   selectedSports?: string[];
   startDate?: string;
   endDate?: string;
+  myRank?: number | null;
+  totalMembers?: number;
+  scheduledStartAt?: string | null;
 }
 
 interface PendingInvite {
@@ -57,6 +60,18 @@ function formatSeason(start?: string, end?: string): string | null {
   if (start && end) return `${fmt(start)} – ${fmt(end)}`;
   if (start) return `From ${fmt(start)}`;
   return null;
+}
+
+function draftCountdown(scheduledStartAt?: string | null): string {
+  if (!scheduledStartAt) return 'Draft open';
+  const diff = new Date(scheduledStartAt).getTime() - Date.now();
+  if (diff <= 0) return 'Draft open';
+  const days = Math.floor(diff / 86400000);
+  if (days >= 1) return `Starts in ${days}d`;
+  const hours = Math.floor(diff / 3600000);
+  if (hours >= 1) return `Starts in ${hours}h`;
+  const mins = Math.floor(diff / 60000);
+  return mins > 0 ? `Starts in ${mins}m` : 'Draft open';
 }
 
 const STATE_META: Record<string, { label: string; cls: string }> = {
@@ -94,6 +109,8 @@ function SkeletonCard() {
 function LeagueCard({ league, muted = false, starred = false, onToggleStar }: { league: League; muted?: boolean; starred?: boolean; onToggleStar?: () => void }) {
   const meta = STATE_META[league.state] ?? STATE_META.completed;
   const season = formatSeason(league.startDate, league.endDate);
+  const isDrafting = league.state === 'draft' || league.state === 'auction';
+  const countdown = isDrafting ? draftCountdown(league.scheduledStartAt) : null;
   return (
     <Link
       href={`/leagues/${league.id}`}
@@ -107,9 +124,17 @@ function LeagueCard({ league, muted = false, starred = false, onToggleStar }: { 
       }`}
     >
       <div className="flex items-start justify-between gap-3 mb-3">
-        <h3 className={`font-semibold leading-snug transition-colors ${muted ? 'text-copy-2 group-hover:text-copy' : 'text-copy group-hover:text-brand'}`}>
-          {league.name}
-        </h3>
+        <div className="min-w-0">
+          <h3 className={`font-semibold leading-snug transition-colors ${muted ? 'text-copy-2 group-hover:text-copy' : 'text-copy group-hover:text-brand'}`}>
+            {league.name}
+          </h3>
+          {league.myRank != null && league.state === 'active' && (
+            <p className="text-[11px] text-copy-3 mt-0.5">
+              Rank <span className="font-semibold text-copy-2">#{league.myRank}</span>
+              {league.totalMembers ? ` of ${league.totalMembers}` : ''}
+            </p>
+          )}
+        </div>
         <div className="flex items-center gap-1.5 flex-shrink-0">
           {onToggleStar && (
             <button
@@ -136,7 +161,12 @@ function LeagueCard({ league, muted = false, starred = false, onToggleStar }: { 
             </span>
           ))}
           {league.selectedSports.length > 3 && (
-            <span className="text-xs text-copy-3 self-center">+{league.selectedSports.length - 3}</span>
+            <span
+              className="text-xs text-copy-3 self-center"
+              title={league.selectedSports.slice(3).map(formatSport).join(', ')}
+            >
+              +{league.selectedSports.length - 3}
+            </span>
           )}
         </div>
       )}
@@ -149,7 +179,16 @@ function LeagueCard({ league, muted = false, starred = false, onToggleStar }: { 
           </svg>
           {league.memberCount}{league.maxMembers ? ` / ${league.maxMembers}` : ''}
         </span>
-        {season && <span>{season}</span>}
+        {countdown ? (
+          <span className="flex items-center gap-1 text-warn font-medium">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+            </svg>
+            {countdown}
+          </span>
+        ) : season ? (
+          <span>{season}</span>
+        ) : null}
       </div>
     </Link>
   );
@@ -260,16 +299,36 @@ export default function DashboardPage() {
       {/* Stats */}
       {!loading && leagues.length > 0 && (
         <div className="grid grid-cols-3 gap-3">
-          {[
-            { label: 'My Leagues', value: activeLeagues.length },
-            { label: 'In Season',  value: activeCount },
-            { label: 'Drafting',   value: draftingCount },
-          ].map(s => (
-            <div key={s.label} className="bg-card border border-line rounded-xl p-4">
-              <p className="text-2xl font-bold text-copy tabular-nums">{s.value}</p>
-              <p className="text-copy-3 text-xs mt-0.5 font-medium">{s.label}</p>
+          <div className="relative bg-card border border-line rounded-xl p-4 overflow-hidden">
+            <div className="absolute inset-y-0 left-0 w-[3px] bg-brand/50" />
+            <div className="mb-2 text-brand">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M6 9H4.5a2.5 2.5 0 010-5H6M18 9h1.5a2.5 2.5 0 000-5H18M3 4h18M6 9v10a1 1 0 001 1h10a1 1 0 001-1V9M9 12h6" />
+              </svg>
             </div>
-          ))}
+            <p className="text-2xl font-bold text-copy tabular-nums">{activeLeagues.length}</p>
+            <p className="text-copy-3 text-xs mt-0.5 font-medium">My Leagues</p>
+          </div>
+          <div className="relative bg-card border border-line rounded-xl p-4 overflow-hidden">
+            <div className="absolute inset-y-0 left-0 w-[3px] bg-positive/60" />
+            <div className="mb-2 text-positive">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            </div>
+            <p className="text-2xl font-bold text-copy tabular-nums">{activeCount}</p>
+            <p className="text-copy-3 text-xs mt-0.5 font-medium">In Season</p>
+          </div>
+          <div className="relative bg-card border border-line rounded-xl p-4 overflow-hidden">
+            <div className="absolute inset-y-0 left-0 w-[3px] bg-warn/60" />
+            <div className="mb-2 text-warn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+              </svg>
+            </div>
+            <p className="text-2xl font-bold text-copy tabular-nums">{draftingCount}</p>
+            <p className="text-copy-3 text-xs mt-0.5 font-medium">Drafting</p>
+          </div>
         </div>
       )}
 
