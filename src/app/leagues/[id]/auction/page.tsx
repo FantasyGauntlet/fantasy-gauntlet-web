@@ -1410,8 +1410,8 @@ export default function AuctionPage() {
                 <div className="bg-card border border-brand/30 rounded-2xl p-6 text-center space-y-3">
                   <p className="text-xs font-semibold text-brand uppercase tracking-wide">Draft Queue</p>
                   <p className="text-5xl font-bold tabular-nums text-copy">{fmtCountdown(msUntilDraftStart)}</p>
-                  <p className="text-sm text-copy-2">Use this time to queue up teams you want to nominate.</p>
-                  <p className="text-xs text-copy-3">Nominations begin automatically when the timer ends.</p>
+                  <p className="text-sm text-copy-2">{isSnake ? 'Use this time to queue up teams you want to draft.' : 'Use this time to queue up teams you want to nominate.'}</p>
+                  <p className="text-xs text-copy-3">{isSnake ? 'The draft starts automatically when the timer ends.' : 'Nominations begin automatically when the timer ends.'}</p>
                   {isCommissioner && (
                     <button
                       disabled={startingAuction}
