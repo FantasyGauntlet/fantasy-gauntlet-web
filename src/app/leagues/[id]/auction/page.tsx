@@ -1628,7 +1628,7 @@ export default function AuctionPage() {
                       {validQueue.length === 0 ? (
                         <p className="text-xs text-copy-3/60 py-1">No teams queued — add teams below to auto-pick when time runs out.</p>
                       ) : (
-                        <div className="space-y-1">
+                        <div className="space-y-1 max-h-[228px] overflow-y-auto pr-0.5">
                           {validQueue.map((tid, idx) => {
                             const t = teamMapRef.current.get(tid);
                             if (!t) return null;
