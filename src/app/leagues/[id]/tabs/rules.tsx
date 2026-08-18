@@ -54,7 +54,7 @@ function RulesTab({ league }: { league: League }) {
           <p className="text-xs font-semibold text-copy-2 uppercase tracking-wide mb-2">Points</p>
           <ul className="space-y-1.5 list-disc list-inside">
             <li className="text-sm text-copy-2 leading-relaxed pl-1">Points are based on Wins, Draws and Playoffs. The Table is based on the total accumulation throughout the season.</li>
-            <li className="text-sm text-copy-2 leading-relaxed pl-1">A bonus is given for Conference and Division Champions. (See &ldquo;Points&rdquo; tab for criteria)</li>
+            <li className="text-sm text-copy-2 leading-relaxed pl-1">A bonus is given for Conference and Division Champions.</li>
             <li className="text-sm text-copy-2 leading-relaxed pl-1">NCAAF bonus points will only be given out for Power 4 teams; NCAAB bonus will only be given out for Power 5 teams</li>
             <li className="text-sm text-copy-2 leading-relaxed pl-1">Power 4 = SEC, Big Ten, ACC, Big 12</li>
             <li className="text-sm text-copy-2 leading-relaxed pl-1">Power 5 = Power 4 + Big East</li>
