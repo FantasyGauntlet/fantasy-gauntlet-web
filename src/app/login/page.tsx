@@ -6,12 +6,33 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   updateProfile,
-  sendPasswordResetEmail,
   GoogleAuthProvider,
   signInWithPopup,
 } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { api } from '@/lib/api';
+
+function friendlyAuthError(err: unknown): string {
+  const code = (err as any)?.code ?? '';
+  switch (code) {
+    case 'auth/invalid-credential':
+    case 'auth/wrong-password':
+    case 'auth/user-not-found':
+      return 'Incorrect email or password. If you signed up with Google, try "Continue with Google" instead.';
+    case 'auth/too-many-requests':
+      return 'Too many failed attempts. Try again later or reset your password.';
+    case 'auth/email-already-in-use':
+      return 'An account with this email already exists. Try signing in instead.';
+    case 'auth/weak-password':
+      return 'Password must be at least 6 characters.';
+    case 'auth/invalid-email':
+      return 'Please enter a valid email address.';
+    case 'auth/popup-closed-by-user':
+      return 'Sign-in popup was closed. Please try again.';
+    default:
+      return err instanceof Error ? err.message : 'Authentication failed. Please try again.';
+  }
+}
 
 export default function LoginPage() {
   return (
@@ -53,7 +74,7 @@ function LoginContent() {
       }
       router.replace(redirect);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Authentication failed');
+      setError(friendlyAuthError(err));
     } finally {
       setLoading(false);
     }
@@ -65,7 +86,7 @@ function LoginContent() {
     setError('');
     setLoading(true);
     try {
-      await sendPasswordResetEmail(auth, email.trim());
+      await api.post('/users/password-reset', { email: email.trim() });
       setResetSent(true);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to send reset email');
@@ -81,7 +102,7 @@ function LoginContent() {
       await signInWithPopup(auth, new GoogleAuthProvider());
       router.replace(redirect);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Google sign-in failed');
+      setError(friendlyAuthError(err));
     } finally {
       setLoading(false);
     }
