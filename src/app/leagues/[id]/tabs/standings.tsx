@@ -34,6 +34,9 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone, own
   }, [standings.length, storageKey]);
 
   const logoByUserId = new Map(fantasyTeams.map(ft => [ft.userId, ft.logoUrl ?? null]));
+  // Use fantasyTeams as the source of truth for names — standingsCache is only updated on scoring
+  // runs and goes stale between them when managers rename their team
+  const nameByUserId = new Map(fantasyTeams.map(ft => [ft.userId, ft.displayName]));
   const coOwnerNamesByUserId = new Map(fantasyTeams.map(ft => [ft.userId, ft.coOwnerDisplayNames ?? []]));
 
   // Set of primary-owner userIds where the current user is owner or co-owner
@@ -125,14 +128,14 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone, own
                   <td className="px-4 py-3.5">
                     <div className="flex items-center gap-2.5">
                       {logoByUserId.get(s.userId) ? (
-                        <img src={logoByUserId.get(s.userId)!} alt={s.displayName} className="w-7 h-7 object-cover rounded-full flex-shrink-0 cursor-pointer" onClick={() => setLightboxUrl(logoByUserId.get(s.userId)!)} />
+                        <img src={logoByUserId.get(s.userId)!} alt={nameByUserId.get(s.userId) ?? s.displayName} className="w-7 h-7 object-cover rounded-full flex-shrink-0 cursor-pointer" onClick={() => setLightboxUrl(logoByUserId.get(s.userId)!)} />
                       ) : (
                         <div className="w-7 h-7 rounded-full bg-field border border-line flex items-center justify-center flex-shrink-0">
-                          <span className="text-xs font-semibold text-copy-3">{s.displayName.charAt(0).toUpperCase()}</span>
+                          <span className="text-xs font-semibold text-copy-3">{(nameByUserId.get(s.userId) ?? s.displayName).charAt(0).toUpperCase()}</span>
                         </div>
                       )}
                       <div>
-                        <span className="text-sm font-medium text-copy">{s.displayName}</span>
+                        <span className="text-sm font-medium text-copy">{nameByUserId.get(s.userId) ?? s.displayName}</span>
                         {isMe && <span className="ml-2 text-xs text-brand font-medium">you</span>}
                         {(() => {
                           const primary = ownerNameByUserId[s.userId];
@@ -197,7 +200,7 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone, own
                           return (
                             <div
                               key={t.teamId}
-                              onClick={() => openProfile({ teamId: t.teamId, leagueId, name: t.teamName, logoUrl: t.logoUrl, sportLeagueId: t.sportLeagueId, wins: t.wins, draws: t.draws, losses: t.losses, points: t.points, bonusPoints: teamBonusTotal, bonusBreakdown: teamBonuses.map(b => ({ label: b.label, points: b.points })), ownerDisplayName: s.displayName })}
+                              onClick={() => openProfile({ teamId: t.teamId, leagueId, name: t.teamName, logoUrl: t.logoUrl, sportLeagueId: t.sportLeagueId, wins: t.wins, draws: t.draws, losses: t.losses, points: t.points, bonusPoints: teamBonusTotal, bonusBreakdown: teamBonuses.map(b => ({ label: b.label, points: b.points })), ownerDisplayName: nameByUserId.get(s.userId) ?? s.displayName })}
                               className={`bg-card border rounded-lg overflow-hidden cursor-pointer transition-colors ${
                                 hasBonus ? 'border-positive/30 hover:border-positive/60' : 'border-line hover:border-line-2'
                               }`}
