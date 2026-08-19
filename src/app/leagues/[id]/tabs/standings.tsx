@@ -110,6 +110,9 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone, own
                         #{s.rank}
                       </span>
                       {(() => {
+                        // Don't show rank changes when nothing has been scored yet —
+                        // pre-season order is arbitrary and the deltas would be meaningless
+                        if (standings.every(s2 => !s2.totalPoints)) return null;
                         const prev = prevRanks[s.userId];
                         if (!prev || prev === s.rank) return null;
                         const diff = prev - s.rank;

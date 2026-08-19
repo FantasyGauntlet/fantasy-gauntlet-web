@@ -3,8 +3,10 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
+import { db } from '@/lib/firebase';
 import { STATE_META, Spinner } from './_components';
 import { VALID_TABS } from './_types';
 import type { League, Member, FantasyTeam, Tab, ScoreboardGame, Standing } from './_types';
@@ -98,6 +100,32 @@ export default function LeaguePage() {
     }).catch(() => router.replace('/dashboard'))
       .finally(() => setLoading(false));
   }, [id, router, user?.uid]);
+
+  // Live listener — keeps team names and logos fresh without a page reload
+  useEffect(() => {
+    if (!db) return;
+    const q = query(collection(db, 'fantasyTeams'), where('leagueId', '==', id));
+    const unsub = onSnapshot(q, snap => {
+      const teams: FantasyTeam[] = snap.docs.map(d => {
+        const data = d.data();
+        return {
+          id: d.id,
+          userId: data.userId,
+          displayName: data.displayName,
+          logoUrl: data.logoUrl ?? null,
+          isPlaceholder: data.isPlaceholder ?? false,
+          ownedTeamIds: data.ownedTeamIds ?? [],
+          remainingBudget: data.remainingBudget ?? 0,
+          totalPoints: data.totalPoints ?? 0,
+          faabRemaining: data.faabRemaining,
+          coOwnerIds: data.coOwnerIds,
+          coOwnerDisplayNames: data.coOwnerDisplayNames,
+        };
+      });
+      if (teams.length > 0) setFantasyTeams(teams);
+    }, () => {});
+    return () => unsub();
+  }, [id]);
 
   // Read initial tab from URL search param (set by NavBar dropdown links)
   useEffect(() => {
