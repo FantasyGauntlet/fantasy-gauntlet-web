@@ -8,7 +8,7 @@ import { useTeamProfile } from '@/context/TeamProfileContext';
 import { Spinner, Lightbox, formatLeagueName, formatRecord, SPORT_ORDER } from '../_components';
 import type { Standing, FantasyTeam } from '../_types';
 
-function StandingsTab({ leagueId, userId, fantasyTeams: fantasyTeamsProp, topZone, bottomZone, ownerNameByUserId, liveTeamIds, initialStandings, selectedSports, maxWildcard }: { leagueId: string; userId?: string; fantasyTeams: FantasyTeam[]; topZone?: number | null; bottomZone?: number | null; ownerNameByUserId: Record<string, string>; liveTeamIds?: Set<string>; initialStandings?: Standing[]; selectedSports?: string[]; maxWildcard?: number; }) {
+function StandingsTab({ leagueId, userId, fantasyTeams: fantasyTeamsProp, topZone, bottomZone, ownerNameByUserId, liveTeamIds, initialStandings, selectedSports, maxWildcard, draftOrder }: { leagueId: string; userId?: string; fantasyTeams: FantasyTeam[]; topZone?: number | null; bottomZone?: number | null; ownerNameByUserId: Record<string, string>; liveTeamIds?: Set<string>; initialStandings?: Standing[]; selectedSports?: string[]; maxWildcard?: number; draftOrder?: string[]; }) {
   const [standings, setStandings] = useState<Standing[]>(() => initialStandings ?? []);
   const [loading, setLoading] = useState(!initialStandings?.length);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -208,8 +208,16 @@ function StandingsTab({ leagueId, userId, fantasyTeams: fantasyTeamsProp, topZon
                         </div>
                       )}
                       <div>
-                        <span className="text-sm font-medium text-copy">{nameByUserId.get(s.userId) ?? s.displayName}</span>
-                        {isMe && <span className="ml-2 text-xs text-brand font-medium">you</span>}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-sm font-medium text-copy">{nameByUserId.get(s.userId) ?? s.displayName}</span>
+                          {isMe && <span className="text-xs text-brand font-medium">you</span>}
+                          {draftOrder && (() => {
+                            const pick = draftOrder.indexOf(s.userId) + 1;
+                            return pick > 0 ? (
+                              <span className="text-[10px] font-bold bg-field border border-line px-1.5 py-0.5 rounded-md text-copy-3 whitespace-nowrap">Pick #{pick}</span>
+                            ) : null;
+                          })()}
+                        </div>
                         {(() => {
                           const primary = ownerNameByUserId[s.userId];
                           const coOwners = coOwnerNamesByUserId.get(s.userId) ?? [];

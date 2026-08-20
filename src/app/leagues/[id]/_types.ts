@@ -31,6 +31,7 @@ export interface League {
   waiverType?: 'reserve-standings' | 'faab';
   faabStartingBudget?: number;
   leagueGroupId?: string;
+  draftOrder?: string[];
   createdAt?: string;
 }
 

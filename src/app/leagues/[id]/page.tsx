@@ -441,7 +441,7 @@ export default function LeaguePage() {
 
       {mountedTabs.has('standings') && (
         <div className={tab !== 'standings' ? 'hidden' : ''}>
-          <StandingsTab leagueId={id} userId={user?.uid} fantasyTeams={fantasyTeams} topZone={league.topZone} bottomZone={league.bottomZone} ownerNameByUserId={Object.fromEntries(members.filter((m: Member) => m.displayName).map((m: Member) => [m.userId, m.displayName!]))} liveTeamIds={liveTeamIds} selectedSports={league.selectedSports} maxWildcard={league.maxWildcard ?? 0} />
+          <StandingsTab leagueId={id} userId={user?.uid} fantasyTeams={fantasyTeams} topZone={league.topZone} bottomZone={league.bottomZone} ownerNameByUserId={Object.fromEntries(members.filter((m: Member) => m.displayName).map((m: Member) => [m.userId, m.displayName!]))} liveTeamIds={liveTeamIds} selectedSports={league.selectedSports} maxWildcard={league.maxWildcard ?? 0} draftOrder={league.draftOrder} />
         </div>
       )}
       {mountedTabs.has('roster') && (

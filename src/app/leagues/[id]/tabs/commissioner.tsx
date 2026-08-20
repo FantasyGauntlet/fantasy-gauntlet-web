@@ -72,6 +72,9 @@ function CommissionerTab({
   const [waiverResult, setWaiverResult] = useState<{ approved: number; denied: number } | null>(null);
   const [confirmModal, setConfirmModal] = useState<{ title: string; message: string; danger?: boolean; confirmLabel?: string; onConfirm: () => void } | null>(null);
 
+  const [draftOrderWorking, setDraftOrderWorking] = useState(false);
+  const [draftOrderMsg, setDraftOrderMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
   const inputCls = 'w-full bg-field border border-line-2 rounded-xl px-4 py-2.5 text-copy text-sm focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors';
 
   async function saveAuctionConfig(e: React.FormEvent) {
@@ -822,6 +825,74 @@ function CommissionerTab({
           </button>
         </form>
       </div>}
+
+      {/* Draft Order — only for snake formats */}
+      {league.state === 'draft' && (league.auctionConfig?.nominationMode === 'snake-random' || league.auctionConfig?.nominationMode === 'snake-defined') && (
+        <div className="bg-card border border-line rounded-2xl p-5">
+          <h2 className="text-sm font-semibold text-copy mb-1">Draft Order</h2>
+          <p className="text-xs text-copy-3 mb-4">
+            Randomly assigns pick positions for the snake draft. Once set, the order is locked and emailed to all members. Reset to re-roll if the roster changes.
+          </p>
+
+          {league.draftOrder && league.draftOrder.length > 0 ? (
+            <div className="space-y-3">
+              <p className="text-xs text-positive font-medium">Draft order is set — all members have been notified by email.</p>
+              <button
+                onClick={() => setConfirmModal({
+                  title: 'Reset Draft Order',
+                  message: 'This will clear the current pick order. You can re-randomize at any time. Members will not be notified automatically.',
+                  confirmLabel: 'Reset',
+                  danger: true,
+                  onConfirm: async () => {
+                    setConfirmModal(null);
+                    setDraftOrderWorking(true);
+                    setDraftOrderMsg(null);
+                    try {
+                      const updated = await api.delete<League>(`/leagues/${leagueId}/draft-order`);
+                      setLeague(updated);
+                      setDraftOrderMsg({ type: 'success', text: 'Draft order cleared.' });
+                    } catch (e) {
+                      setDraftOrderMsg({ type: 'error', text: e instanceof Error ? e.message : 'Failed to reset' });
+                    } finally {
+                      setDraftOrderWorking(false);
+                    }
+                  },
+                })}
+                disabled={draftOrderWorking}
+                className="px-4 py-2 rounded-xl border border-danger/40 text-danger text-sm font-medium hover:bg-danger-bg transition-colors disabled:opacity-50"
+              >
+                Reset Draft Order
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={async () => {
+                setDraftOrderWorking(true);
+                setDraftOrderMsg(null);
+                try {
+                  const updated = await api.post<League>(`/leagues/${leagueId}/draft-order/randomize`);
+                  setLeague(updated);
+                  setDraftOrderMsg({ type: 'success', text: 'Draft order set! All members have been emailed.' });
+                } catch (e) {
+                  setDraftOrderMsg({ type: 'error', text: e instanceof Error ? e.message : 'Failed to randomize' });
+                } finally {
+                  setDraftOrderWorking(false);
+                }
+              }}
+              disabled={draftOrderWorking}
+              className="bg-brand hover:bg-brand-2 disabled:opacity-50 text-white font-semibold px-5 py-2.5 rounded-xl transition-colors text-sm"
+            >
+              {draftOrderWorking ? 'Randomizing…' : 'Randomize Draft Order'}
+            </button>
+          )}
+
+          {draftOrderMsg && (
+            <p className={`mt-3 text-xs font-medium ${draftOrderMsg.type === 'success' ? 'text-positive' : 'text-danger'}`}>
+              {draftOrderMsg.text}
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Schedule */}
       {league.state === 'draft' && <div className="bg-card border border-line rounded-2xl p-5">
