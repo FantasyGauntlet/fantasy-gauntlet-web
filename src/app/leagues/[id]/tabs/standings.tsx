@@ -124,9 +124,8 @@ function StandingsTab({ leagueId, userId, fantasyTeams: fantasyTeamsProp, topZon
         if (!snap.exists()) return;
         const cacheData = (snap.data() as { standings: Standing[] }).standings;
         if (!restLoadedRef.current) {
-          // REST hasn't returned yet — use cache for fast initial display
-          setStandings(cacheData);
-          setLoading(false);
+          // REST is authoritative — don't replace with potentially stale cache data.
+          // The loading spinner already covers the brief wait.
         } else {
           // REST already returned authoritative data — only merge score updates for
           // userIds that exist in REST data; ignore entries with stale/mismatched userIds
