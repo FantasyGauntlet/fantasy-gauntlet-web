@@ -1050,6 +1050,13 @@ export default function AuctionPage() {
 
   const isSnake = nominationMode === 'snake-random' || nominationMode === 'snake-defined';
 
+  const maxTotalPicks = (() => {
+    if (!isSnake || snakeDraftOrder.length === 0) return 0;
+    const mw = league?.auctionConfig?.maxWildcard ?? 0;
+    const slotsPerPerson = orderedLeagueSports.reduce((sum, sport) => sum + getMaxForSport(sport), 0) + mw;
+    return slotsPerPerson * snakeDraftOrder.length;
+  })();
+
   const soldOrPassedIds = new Set(soldLots.map(l => l.teamId));
   // Filter to only teams in the draft pool when one is known (preset-curated by backend).
   // Falls back to all sport teams if the pool hasn't arrived yet (e.g. on first render).
@@ -1262,7 +1269,9 @@ export default function AuctionPage() {
         {/* ── Sticky draft ticker ─────────────────────────────────────── */}
         {isSnake && snakeDraftOrder.length > 0 && status !== 'closed' && (() => {
           const n = snakeDraftOrder.length;
-          const totalPicks = snakePickHistory.length + availableTeams.length;
+          const totalPicks = maxTotalPicks > 0
+            ? Math.min(snakePickHistory.length + availableTeams.length, maxTotalPicks)
+            : snakePickHistory.length + availableTeams.length;
           const ftMap = new Map(fantasyTeams.map(ft => [ft.userId, ft]));
           const upcoming: { uid: string; pickIndex: number }[] = [];
           const end = Math.min(totalPicks, snakePickIndex + n * 3 + 1);
@@ -2047,7 +2056,7 @@ export default function AuctionPage() {
             {isSnake && snakePickHistory.length > 0 && (
               <div className="bg-card border border-line rounded-2xl p-4">
                 <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide mb-3">
-                  Draft Picks — {snakePickHistory.length} made
+                  Draft Picks — {snakePickHistory.length}{maxTotalPicks > 0 ? `/${maxTotalPicks}` : ''} picked
                 </p>
                 <div className="space-y-2 max-h-64 overflow-y-auto -mr-1 pr-1">
                   {[...snakePickHistory].reverse().map((pick, i) => (
@@ -2431,6 +2440,34 @@ export default function AuctionPage() {
           {/* ── Right sidebar ─────────────────────────────────────── */}
           <div className="space-y-4 order-1 lg:order-2">
 
+            {/* Draft order list — snake draft only */}
+            {isSnake && snakeDraftOrder.length > 0 && (
+              <div className="bg-card border border-line rounded-2xl p-4">
+                <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide mb-3">Draft Order</p>
+                <div className="space-y-1">
+                  {snakeDraftOrder.map((uid, idx) => {
+                    const ft = fantasyTeams.find(f => f.userId === uid);
+                    const isMe = uid === myTeamUserId;
+                    const isCurrent = uid === snakePickerUserId && status === 'active';
+                    return (
+                      <div key={uid} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors ${isCurrent ? 'bg-brand/10' : isMe ? 'bg-brand/5' : ''}`}>
+                        <span className={`text-[10px] font-bold tabular-nums w-4 text-right flex-shrink-0 ${isCurrent ? 'text-brand' : 'text-copy-3'}`}>
+                          {idx + 1}
+                        </span>
+                        <TeamLogo logoUrl={ft?.logoUrl ?? null} name={ft?.displayName ?? uid} size={5} />
+                        <p className={`text-xs font-medium truncate flex-1 ${isCurrent ? 'text-brand' : isMe ? 'text-brand/80' : 'text-copy'}`}>
+                          {isMe ? 'You' : (ft?.displayName ?? participantName(uid))}
+                        </p>
+                        {isCurrent && (
+                          <span className="text-[10px] font-bold bg-brand text-white px-1.5 py-0.5 rounded-full flex-shrink-0">PICK</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* My budget — auction mode only */}
             {!isSnake && (
               <div className="bg-card border border-line rounded-2xl p-4">
@@ -2476,18 +2513,19 @@ export default function AuctionPage() {
                     {orderedLeagueSports.map(sport => {
                       const max = getMaxForSport(sport);
                       const wonInSport = ownedLots.filter(l => teamMapRef.current.get(l.teamId)?.sportLeagueId === sport);
-                      const isFull = wonInSport.length >= max;
                       // Slot 0 is the regular pick (gray). Slot 1+ are wildcard picks (warn/orange).
                       const grayEmpty = Math.max(0, 1 - wonInSport.length);
                       const orangeEmpty = max >= 2 && wildcardBudgetLeft > 0
                         ? Math.max(0, max - Math.max(wonInSport.length, 1))
                         : 0;
+                      const displayMax = wonInSport.length + grayEmpty + orangeEmpty;
+                      const isFull = wonInSport.length >= displayMax;
                       return (
                         <div key={sport}>
                           <div className="flex items-center justify-between mb-1.5">
                             <p className="text-xs font-semibold text-copy-2">{fln(sport)}</p>
                             <span className={`text-[10px] font-medium ${isFull ? 'text-positive' : 'text-copy-3'}`}>
-                              {wonInSport.length}/{max}
+                              {wonInSport.length}/{displayMax}
                             </span>
                           </div>
                           <div className="flex flex-wrap gap-1.5">
