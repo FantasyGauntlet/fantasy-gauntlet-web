@@ -37,6 +37,11 @@ interface AvgPriceEntry {
   timesAuctioned: number;
 }
 
+interface AvgPricesResponse {
+  years: string[];
+  prices: AvgPriceEntry[];
+}
+
 export default function BrowsePage() {
   const [leagues, setLeagues] = useState<PublicLeague[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,6 +49,8 @@ export default function BrowsePage() {
   const [sportFilter, setSportFilter] = useState('');
 
   const [avgPrices, setAvgPrices] = useState<AvgPriceEntry[]>([]);
+  const [availableYears, setAvailableYears] = useState<string[]>([]);
+  const [selectedYear, setSelectedYear] = useState('');
   const [pricesLoading, setPricesLoading] = useState(true);
   const [priceSearch, setPriceSearch] = useState('');
   const [priceSportFilter, setPriceSportFilter] = useState('');
@@ -53,12 +60,20 @@ export default function BrowsePage() {
       .then(setLeagues)
       .catch(() => {})
       .finally(() => setLoading(false));
+  }, []);
 
-    api.get<AvgPriceEntry[]>('/sports/average-prices')
-      .then(setAvgPrices)
+  useEffect(() => {
+    setPricesLoading(true);
+    const params = selectedYear ? `?year=${selectedYear}` : '';
+    api.get<AvgPricesResponse>(`/sports/average-prices${params}`)
+      .then(res => {
+        setAvgPrices(res.prices);
+        setAvailableYears(res.years);
+        if (!selectedYear && res.years.length > 0) setSelectedYear(res.years[0]);
+      })
       .catch(() => {})
       .finally(() => setPricesLoading(false));
-  }, []);
+  }, [selectedYear]);
 
   const allSports = [...new Set(leagues.flatMap(l => l.selectedSports))].sort();
 
@@ -167,7 +182,9 @@ export default function BrowsePage() {
       {/* ── Auction price reference ────────────────────────────────────── */}
       <section className="space-y-5">
         <div>
-          <h2 className="text-xl font-bold text-copy">Average Auction Prices</h2>
+          <h2 className="text-xl font-bold text-copy">
+            Average Auction Prices{selectedYear ? ` — ${selectedYear}` : ''}
+          </h2>
           <p className="text-copy-3 text-sm mt-1">
             Historical average prices teams have sold for across all Fantasy Gauntlet auctions. Use this as a reference when setting your budget.
           </p>
@@ -191,6 +208,17 @@ export default function BrowsePage() {
               <option key={s} value={s}>{SPORT_LABELS[s] ?? s}</option>
             ))}
           </select>
+          {availableYears.length > 0 && (
+            <select
+              value={selectedYear}
+              onChange={e => { setSelectedYear(e.target.value); setPriceSearch(''); setPriceSportFilter(''); }}
+              className="bg-card border border-line-2 rounded-xl px-4 py-2.5 text-copy text-sm focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors"
+            >
+              {availableYears.map(y => (
+                <option key={y} value={y}>{y} Season</option>
+              ))}
+            </select>
+          )}
         </div>
 
         {pricesLoading && (
