@@ -47,6 +47,8 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone, own
     } catch { return {}; }
   });
   const storedRef = useRef(false);
+  // Track whether REST has returned authoritative data so onSnapshot never clobbers it
+  const restLoadedRef = useRef(false);
 
   useEffect(() => {
     if (standings.length === 0 || storedRef.current) return;
@@ -83,21 +85,42 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone, own
 
   useEffect(() => {
     if (!db) return;
+    restLoadedRef.current = false;
     setLoading(true);
 
-    // Always call the REST endpoint on mount — it validates the Firestore cache against
-    // the current member count and rewrites it if stale. onSnapshot picks up the update.
+    // REST endpoint is the authoritative source — reads fresh Firestore data (with short
+    // server-side TTL) and always returns current userId values for every member.
     api.get<Standing[]>(`/leagues/${leagueId}/standings`)
-      .then(data => { setStandings(data); setLoading(false); })
+      .then(data => {
+        restLoadedRef.current = true;
+        setStandings(data);
+        setLoading(false);
+      })
       .catch(() => setLoading(false));
 
-    // Real-time listener for live score pushes during active seasons
+    // Real-time listener for live score pushes during active seasons.
+    // Once REST has loaded, we use it as the authoritative userId/name structure and only
+    // merge scoring data from the cache — this prevents a stale standingsCache document
+    // (written before placeholder teams were claimed by real users) from clobbering the
+    // correct userId mapping returned by REST.
     const unsub = onSnapshot(
       doc(db, 'standingsCache', leagueId),
       snap => {
-        if (snap.exists()) {
-          setStandings((snap.data() as { standings: Standing[] }).standings);
+        if (!snap.exists()) return;
+        const cacheData = (snap.data() as { standings: Standing[] }).standings;
+        if (!restLoadedRef.current) {
+          // REST hasn't returned yet — use cache for fast initial display
+          setStandings(cacheData);
           setLoading(false);
+        } else {
+          // REST already returned authoritative data — only merge score updates for
+          // userIds that exist in REST data; ignore entries with stale/mismatched userIds
+          const cacheMap = new Map(cacheData.map(e => [e.userId, e]));
+          setStandings(prev => prev.map(entry => {
+            const cached = cacheMap.get(entry.userId);
+            if (!cached) return entry;
+            return { ...cached, userId: entry.userId, displayName: entry.displayName };
+          }));
         }
       },
       () => {},
