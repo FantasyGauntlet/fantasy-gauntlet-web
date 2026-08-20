@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
+import { loadPrevRanks } from '@/lib/rankSnapshot';
 
 interface MyLeague {
   id: string;
@@ -126,6 +127,19 @@ export function BottomNav() {
       return aStarred - bStarred;
     });
 
+  // Compute rank trend for each visible league using Tuesday-anchored snapshots.
+  // prevRanks is keyed by userId; a positive diff means moved up (rank number decreased).
+  const trendByLeagueId = new Map<string, number>();
+  if (user && visibleLeagues.length > 0) {
+    for (const league of visibleLeagues) {
+      if (league.myRank == null) continue;
+      const prevRanks = loadPrevRanks(league.id);
+      const prev = prevRanks[user.uid];
+      if (prev == null || prev === league.myRank) continue;
+      trendByLeagueId.set(league.id, prev - league.myRank); // positive = moved up
+    }
+  }
+
   return (
     <>
       {/* Bottom sheet overlay */}
@@ -186,8 +200,15 @@ export function BottomNav() {
                     <div className="flex items-center gap-2 mt-0.5">
                       <p className="text-xs text-copy-3 truncate">{league.name}</p>
                       {league.myRank != null && (
-                        <span className="text-xs text-copy-3 flex-shrink-0">
+                        <span className="text-xs text-copy-3 flex-shrink-0 flex items-center gap-0.5">
                           · #{league.myRank}{league.totalMembers > 0 ? `/${league.totalMembers}` : ''}
+                          {(() => {
+                            const diff = trendByLeagueId.get(league.id);
+                            if (!diff) return null;
+                            return diff > 0
+                              ? <span className="text-[10px] font-bold text-positive leading-none ml-0.5">↑{diff}</span>
+                              : <span className="text-[10px] font-bold text-danger leading-none ml-0.5">↓{Math.abs(diff)}</span>;
+                          })()}
                         </span>
                       )}
                     </div>

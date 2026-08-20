@@ -7,6 +7,7 @@ import { db } from '@/lib/firebase';
 import { useTeamProfile } from '@/context/TeamProfileContext';
 import { Spinner, Lightbox, formatLeagueName, formatRecord, SPORT_ORDER } from '../_components';
 import type { Standing, FantasyTeam } from '../_types';
+import { loadPrevRanks, saveRankSnapshot } from '@/lib/rankSnapshot';
 
 function StandingsTab({ leagueId, userId, fantasyTeams: fantasyTeamsProp, topZone, bottomZone, ownerNameByUserId, liveTeamIds, initialStandings, selectedSports, maxWildcard, draftOrder }: { leagueId: string; userId?: string; fantasyTeams: FantasyTeam[]; topZone?: number | null; bottomZone?: number | null; ownerNameByUserId: Record<string, string>; liveTeamIds?: Set<string>; initialStandings?: Standing[]; selectedSports?: string[]; maxWildcard?: number; draftOrder?: string[]; }) {
   const [standings, setStandings] = useState<Standing[]>(() => initialStandings ?? []);
@@ -19,37 +20,7 @@ function StandingsTab({ leagueId, userId, fantasyTeams: fantasyTeamsProp, topZon
   const [fantasyTeams, setFantasyTeams] = useState<FantasyTeam[]>(fantasyTeamsProp);
   const { openProfile } = useTeamProfile();
 
-  const storageKey = `fg_standings_${leagueId}`;
-  // Week key: integer that increments every 7 days — used to detect week rollovers
-  const currentWeek = Math.floor(Date.now() / (7 * 24 * 60 * 60 * 1000)).toString();
-
-  interface RankSnapshot {
-    prevRanks: Record<string, number>; // last week's final ranks — used for arrows
-    curRanks: Record<string, number>;  // this week's latest ranks — becomes prevRanks next week
-    weekKey: string;
-  }
-
-  const [prevRanks] = useState<Record<string, number>>(() => {
-    try {
-      const raw = JSON.parse(localStorage.getItem(storageKey) ?? 'null');
-      if (!raw) return {};
-      // Migrate old format (flat { userId: rank }) to new RankSnapshot shape
-      if (typeof raw.weekKey !== 'string') {
-        const migrated: RankSnapshot = { prevRanks: {}, curRanks: raw, weekKey: currentWeek };
-        try { localStorage.setItem(storageKey, JSON.stringify(migrated)); } catch {}
-        return {}; // no prior-week data yet after migration
-      }
-      const stored = raw as RankSnapshot;
-      const prevRanks = stored.curRanks ?? {};
-      if (stored.weekKey !== currentWeek) {
-        // New week — roll current → previous immediately so next save preserves it
-        const rolled: RankSnapshot = { prevRanks, curRanks: prevRanks, weekKey: currentWeek };
-        try { localStorage.setItem(storageKey, JSON.stringify(rolled)); } catch {}
-        return prevRanks; // arrows show vs last week
-      }
-      return stored.prevRanks ?? {}; // arrows show vs start of this week
-    } catch { return {}; }
-  });
+  const [prevRanks] = useState<Record<string, number>>(() => loadPrevRanks(leagueId));
   const storedRef = useRef(false);
   // Track whether REST has returned authoritative data so onSnapshot never clobbers it
   const restLoadedRef = useRef(false);
@@ -58,21 +29,12 @@ function StandingsTab({ leagueId, userId, fantasyTeams: fantasyTeamsProp, topZon
     if (standings.length === 0 || storedRef.current) return;
     storedRef.current = true;
     const t = setTimeout(() => {
-      try {
-        const existing = JSON.parse(localStorage.getItem(storageKey) ?? 'null') as RankSnapshot | null;
-        const curRanks: Record<string, number> = {};
-        standings.forEach(s => { curRanks[s.userId] = s.rank; });
-        const snapshot: RankSnapshot = {
-          // Keep prevRanks frozen within a week; on a new week the roll already happened in useState
-          prevRanks: existing?.weekKey === currentWeek ? (existing.prevRanks ?? {}) : (existing?.curRanks ?? {}),
-          curRanks,
-          weekKey: currentWeek,
-        };
-        localStorage.setItem(storageKey, JSON.stringify(snapshot));
-      } catch {}
+      const curRanks: Record<string, number> = {};
+      standings.forEach(s => { curRanks[s.userId] = s.rank; });
+      saveRankSnapshot(leagueId, curRanks);
     }, 5000);
     return () => clearTimeout(t);
-  }, [standings.length, storageKey]);
+  }, [standings.length, leagueId]);
 
   // Sync local teams state whenever the parent prop updates (e.g., after an in-session rename)
   useEffect(() => {
