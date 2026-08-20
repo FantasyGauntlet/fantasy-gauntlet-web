@@ -16,9 +16,27 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone, own
   const { openProfile } = useTeamProfile();
 
   const storageKey = `fg_standings_${leagueId}`;
+  // Week key: integer that increments every 7 days — used to detect week rollovers
+  const currentWeek = Math.floor(Date.now() / (7 * 24 * 60 * 60 * 1000)).toString();
+
+  interface RankSnapshot {
+    prevRanks: Record<string, number>; // last week's final ranks — used for arrows
+    curRanks: Record<string, number>;  // this week's latest ranks — becomes prevRanks next week
+    weekKey: string;
+  }
+
   const [prevRanks] = useState<Record<string, number>>(() => {
-    try { return JSON.parse(localStorage.getItem(storageKey) ?? '{}'); }
-    catch { return {}; }
+    try {
+      const stored = JSON.parse(localStorage.getItem(storageKey) ?? 'null') as RankSnapshot | null;
+      if (!stored) return {};
+      if (stored.weekKey !== currentWeek) {
+        // New week — roll current → previous immediately so next save preserves it
+        const rolled: RankSnapshot = { prevRanks: stored.curRanks, curRanks: stored.curRanks, weekKey: currentWeek };
+        try { localStorage.setItem(storageKey, JSON.stringify(rolled)); } catch {}
+        return stored.curRanks; // arrows show vs last week
+      }
+      return stored.prevRanks; // arrows show vs start of this week
+    } catch { return {}; }
   });
   const storedRef = useRef(false);
 
@@ -26,10 +44,19 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone, own
     if (standings.length === 0 || storedRef.current) return;
     storedRef.current = true;
     const t = setTimeout(() => {
-      const snap: Record<string, number> = {};
-      standings.forEach(s => { snap[s.userId] = s.rank; });
-      try { localStorage.setItem(storageKey, JSON.stringify(snap)); } catch {}
-    }, 8000);
+      try {
+        const existing = JSON.parse(localStorage.getItem(storageKey) ?? 'null') as RankSnapshot | null;
+        const curRanks: Record<string, number> = {};
+        standings.forEach(s => { curRanks[s.userId] = s.rank; });
+        const snapshot: RankSnapshot = {
+          // Keep prevRanks frozen within a week; on a new week the roll already happened in useState
+          prevRanks: existing?.weekKey === currentWeek ? (existing.prevRanks ?? {}) : (existing?.curRanks ?? {}),
+          curRanks,
+          weekKey: currentWeek,
+        };
+        localStorage.setItem(storageKey, JSON.stringify(snapshot));
+      } catch {}
+    }, 5000);
     return () => clearTimeout(t);
   }, [standings.length, storageKey]);
 
