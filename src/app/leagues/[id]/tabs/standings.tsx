@@ -27,15 +27,23 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone, own
 
   const [prevRanks] = useState<Record<string, number>>(() => {
     try {
-      const stored = JSON.parse(localStorage.getItem(storageKey) ?? 'null') as RankSnapshot | null;
-      if (!stored) return {};
+      const raw = JSON.parse(localStorage.getItem(storageKey) ?? 'null');
+      if (!raw) return {};
+      // Migrate old format (flat { userId: rank }) to new RankSnapshot shape
+      if (typeof raw.weekKey !== 'string') {
+        const migrated: RankSnapshot = { prevRanks: {}, curRanks: raw, weekKey: currentWeek };
+        try { localStorage.setItem(storageKey, JSON.stringify(migrated)); } catch {}
+        return {}; // no prior-week data yet after migration
+      }
+      const stored = raw as RankSnapshot;
+      const prevRanks = stored.curRanks ?? {};
       if (stored.weekKey !== currentWeek) {
         // New week — roll current → previous immediately so next save preserves it
-        const rolled: RankSnapshot = { prevRanks: stored.curRanks, curRanks: stored.curRanks, weekKey: currentWeek };
+        const rolled: RankSnapshot = { prevRanks, curRanks: prevRanks, weekKey: currentWeek };
         try { localStorage.setItem(storageKey, JSON.stringify(rolled)); } catch {}
-        return stored.curRanks; // arrows show vs last week
+        return prevRanks; // arrows show vs last week
       }
-      return stored.prevRanks; // arrows show vs start of this week
+      return stored.prevRanks ?? {}; // arrows show vs start of this week
     } catch { return {}; }
   });
   const storedRef = useRef(false);
