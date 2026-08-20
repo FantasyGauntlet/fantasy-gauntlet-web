@@ -210,10 +210,11 @@ export default function LeaguePage() {
   const isCommissioner = league.commissionerId === user?.uid;
   const stateMeta = STATE_META[league.state] ?? STATE_META.completed;
 
+  const isSnakeLeague = league.auctionConfig?.nominationMode === 'snake-random' || league.auctionConfig?.nominationMode === 'snake-defined';
   const teamsSubTabs: { key: Tab; label: string }[] = [
     { key: 'waivers',             label: 'Waivers' },
     { key: 'transaction-counter', label: 'Transaction Counter' },
-    { key: 'auction-summary',     label: 'Auction Summary' },
+    { key: 'auction-summary',     label: isSnakeLeague ? 'ADP' : 'Auction Summary' },
   ];
   const isTeamsTab = teamsSubTabs.some(t => t.key === tab);
   const activeTeamsLabel = teamsSubTabs.find(t => t.key === tab)?.label ?? 'Teams';
@@ -493,7 +494,7 @@ export default function LeaguePage() {
       )}
       {mountedTabs.has('auction-summary') && (
         <div className={tab !== 'auction-summary' ? 'hidden' : ''}>
-          <AuctionSummaryTab leagueId={id} fantasyTeams={fantasyTeams} />
+          <AuctionSummaryTab leagueId={id} fantasyTeams={fantasyTeams} isSnake={isSnakeLeague} />
         </div>
       )}
       {mountedTabs.has('games') && (

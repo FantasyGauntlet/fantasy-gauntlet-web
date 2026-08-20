@@ -868,10 +868,11 @@ export default function AuctionPage() {
         if (data.nominationOrder) setNominationOrderState(data.nominationOrder);
       });
 
-      socket.on('auction_closed', () => {
+      socket.on('auction_closed', (data: any) => {
         setStatus('closed');
         setCurrentLot(null);
-        toast('info', 'The auction has ended.');
+        const isSnakeClosed = data?.nominationMode === 'snake-random' || data?.nominationMode === 'snake-defined';
+        toast('info', isSnakeClosed ? 'The draft has ended.' : 'The auction has ended.');
       });
 
       socket.on('auction_reset', () => {
@@ -1386,8 +1387,12 @@ export default function AuctionPage() {
             {/* Closed banner */}
             {status === 'closed' && (
               <div className="bg-card border border-line rounded-2xl p-6 text-center">
-                <p className="text-2xl font-bold text-copy mb-1">Auction Complete</p>
-                <p className="text-copy-3 text-sm">All {soldLots.length} teams have been processed.</p>
+                <p className="text-2xl font-bold text-copy mb-1">{isSnake ? 'Draft Complete' : 'Auction Complete'}</p>
+                <p className="text-copy-3 text-sm">
+                  {isSnake
+                    ? `All ${soldLots.length} picks have been made.`
+                    : `All ${soldLots.length} teams have been processed.`}
+                </p>
                 <Link href={`/leagues/${id}`} className="inline-block mt-4 bg-brand hover:bg-brand-2 text-white font-medium px-6 py-2 rounded-xl transition-colors text-sm">
                   View League
                 </Link>

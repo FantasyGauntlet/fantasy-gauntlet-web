@@ -19,13 +19,29 @@ interface AuctionResultDoc {
   lots: AuctionLot[];
 }
 
+interface DraftPick {
+  pickIndex: number;
+  pickerUserId: string;
+  teamId: string;
+}
+
+interface DraftResultDoc {
+  id: string;
+  leagueId: string;
+  completedAt: string;
+  nominationMode: string;
+  picks: DraftPick[];
+}
+
 function AuctionSummaryTab({
-  leagueId, fantasyTeams,
+  leagueId, fantasyTeams, isSnake,
 }: {
   leagueId: string;
   fantasyTeams: FantasyTeam[];
+  isSnake?: boolean;
 }) {
   const [result, setResult] = useState<AuctionResultDoc | null>(null);
+  const [draftResult, setDraftResult] = useState<DraftResultDoc | null>(null);
   const [sportTeams, setSportTeams] = useState<Map<string, SportTeam>>(new Map());
   const [loading, setLoading] = useState(true);
 
@@ -36,21 +52,77 @@ function AuctionSummaryTab({
   const [sortBy, setSortBy] = useState<'bid-desc' | 'bid-asc' | 'team' | 'owner'>('bid-desc');
 
   useEffect(() => {
+    const resultsCall = isSnake
+      ? api.get<DraftResultDoc | null>(`/leagues/${leagueId}/auction/draft-results`).catch(() => null)
+      : api.get<AuctionResultDoc | null>(`/leagues/${leagueId}/auction/results`).catch(() => null);
+
     Promise.all([
-      api.get<AuctionResultDoc | null>(`/leagues/${leagueId}/auction/results`).catch(() => null),
+      resultsCall,
       api.get<SportGroup[]>(`/leagues/${leagueId}/sport-teams`).catch(() => [] as SportGroup[]),
     ]).then(([res, groups]) => {
-      setResult(res);
+      if (isSnake) setDraftResult(res as DraftResultDoc | null);
+      else setResult(res as AuctionResultDoc | null);
       const map = new Map<string, SportTeam>();
       for (const g of groups) for (const t of g.teams) map.set(t.id, t);
       setSportTeams(map);
     }).finally(() => setLoading(false));
-  }, [leagueId]);
+  }, [leagueId, isSnake]);
 
   const ownerByUserId = new Map(fantasyTeams.map(ft => [ft.userId, ft.displayName]));
 
   if (loading) return <div className="flex justify-center py-12"><Spinner /></div>;
 
+  // ── Snake draft ADP view ───────────────────────────────────────────────────
+  if (isSnake) {
+    if (!draftResult) {
+      return (
+        <div className="text-center py-16 border border-dashed border-line rounded-2xl">
+          <p className="text-copy-3 text-sm">No draft results yet — the ADP summary appears once the draft is complete.</p>
+        </div>
+      );
+    }
+    return (
+      <div className="space-y-4">
+        <div className="bg-card border border-line rounded-2xl overflow-hidden">
+          <div className="px-4 py-3 border-b border-line flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-copy">ADP — Average Draft Position</p>
+              <p className="text-xs text-copy-3 mt-0.5">{draftResult.picks.length} picks · {new Date(draftResult.completedAt).toLocaleDateString(undefined, { dateStyle: 'medium' })}</p>
+            </div>
+          </div>
+          <div className="divide-y divide-line">
+            {draftResult.picks.map((pick) => {
+              const team = sportTeams.get(pick.teamId);
+              const manager = ownerByUserId.get(pick.pickerUserId) ?? pick.pickerUserId;
+              const ft = fantasyTeams.find(f => f.userId === pick.pickerUserId);
+              return (
+                <div key={pick.pickIndex} className="flex items-center gap-3 px-4 py-3 hover:bg-field/40 transition-colors">
+                  <span className="text-sm font-bold tabular-nums text-copy-3 w-8 text-right flex-shrink-0">
+                    #{pick.pickIndex + 1}
+                  </span>
+                  {team?.logoUrl ? (
+                    <img src={team.logoUrl} alt={team.name} className="w-8 h-8 object-contain flex-shrink-0" />
+                  ) : (
+                    <div className="w-8 h-8 rounded-lg bg-field border border-line flex-shrink-0" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-copy truncate">{team?.name ?? pick.teamId}</p>
+                    <p className="text-xs text-copy-3">{formatLeagueName(team?.sportLeagueId ?? '')}</p>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <p className="text-xs font-semibold text-copy">{ft?.displayName ?? manager}</p>
+                    <p className="text-xs text-copy-3">Pick #{pick.pickIndex + 1}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Auction summary view ───────────────────────────────────────────────────
   if (!result) {
     return (
       <div className="text-center py-16 border border-dashed border-line rounded-2xl">
