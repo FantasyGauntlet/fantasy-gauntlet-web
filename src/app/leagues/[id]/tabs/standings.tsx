@@ -8,11 +8,15 @@ import { useTeamProfile } from '@/context/TeamProfileContext';
 import { Spinner, Lightbox, formatLeagueName, formatRecord, SPORT_ORDER } from '../_components';
 import type { Standing, FantasyTeam } from '../_types';
 
-function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone, ownerNameByUserId, liveTeamIds, initialStandings, selectedSports, maxWildcard }: { leagueId: string; userId?: string; fantasyTeams: FantasyTeam[]; topZone?: number | null; bottomZone?: number | null; ownerNameByUserId: Record<string, string>; liveTeamIds?: Set<string>; initialStandings?: Standing[]; selectedSports?: string[]; maxWildcard?: number; }) {
+function StandingsTab({ leagueId, userId, fantasyTeams: fantasyTeamsProp, topZone, bottomZone, ownerNameByUserId, liveTeamIds, initialStandings, selectedSports, maxWildcard }: { leagueId: string; userId?: string; fantasyTeams: FantasyTeam[]; topZone?: number | null; bottomZone?: number | null; ownerNameByUserId: Record<string, string>; liveTeamIds?: Set<string>; initialStandings?: Standing[]; selectedSports?: string[]; maxWildcard?: number; }) {
   const [standings, setStandings] = useState<Standing[]>(() => initialStandings ?? []);
   const [loading, setLoading] = useState(!initialStandings?.length);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  // Maintain a local copy of teams fetched fresh alongside standings — avoids
+  // stale-prop issues when other users rename while the page is open, and removes
+  // the race condition between the parent's Promise.all and standings loading
+  const [fantasyTeams, setFantasyTeams] = useState<FantasyTeam[]>(fantasyTeamsProp);
   const { openProfile } = useTeamProfile();
 
   const storageKey = `fg_standings_${leagueId}`;
@@ -70,6 +74,11 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone, own
     return () => clearTimeout(t);
   }, [standings.length, storageKey]);
 
+  // Sync local teams state whenever the parent prop updates (e.g., after an in-session rename)
+  useEffect(() => {
+    if (fantasyTeamsProp.length > 0) setFantasyTeams(fantasyTeamsProp);
+  }, [fantasyTeamsProp]);
+
   const logoByUserId = new Map(fantasyTeams.map(ft => [ft.userId, ft.logoUrl ?? null]));
   // Use fantasyTeams as the source of truth for names — standingsCache is only updated on scoring
   // runs and goes stale between them when managers rename their team
@@ -87,6 +96,12 @@ function StandingsTab({ leagueId, userId, fantasyTeams, topZone, bottomZone, own
     if (!db) return;
     restLoadedRef.current = false;
     setLoading(true);
+
+    // Fetch teams and standings in parallel — this makes StandingsTab self-sufficient
+    // with fresh team names regardless of parent prop timing or cross-session renames
+    api.get<FantasyTeam[]>(`/leagues/${leagueId}/teams`)
+      .then(teams => { if (teams.length > 0) setFantasyTeams(teams); })
+      .catch(() => {});
 
     // REST endpoint is the authoritative source — reads fresh Firestore data (with short
     // server-side TTL) and always returns current userId values for every member.
