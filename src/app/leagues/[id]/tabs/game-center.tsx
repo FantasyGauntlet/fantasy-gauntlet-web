@@ -570,10 +570,10 @@ function GameCenterTab({
               scheduleByDate.get(dateKey)!.push(g);
             }
 
-            // Next upcoming date bucket for this sport (all teams, not just owned)
-            const nextSportDate = upcomingSportGames[0]?.scheduledAt.slice(0, 10);
+            // Next upcoming date bucket for this sport — owned teams only
+            const nextSportDate = myUpcomingSportGames[0]?.scheduledAt.slice(0, 10);
             const nextUpcomingGames = nextSportDate
-              ? upcomingSportGames.filter(g => g.scheduledAt.slice(0, 10) === nextSportDate)
+              ? myUpcomingSportGames.filter(g => g.scheduledAt.slice(0, 10) === nextSportDate)
               : [];
 
             const totalCount = todaySportGames.length + upcomingSportGames.length;
