@@ -483,9 +483,7 @@ function GameCenterTab({
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2.5">
             <h2 className="text-xs font-semibold text-copy-3 uppercase tracking-widest">
-              {myGames.length > 0
-                ? (viewingFtId === '__me__' ? 'Your Teams Today' : `${viewingLabel} Today`)
-                : (viewingFtId === '__me__' ? 'Your Teams · Next Up' : `${viewingLabel} · Next Up`)}
+              {viewingFtId === '__me__' ? 'Your Teams' : viewingLabel}
             </h2>
             {myLiveCount > 0 && (
               <span className="flex items-center gap-1 text-[11px] font-semibold text-positive">
