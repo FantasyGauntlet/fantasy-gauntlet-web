@@ -9,8 +9,16 @@ import type { FantasyTeam, ScoreboardGame } from '../_types';
 function formatMatchTime(scheduledAt: string): string {
   if (!scheduledAt) return 'TBD';
   const d = new Date(scheduledAt);
-  if (isNaN(d.getTime())) return 'TBD';
-  return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  const now = new Date();
+  if (isNaN(d.getTime())) {
+    // Fallback: show just the date if the time is unparseable
+    const dateOnly = new Date(`${scheduledAt.slice(0, 10)}T12:00:00Z`);
+    if (isNaN(dateOnly.getTime())) return 'TBD';
+    return dateOnly.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  }
+  const time = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  if (d.toDateString() === now.toDateString()) return time;
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ` · ${time}`;
 }
 
 function formatGameTime(scheduledAt: string): string {
@@ -97,7 +105,7 @@ function MatchRow({ game, isMyHome, isMyAway }: {
       </div>
 
       {/* Center: score or time — fixed width so every row aligns */}
-      <div className="flex-shrink-0 flex items-center justify-center gap-0.5 w-[5.5rem]">
+      <div className="flex-shrink-0 flex items-center justify-center gap-0.5 w-[7rem]">
         {showScore ? (
           <>
             <span className="text-xs font-bold tabular-nums w-5 text-right text-copy">
