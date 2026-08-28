@@ -437,10 +437,28 @@ export default function AuctionPage() {
         if (session.nominationMode) setNominationMode(session.nominationMode);
         if (session.draftPool) setDraftPool(new Set(session.draftPool as string[]));
 
-        // Remaining queue: only revealed for non-hidden modes
-        const remaining: string[] = session.nominationMode !== 'random-hidden'
-          ? (session.queue?.slice((session.currentIndex ?? -1) + 1) ?? [])
-          : [];
+        // Remaining queue: only revealed for non-hidden modes.
+        //
+        // currentIndex means two different things depending on mode. In an
+        // auction it is the position within the nomination queue, so everything
+        // past it is what has yet to come up — slicing is right. In a snake
+        // draft it is the PICK NUMBER (0, 1, 2, …) and session.queue is the whole
+        // team pool, so slicing by it chopped the first N teams off the pool on
+        // every reconnect. With the pool grouped by sport that silently removed
+        // entire sports from the front of the list, and it got worse as the draft
+        // went on. Mobile clients hit this constantly because backgrounding a tab
+        // forces a reconnect.
+        //
+        // For snake, hand over the full pool; availableTeams already drops
+        // anything sold or passed.
+        const isSnakeSession =
+          session.nominationMode === 'snake-random' || session.nominationMode === 'snake-defined';
+        const remaining: string[] =
+          session.nominationMode === 'random-hidden'
+            ? []
+            : isSnakeSession
+              ? (session.queue ?? [])
+              : (session.queue?.slice((session.currentIndex ?? -1) + 1) ?? []);
         setUpcomingQueue(remaining);
         if (session.nominationMode === 'random-hidden' && session.queueSize) {
           setHiddenQueueSize(session.queueSize);
@@ -571,8 +589,9 @@ export default function AuctionPage() {
       socket.on('snake_pick_turn', (data: any) => {
         setSnakePickerUserId(data.pickerUserId);
         setSnakePickIndex(data.pickIndex ?? 0);
-        setSnakePickSearch('');
-        setSnakePickSport(null);
+        // Clear only the selection. The sport filter and search are the user's
+        // own browsing state — wiping them every turn forced people to re-apply
+        // filters after every single pick.
         setSnakePickSelected(null);
         setSnakePickPending(false);
         setStatus('active');
@@ -596,8 +615,7 @@ export default function AuctionPage() {
         setSnakePickerUserId(data.nextPickerUserId ?? null);
         setSnakePickIndex(data.nextPickIndex ?? 0);
         setSnakePickPending(false);
-        setSnakePickSearch('');
-        setSnakePickSport(null);
+        // Selection only — the sport filter and search stay as the user left them
         setSnakePickSelected(null);
         // Update the winner's roster locally (mirrors team_sold path)
         if (data.pickerUserId) {
@@ -628,7 +646,6 @@ export default function AuctionPage() {
 
       socket.on('pick_skipped', (data: any) => {
         setSnakePickPending(false);
-        setSnakePickSearch('');
         toast('warn', `Pick skipped${data.reason === 'timeout' ? ' (time expired)' : ''}`);
       });
 
@@ -1051,11 +1068,19 @@ export default function AuctionPage() {
 
   const isSnake = nominationMode === 'snake-random' || nominationMode === 'snake-defined';
 
+  // A roster is one required team per sport, plus the shared wildcard allowance —
+  // the same formula the backend enforces (selectedSports.length + maxWildcard)
+  // and the same one the Roster panel renders (one grey slot per sport, then
+  // wildcard slots). Summing getMaxForSport here instead counted every sport's
+  // CAP (2, or 1 for premier league), which for an 8-sport league produced
+  // 8*2+2 = 18 slots per person rather than 8+2 = 10, so the draft order bar
+  // ran roughly twice as long as the draft actually does.
+  const rosterSlotsPerPerson =
+    orderedLeagueSports.length + (league?.auctionConfig?.maxWildcard ?? 0);
+
   const maxTotalPicks = (() => {
     if (!isSnake || snakeDraftOrder.length === 0) return 0;
-    const mw = league?.auctionConfig?.maxWildcard ?? 0;
-    const slotsPerPerson = orderedLeagueSports.reduce((sum, sport) => sum + getMaxForSport(sport), 0) + mw;
-    return slotsPerPerson * snakeDraftOrder.length;
+    return rosterSlotsPerPerson * snakeDraftOrder.length;
   })();
 
   const soldOrPassedIds = new Set(soldLots.map(l => l.teamId));
@@ -1332,7 +1357,9 @@ export default function AuctionPage() {
             upcoming.push({ uid, pickNum: i + 1 });
           }
           const maxWildcard = league?.auctionConfig?.maxWildcard ?? 0;
-          const totalCapacity = orderedLeagueSports.reduce((sum, sport) => sum + getMaxForSport(sport), 0) + maxWildcard;
+          // Same correction as maxTotalPicks: capacity is one slot per sport plus
+          // wildcards, not the sum of every sport's cap.
+          const totalCapacity = rosterSlotsPerPerson;
           const isDone = (uid: string) => {
             const ft = ftMap.get(uid);
             return ft ? ft.ownedTeamIds.length >= totalCapacity : false;
@@ -1341,7 +1368,7 @@ export default function AuctionPage() {
             <div className="sticky top-0 z-30 bg-card/95 backdrop-blur-sm border border-line rounded-2xl px-4 py-3 mb-4">
               <div className="flex items-center gap-4">
                 <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide flex-shrink-0">Up Next</p>
-                <div className="flex gap-3 overflow-x-auto scrollbar-none flex-1 -mr-1 pr-1">
+                <div className="flex gap-1 overflow-x-auto scrollbar-none flex-1 -mr-1 pr-1">
                   {upcoming.map(({ uid, pickNum }, relIdx) => {
                     const isCurrent = relIdx === 0 && nominatorUserId !== null;
                     const isNext = relIdx === (nominatorUserId !== null ? 1 : 0);
@@ -1350,25 +1377,38 @@ export default function AuctionPage() {
                     const label = isMe ? 'You' : (ft?.displayName?.split(' ')[0] ?? uid.slice(0, 6));
                     const done = isDone(uid);
                     return (
-                      <div key={pickNum} className="flex flex-col items-center gap-0.5 flex-shrink-0 w-12">
-                        <span className={`text-[10px] tabular-nums font-semibold ${done ? 'text-copy-3/40' : isCurrent ? 'text-brand' : isNext ? 'text-warn' : 'text-copy-3'}`}>
-                          #{pickNum}
-                        </span>
-                        <div className={`relative rounded-lg p-0.5 ${done ? 'opacity-40' : isCurrent ? 'ring-2 ring-brand ring-offset-1 ring-offset-card' : isNext ? 'ring-1 ring-warn/60 ring-offset-1 ring-offset-card' : ''}`}>
-                          <TeamLogo logoUrl={ft?.logoUrl ?? null} name={ft?.displayName ?? uid} size={8} />
-                          {done && (
-                            <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-card/70">
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-copy-3"><path d="M20 6L9 17l-5-5"/></svg>
-                            </div>
+                      <div key={pickNum} className="flex items-stretch flex-shrink-0">
+                        {/* Your own upcoming picks get a green wash across the whole
+                            cell, so they are findable at a glance while scanning the
+                            row. The rings below still mark whose turn it is now/next. */}
+                        <div
+                          className={`flex flex-col items-center gap-0.5 w-14 rounded-lg px-1 py-1 border transition-colors ${
+                            isMe ? 'bg-brand/10 border-brand/40' : 'border-transparent'
+                          }`}
+                        >
+                          <span className={`text-[10px] tabular-nums font-semibold ${done ? 'text-copy-3/40' : isCurrent ? 'text-brand' : isNext ? 'text-warn' : isMe ? 'text-brand/80' : 'text-copy-3'}`}>
+                            #{pickNum}
+                          </span>
+                          <div className={`relative rounded-lg p-0.5 ${done ? 'opacity-40' : isCurrent ? 'ring-2 ring-brand ring-offset-1 ring-offset-card' : isNext ? 'ring-1 ring-warn/60 ring-offset-1 ring-offset-card' : ''}`}>
+                            <TeamLogo logoUrl={ft?.logoUrl ?? null} name={ft?.displayName ?? uid} size={8} />
+                            {done && (
+                              <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-card/70">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-copy-3"><path d="M20 6L9 17l-5-5"/></svg>
+                              </div>
+                            )}
+                          </div>
+                          <p className={`text-[10px] text-center leading-tight w-full truncate font-medium ${done ? 'text-copy-3/40' : isCurrent ? 'text-brand' : isNext ? 'text-warn' : isMe ? 'text-brand' : 'text-copy-3'}`}>
+                            {label}
+                          </p>
+                          {isCurrent && nominationTimerRemaining !== null && nominationTimerRemaining > 0 && (
+                            <span className={`text-[10px] font-bold tabular-nums ${nominationTimerRemaining <= 10 ? 'text-danger' : 'text-copy-3'}`}>
+                              {nominationTimerRemaining}s
+                            </span>
                           )}
                         </div>
-                        <p className={`text-[10px] text-center leading-tight w-full truncate font-medium ${done ? 'text-copy-3/40' : isCurrent ? 'text-brand' : isNext ? 'text-warn' : isMe ? 'text-brand/70' : 'text-copy-3'}`}>
-                          {label}
-                        </p>
-                        {isCurrent && nominationTimerRemaining !== null && nominationTimerRemaining > 0 && (
-                          <span className={`text-[10px] font-bold tabular-nums ${nominationTimerRemaining <= 10 ? 'text-danger' : 'text-copy-3'}`}>
-                            {nominationTimerRemaining}s
-                          </span>
+                        {/* Divider between picks so the row reads as discrete slots */}
+                        {relIdx < upcoming.length - 1 && (
+                          <div className="w-px bg-line self-stretch my-1.5 ml-1" aria-hidden="true" />
                         )}
                       </div>
                     );
@@ -1755,6 +1795,10 @@ export default function AuctionPage() {
                         const queuePos = snakePickQueue.indexOf(team.id);
                         const inQueue = queuePos !== -1;
                         const rank = oddsRankMap.has(team.id) ? oddsRankMap.get(team.id)! + 1 : null;
+                        // Sports stay browsable once your roster spots for them are
+                        // full — the team is simply not selectable. Previously the
+                        // row looked pickable and the server rejected it on submit.
+                        const capped = sportCapReached.has(team.sportLeagueId);
                         return (
                           <div key={team.id} className="group/row flex items-center gap-1">
                             {status === 'waiting' ? (
@@ -1773,14 +1817,17 @@ export default function AuctionPage() {
                               </div>
                             ) : (
                               <button
-                                onClick={() => isMyTurn && setSnakePickSelected(prev => prev === team.id ? null : team.id)}
-                                disabled={snakePickPending}
+                                onClick={() => isMyTurn && !capped && setSnakePickSelected(prev => prev === team.id ? null : team.id)}
+                                disabled={snakePickPending || capped}
+                                title={capped ? `Your ${fln(team.sportLeagueId)} roster spots are already full` : undefined}
                                 className={`flex-1 flex items-center gap-2 px-3 py-2 rounded-xl transition-all text-left ${
-                                  isSelected
-                                    ? 'bg-brand/15 border border-brand/40'
-                                    : isMyTurn
-                                      ? 'bg-field hover:bg-field-2 active:scale-[0.98] cursor-pointer'
-                                      : 'bg-field cursor-default'
+                                  capped
+                                    ? 'bg-field/50 cursor-not-allowed opacity-50'
+                                    : isSelected
+                                      ? 'bg-brand/15 border border-brand/40'
+                                      : isMyTurn
+                                        ? 'bg-field hover:bg-field-2 active:scale-[0.98] cursor-pointer'
+                                        : 'bg-field cursor-default'
                                 }`}
                               >
                                 {rank !== null && (
@@ -1789,7 +1836,12 @@ export default function AuctionPage() {
                                 <TeamLogo logoUrl={team.logoUrl} name={team.name} size={7} />
                                 <div className="flex-1 min-w-0">
                                   <p className={`text-sm font-medium truncate ${isSelected ? 'text-brand' : 'text-copy'}`}>{team.name}</p>
-                                  {!snakePickSport && <p className="text-xs text-copy-3">{fln(team.sportLeagueId)}</p>}
+                                  {(!snakePickSport || capped) && (
+                                    <p className="text-xs text-copy-3">
+                                      {fln(team.sportLeagueId)}
+                                      {capped && <span className="text-copy-3/70"> · roster full</span>}
+                                    </p>
+                                  )}
                                 </div>
                                 {isSelected && (
                                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="text-brand flex-shrink-0">
@@ -2064,14 +2116,27 @@ export default function AuctionPage() {
                   Draft Picks — {snakePickHistory.length}{maxTotalPicks > 0 ? `/${maxTotalPicks}` : ''} picked
                 </p>
                 <div className="space-y-2 max-h-64 overflow-y-auto -mr-1 pr-1">
-                  {[...snakePickHistory].reverse().map((pick, i) => (
+                  {[...snakePickHistory].reverse().map((pick, i) => {
+                    // Resolve the sport at render time rather than storing it on the
+                    // pick: this also covers history restored on reconnect, which
+                    // never carried a sport. Without it "Alabama" is ambiguous
+                    // between NCAAF and NCAAB — the auction view shows this, snake did not.
+                    const pickSport = teamMapRef.current.get(pick.teamId)?.sportLeagueId;
+                    return (
                     <div key={pick.pickIndex} className="flex items-center gap-3 py-2 border-b border-line last:border-0">
                       <span className="text-xs text-copy-3 tabular-nums w-6 text-right flex-shrink-0">
                         {pick.pickIndex + 1}
                       </span>
                       <TeamLogo logoUrl={pick.logoUrl} name={pick.teamName} size={8} />
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-copy truncate">{pick.teamName}</p>
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <p className="text-sm font-medium text-copy truncate">{pick.teamName}</p>
+                          {pickSport && (
+                            <span className="flex-shrink-0 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-field border border-line text-copy-3">
+                              {fln(pickSport)}
+                            </span>
+                          )}
+                        </div>
                         <p className="text-xs text-copy-2 truncate">
                           {pick.pickerUserId === myTeamUserId ? 'You' : pick.pickerName}
                         </p>
@@ -2082,7 +2147,8 @@ export default function AuctionPage() {
                         </span>
                       )}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
