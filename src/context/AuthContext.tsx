@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { User, onAuthStateChanged, signOut as fbSignOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { initPush, cleanupPush } from '@/lib/push';
+import { clearSession } from '@/lib/api';
 
 interface AuthContextValue {
   user: User | null;
@@ -38,6 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     if (!auth) return;
     await cleanupPush();
+    clearSession();
     await fbSignOut(auth);
   };
 

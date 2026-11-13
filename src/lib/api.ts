@@ -109,3 +109,11 @@ export const api = {
     }
   },
 };
+
+/** Call on sign-out to prevent the next user from seeing cached data. */
+export function clearSession() {
+  _cache.clear();
+  _cachedToken = '';
+  _tokenExpiry = 0;
+  _tokenInFlight = null;
+}
