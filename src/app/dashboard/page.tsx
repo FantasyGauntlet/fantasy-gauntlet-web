@@ -625,26 +625,6 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Stats */}
-      {!loading && leagues.length > 0 && (
-        <div className="grid grid-cols-3 gap-3">
-          <div className="relative bg-card border border-line rounded-xl p-4 overflow-hidden">
-            <div className="absolute inset-y-0 left-0 w-[3px] bg-brand/50" />
-            <p className="text-2xl font-bold text-copy tabular-nums">{activeLeagues.length}</p>
-            <p className="text-copy-3 text-xs mt-0.5 font-medium">My Leagues</p>
-          </div>
-          <div className="relative bg-card border border-line rounded-xl p-4 overflow-hidden">
-            <div className="absolute inset-y-0 left-0 w-[3px] bg-positive/60" />
-            <p className="text-2xl font-bold text-copy tabular-nums">{activeCount}</p>
-            <p className="text-copy-3 text-xs mt-0.5 font-medium">In Season</p>
-          </div>
-          <div className="relative bg-card border border-line rounded-xl p-4 overflow-hidden">
-            <div className="absolute inset-y-0 left-0 w-[3px] bg-warn/60" />
-            <p className="text-2xl font-bold text-copy tabular-nums">{draftingCount}</p>
-            <p className="text-copy-3 text-xs mt-0.5 font-medium">Drafting</p>
-          </div>
-        </div>
-      )}
 
       {/* This Week */}
       {leagueSummaries.size > 0 && (() => {
