@@ -848,6 +848,7 @@ export default function AdminPage() {
   const [annError, setAnnError] = useState<string | null>(null);
   const [annSuccess, setAnnSuccess] = useState<string | null>(null);
   const [annSending, setAnnSending] = useState<Record<string, boolean>>({});
+  const [annTesting, setAnnTesting] = useState<Record<string, boolean>>({});
 
   async function loadAnnouncements() {
     setAnnLoading(true);
@@ -883,6 +884,15 @@ export default function AdminPage() {
       await loadAnnouncements();
     } catch (e: unknown) { alert(e instanceof Error ? e.message : 'Failed'); }
     finally { setAnnSending(s => { const n = { ...s }; delete n[id]; return n; }); }
+  }
+
+  async function testAnnouncement(id: string) {
+    setAnnTesting(s => ({ ...s, [id]: true }));
+    try {
+      const res = await api.post<{ sent: number }>(`/admin/announcements/${id}/test`, {});
+      setAnnSuccess(`Test sent to ${res.sent} admin account${res.sent !== 1 ? 's' : ''}.`);
+    } catch (e: unknown) { alert(e instanceof Error ? e.message : 'Failed'); }
+    finally { setAnnTesting(s => { const n = { ...s }; delete n[id]; return n; }); }
   }
 
   useEffect(() => { if (tab === 'announcements') loadAnnouncements(); }, [tab]);
@@ -2693,13 +2703,23 @@ export default function AdminPage() {
                             : `Created ${new Date(a.createdAt).toLocaleString()}`}
                       </p>
                       {!a.sentAt && (
-                        <button
-                          onClick={() => sendAnnouncement(a.id)}
-                          disabled={!!annSending[a.id]}
-                          className="text-xs font-semibold text-brand hover:text-brand-2 disabled:opacity-50 transition-colors"
-                        >
-                          {annSending[a.id] ? 'Sending…' : 'Send now'}
-                        </button>
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => testAnnouncement(a.id)}
+                            disabled={!!annTesting[a.id] || !!annSending[a.id]}
+                            className="text-xs font-semibold text-copy-3 hover:text-copy-2 disabled:opacity-50 transition-colors"
+                            title="Send to admin accounts only"
+                          >
+                            {annTesting[a.id] ? 'Testing…' : 'Test'}
+                          </button>
+                          <button
+                            onClick={() => sendAnnouncement(a.id)}
+                            disabled={!!annSending[a.id] || !!annTesting[a.id]}
+                            className="text-xs font-semibold text-brand hover:text-brand-2 disabled:opacity-50 transition-colors"
+                          >
+                            {annSending[a.id] ? 'Sending…' : 'Send now'}
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>
