@@ -318,13 +318,13 @@ function StandingsTab({ leagueId, userId, fantasyTeams: fantasyTeamsProp, topZon
                                   <div className="min-w-0">
                                     <div className="flex items-center gap-1">
                                       <p className="text-xs font-medium truncate text-copy">{t.teamName}</p>
-                                      {t.formTag === 'hot' && t.recentWins != null && (
+                                      {t.formTag === 'hot' && t.recentWins != null && t.seasonActive !== false && (
                                         <span className="inline-flex items-center gap-0.5 text-[9px] font-bold tracking-wide px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-400 border border-orange-500/20 flex-shrink-0 whitespace-nowrap">
                                           <svg width="7" height="7" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M5 8V2M2 5l3-3 3 3"/></svg>
                                           {t.recentWins}–{t.recentLosses}
                                         </span>
                                       )}
-                                      {t.formTag === 'cold' && t.recentWins != null && (
+                                      {t.formTag === 'cold' && t.recentWins != null && t.seasonActive !== false && (
                                         <span className="inline-flex items-center gap-0.5 text-[9px] font-bold tracking-wide px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 flex-shrink-0 whitespace-nowrap">
                                           <svg width="7" height="7" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M5 2v6M2 5l3 3 3-3"/></svg>
                                           {t.recentWins}–{t.recentLosses}

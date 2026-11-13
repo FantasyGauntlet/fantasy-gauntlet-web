@@ -381,12 +381,11 @@ export default function DashboardPage() {
 
         // Best performing team: prefer hot-tagged, then highest points
         for (const tb of mine.teamBreakdown ?? []) {
+          if (tb.seasonActive === false) continue;
           const isHot = tb.formTag === 'hot';
-          if (tb.points > bestPoints || (isHot && (!best || best.formTag !== 'hot'))) {
-            if (!best || tb.points > bestPoints || (isHot && best.formTag !== 'hot')) {
-              bestPoints = tb.points;
-              best = { teamName: tb.teamName, sport: tb.sport, points: tb.points, formTag: tb.formTag ?? null };
-            }
+          if (!best || tb.points > bestPoints || (isHot && best.formTag !== 'hot')) {
+            bestPoints = tb.points;
+            best = { teamName: tb.teamName, sport: tb.sport, points: tb.points, formTag: tb.formTag ?? null };
           }
         }
       }
