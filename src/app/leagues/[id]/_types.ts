@@ -56,7 +56,7 @@ export interface FantasyTeam {
 export interface SportTeam { id: string; name: string; shortName: string; sportLeagueId: string; logoUrl: string | null; }
 export interface SportGroup { sport: string; teams: SportTeam[]; }
 
-export interface TeamBreakdown { teamId: string; teamName: string; sportLeagueId: string; sport: string; logoUrl: string | null; wins: number; draws: number; losses: number; points: number; eliminated?: boolean; seasonActive?: boolean; }
+export interface TeamBreakdown { teamId: string; teamName: string; sportLeagueId: string; sport: string; logoUrl: string | null; wins: number; draws: number; losses: number; points: number; eliminated?: boolean; seasonActive?: boolean; formTag?: 'hot' | 'cold' | null; }
 export interface BonusBreakdownItem { teamId: string; teamName: string; label: string; points: number; }
 export interface Standing {
   userId: string; displayName: string; rank: number;
@@ -75,6 +75,7 @@ export interface TeamWithRecord {
   draws: number;
   losses: number;
   points: number;
+  formTag?: 'hot' | 'cold' | null;
 }
 
 export interface WaiverClaim {

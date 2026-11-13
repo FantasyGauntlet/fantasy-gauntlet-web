@@ -17,6 +17,7 @@ type DisplayTeam = {
   logoUrl: string | null | undefined; sport: string;
   wins: number; draws: number; losses: number; points: number;
   isAvailable: boolean; ownerName?: string; ownerLogoUrl?: string | null;
+  formTag?: 'hot' | 'cold' | null;
 };
 type RosterStat = { rosteredPct: number | null; trend: 'up' | 'down' | null; pickups30d: number; drops30d: number; delta30d: number | null };
 
@@ -46,7 +47,7 @@ function TrendCard({
           }
         </div>
         <div className="w-full">
-          <p className="text-xs font-semibold text-copy leading-snug line-clamp-2">{t.name}</p>
+          <p className="text-xs font-semibold text-copy leading-snug line-clamp-2">{t.name}{t.formTag === 'hot' ? ' 🔥' : t.formTag === 'cold' ? ' 🥶' : ''}</p>
           <p className="text-[10px] text-copy-3 mt-0.5">{formatLeagueName(t.sportLeagueId)}</p>
         </div>
         <div>
@@ -130,6 +131,8 @@ function ClaimCard({
                 <div className="flex items-center gap-2">
                   {dropTeam?.logoUrl && <img src={dropTeam.logoUrl} alt={dropTeam.name} className="w-6 h-6 object-contain flex-shrink-0" />}
                   <p className="font-semibold text-copy text-xs leading-snug">{dropTeam?.name ?? claim.dropTeamId}</p>
+                  {dropTeam?.formTag === 'hot' && <span className="text-xs" title="Hot streak">🔥</span>}
+                  {dropTeam?.formTag === 'cold' && <span className="text-xs" title="Cold stretch">🥶</span>}
                 </div>
                 {dropTeam && (
                   <>
@@ -157,6 +160,8 @@ function ClaimCard({
               <div className="flex items-center gap-2">
                 {addTeam?.logoUrl && <img src={addTeam.logoUrl} alt={addTeam.name} className="w-6 h-6 object-contain flex-shrink-0" />}
                 <p className="font-semibold text-copy text-xs leading-snug">{addTeam?.name ?? claim.addTeamId}</p>
+                {addTeam?.formTag === 'hot' && <span className="text-xs" title="Hot streak">🔥</span>}
+                {addTeam?.formTag === 'cold' && <span className="text-xs" title="Cold stretch">🥶</span>}
               </div>
               {addTeam && (
                 <>
@@ -458,6 +463,7 @@ function WaiversTab({
       wins: stats?.wins ?? 0, draws: stats?.draws ?? 0,
       losses: stats?.losses ?? 0, points: stats?.points ?? 0,
       sport: stats?.sport ?? t.sport,
+      formTag: stats?.formTag ?? null,
       isAvailable: !ownerMap.has(t.id),
       ownerName: ownerMap.get(t.id)?.displayName,
       ownerLogoUrl: ownerMap.get(t.id)?.logoUrl ?? null,
@@ -744,6 +750,8 @@ function WaiversTab({
                     <div className="flex items-center gap-2 mb-1">
                       {t.logoUrl && <img src={t.logoUrl} alt={t.name} className="w-6 h-6 object-contain flex-shrink-0" />}
                       <p className="font-medium text-xs leading-snug">{t.name}</p>
+                      {t.formTag === 'hot' && <span className="text-xs flex-shrink-0">🔥</span>}
+                      {t.formTag === 'cold' && <span className="text-xs flex-shrink-0">🥶</span>}
                     </div>
                     <p className="text-xs text-copy-3">{formatLeagueName(t.sportLeagueId)}</p>
                   </button>

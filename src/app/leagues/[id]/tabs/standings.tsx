@@ -255,6 +255,8 @@ function StandingsTab({ leagueId, userId, fantasyTeams: fantasyTeamsProp, topZon
                                   <div className="min-w-0">
                                     <div className="flex items-center gap-1">
                                       <p className="text-xs font-medium truncate text-copy">{t.teamName}</p>
+                                      {t.formTag === 'hot' && <span className="text-sm flex-shrink-0" title="Hot streak">🔥</span>}
+                                      {t.formTag === 'cold' && <span className="text-sm flex-shrink-0" title="Cold stretch">🥶</span>}
                                       {isWildCard && <span className="text-xs bg-warn-bg text-warn border border-warn/20 px-1.5 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">Wild Card</span>}
                                       {liveTeamIds?.has(t.teamId) && (
                                         <span className="relative flex h-2 w-2 flex-shrink-0">

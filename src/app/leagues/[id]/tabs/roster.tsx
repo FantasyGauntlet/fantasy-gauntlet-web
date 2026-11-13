@@ -653,6 +653,8 @@ function RosterTab({
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
                         <p className="text-sm font-medium text-copy truncate">{t.name}</p>
+                        {stats?.formTag === 'hot' && <span className="text-sm flex-shrink-0" title="Hot streak">🔥</span>}
+                        {stats?.formTag === 'cold' && <span className="text-sm flex-shrink-0" title="Cold stretch">🥶</span>}
                         {isWildCard && (
                           <span className="text-xs bg-warn-bg text-warn border border-warn/20 px-1.5 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">Wild Card</span>
                         )}
