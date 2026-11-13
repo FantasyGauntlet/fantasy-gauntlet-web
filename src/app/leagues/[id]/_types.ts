@@ -84,6 +84,7 @@ export interface TeamWithRecord {
   recentWins?: number | null;
   recentLosses?: number | null;
   recentDraws?: number | null;
+  seasonActive?: boolean;
 }
 
 export interface WaiverClaim {
