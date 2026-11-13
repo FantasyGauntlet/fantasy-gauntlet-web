@@ -11,16 +11,26 @@ import { loadPrevRanks, saveRankSnapshot } from '@/lib/rankSnapshot';
 
 function Sparkline({ history, userId, memberCount, w = 48, h = 16 }: { history: RankHistoryEntry[]; userId: string; memberCount: number; w?: number; h?: number }) {
   const pts = history.map(h => h.ranks[userId]).filter((r): r is number => r !== undefined);
-  if (pts.length < 2) return null;
+  if (pts.length === 0) return null;
   const PAD = 2;
   const range = Math.max(memberCount - 1, 1);
-  const toX = (i: number) => (i / (pts.length - 1)) * w;
+  const toX = (i: number) => (i / Math.max(pts.length - 1, 1)) * w;
   const toY = (rank: number) => PAD + ((rank - 1) / range) * (h - PAD * 2);
+  const dotR = w > 100 ? 3 : 2;
+  const sw = w > 100 ? 2 : 1.5;
+
+  if (pts.length === 1) {
+    // Single data point — show a positioned dot so the column isn't empty
+    return (
+      <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{ overflow: 'visible' }}>
+        <circle cx={w / 2} cy={toY(pts[0]).toFixed(1)} r={dotR} fill="var(--color-copy-3)" opacity="0.5" />
+      </svg>
+    );
+  }
+
   const polyPts = pts.map((r, i) => `${toX(i).toFixed(1)},${toY(r).toFixed(1)}`).join(' ');
   const first = pts[0], last = pts[pts.length - 1];
   const color = last < first ? 'var(--color-positive)' : last > first ? 'var(--color-danger)' : 'var(--color-copy-3)';
-  const dotR = w > 100 ? 3 : 2;
-  const sw = w > 100 ? 2 : 1.5;
   return (
     <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{ overflow: 'visible' }}>
       <polyline points={polyPts} fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" opacity="0.8" />
@@ -405,7 +415,12 @@ function StandingsTab({ leagueId, userId, fantasyTeams: fantasyTeamsProp, topZon
             style={{ position: 'fixed', top: topPx, left: leftPx, transform: above ? 'translateY(-100%)' : undefined, zIndex: 50 }}
             className="w-56 bg-card border border-line rounded-xl shadow-2xl p-3"
           >
-            <p className="text-xs font-semibold text-copy mb-2 truncate">{name}</p>
+            <div className="flex items-baseline justify-between mb-2 gap-2">
+              <p className="text-xs font-semibold text-copy truncate">{name}</p>
+              <span className="text-[10px] text-copy-3 whitespace-nowrap flex-shrink-0">
+                Week {weeks.length} of 12
+              </span>
+            </div>
             <div className="mb-3">
               <Sparkline history={rankHistory} userId={userId} memberCount={standings.length} w={200} h={56} />
             </div>
