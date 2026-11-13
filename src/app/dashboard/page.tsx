@@ -67,6 +67,7 @@ interface WaiverActivity {
   addTeamName?: string; addTeamLogoUrl?: string | null;
   dropTeamName?: string; dropTeamLogoUrl?: string | null;
   reviewedAt: string | null; requestedAt: string; status: string;
+  faabBid?: number;
 }
 
 interface BestTeam { teamName: string; sport: string; points: number; formTag: 'hot' | 'cold' | null; logoUrl?: string | null; }
@@ -402,7 +403,7 @@ export default function DashboardPage() {
     // Waiver activity across all active leagues
     Promise.all(
       active.map(league =>
-        api.get<Array<{ id: string; claimantDisplayName: string; addTeamName?: string; addTeamLogoUrl?: string | null; dropTeamName?: string; dropTeamLogoUrl?: string | null; reviewedAt: string | null; requestedAt: string; status: string }>>(`/leagues/${league.id}/waivers/history`)
+        api.get<Array<{ id: string; claimantDisplayName: string; addTeamName?: string; addTeamLogoUrl?: string | null; dropTeamName?: string; dropTeamLogoUrl?: string | null; reviewedAt: string | null; requestedAt: string; status: string; faabBid?: number }>>(`/leagues/${league.id}/waivers/history`)
           .then(claims => claims.map(c => ({ ...c, leagueId: league.id, leagueName: league.name })))
           .catch(() => [] as WaiverActivity[])
       )
@@ -969,7 +970,14 @@ export default function DashboardPage() {
                     <p className="text-sm text-copy truncate group-hover:text-brand transition-colors">{action}</p>
                     <p className="text-xs text-copy-3 mt-0.5">{item.leagueName}</p>
                   </div>
-                  <span className="text-xs text-copy-3 flex-shrink-0 tabular-nums">{when}</span>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {item.faabBid != null && (
+                      <span className="text-[11px] font-semibold text-positive bg-positive/10 border border-positive/20 px-1.5 py-0.5 rounded-full tabular-nums">
+                        ${item.faabBid}
+                      </span>
+                    )}
+                    <span className="text-xs text-copy-3 tabular-nums">{when}</span>
+                  </div>
                 </Link>
               );
             })}
