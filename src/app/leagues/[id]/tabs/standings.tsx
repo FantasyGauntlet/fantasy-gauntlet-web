@@ -6,11 +6,30 @@ import { api } from '@/lib/api';
 import { db } from '@/lib/firebase';
 import { useTeamProfile } from '@/context/TeamProfileContext';
 import { Spinner, Lightbox, formatLeagueName, formatRecord, SPORT_ORDER } from '../_components';
-import type { Standing, FantasyTeam } from '../_types';
+import type { Standing, FantasyTeam, RankHistoryEntry } from '../_types';
 import { loadPrevRanks, saveRankSnapshot } from '@/lib/rankSnapshot';
+
+function Sparkline({ history, userId, memberCount }: { history: RankHistoryEntry[]; userId: string; memberCount: number }) {
+  const pts = history.map(h => h.ranks[userId]).filter((r): r is number => r !== undefined);
+  if (pts.length < 2) return null;
+  const W = 48, H = 16, PAD = 2;
+  const range = Math.max(memberCount - 1, 1);
+  const toX = (i: number) => (i / (pts.length - 1)) * W;
+  const toY = (rank: number) => PAD + ((rank - 1) / range) * (H - PAD * 2);
+  const polyPts = pts.map((r, i) => `${toX(i).toFixed(1)},${toY(r).toFixed(1)}`).join(' ');
+  const first = pts[0], last = pts[pts.length - 1];
+  const color = last < first ? 'var(--color-positive)' : last > first ? 'var(--color-danger)' : 'var(--color-copy-3)';
+  return (
+    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ overflow: 'visible' }}>
+      <polyline points={polyPts} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.75" />
+      <circle cx={toX(pts.length - 1)} cy={toY(last)} r="2" fill={color} />
+    </svg>
+  );
+}
 
 function StandingsTab({ leagueId, userId, fantasyTeams: fantasyTeamsProp, topZone, bottomZone, ownerNameByUserId, liveTeamIds, initialStandings, selectedSports, maxWildcard, draftOrder }: { leagueId: string; userId?: string; fantasyTeams: FantasyTeam[]; topZone?: number | null; bottomZone?: number | null; ownerNameByUserId: Record<string, string>; liveTeamIds?: Set<string>; initialStandings?: Standing[]; selectedSports?: string[]; maxWildcard?: number; draftOrder?: string[]; }) {
   const [standings, setStandings] = useState<Standing[]>(() => initialStandings ?? []);
+  const [rankHistory, setRankHistory] = useState<RankHistoryEntry[]>([]);
   const [loading, setLoading] = useState(!initialStandings?.length);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
@@ -67,10 +86,11 @@ function StandingsTab({ leagueId, userId, fantasyTeams: fantasyTeamsProp, topZon
 
     // REST endpoint is the authoritative source — reads fresh Firestore data (with short
     // server-side TTL) and always returns current userId values for every member.
-    api.get<Standing[]>(`/leagues/${leagueId}/standings`)
-      .then(data => {
+    api.get<{ standings: Standing[]; rankHistory: RankHistoryEntry[] }>(`/leagues/${leagueId}/standings`)
+      .then(({ standings: data, rankHistory: rh }) => {
         restLoadedRef.current = true;
         setStandings(data);
+        setRankHistory(rh ?? []);
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -84,7 +104,9 @@ function StandingsTab({ leagueId, userId, fantasyTeams: fantasyTeamsProp, topZon
       doc(db, 'standingsCache', leagueId),
       snap => {
         if (!snap.exists()) return;
-        const cacheData = (snap.data() as { standings: Standing[] }).standings;
+        const snapData = snap.data() as { standings: Standing[]; rankHistory?: RankHistoryEntry[] };
+        const cacheData = snapData.standings;
+        if (snapData.rankHistory) setRankHistory(snapData.rankHistory);
         if (!restLoadedRef.current) {
           // REST is authoritative — don't replace with potentially stale cache data.
           // The loading spinner already covers the brief wait.
@@ -122,6 +144,7 @@ function StandingsTab({ leagueId, userId, fantasyTeams: fantasyTeamsProp, topZon
           <tr className="border-b border-line bg-field/50">
             <th className="text-left px-4 py-3 text-xs font-semibold text-copy-3 uppercase tracking-wider">Rank</th>
             <th className="text-left px-4 py-3 text-xs font-semibold text-copy-3 uppercase tracking-wider">Manager</th>
+            <th className="px-3 py-3 hidden sm:table-cell" aria-label="Rank trend" />
             <th className="text-right px-4 py-3 text-xs font-semibold text-copy-3 uppercase tracking-wider">Points</th>
             <th className="text-right px-4 py-3 text-xs font-semibold text-copy-3 uppercase tracking-wider hidden sm:table-cell">Active</th>
             <th className="text-right px-4 py-3 text-xs font-semibold text-copy-3 uppercase tracking-wider hidden sm:table-cell">Bonus</th>
@@ -189,6 +212,9 @@ function StandingsTab({ leagueId, userId, fantasyTeams: fantasyTeamsProp, topZon
                         })()}
                       </div>
                     </div>
+                  </td>
+                  <td className="px-3 py-3.5 hidden sm:table-cell">
+                    <Sparkline history={rankHistory} userId={s.userId} memberCount={standings.length} />
                   </td>
                   <td className="px-4 py-3.5 text-right">
                     <span className="text-sm font-bold text-copy">{s.totalPoints.toFixed(1)}</span>

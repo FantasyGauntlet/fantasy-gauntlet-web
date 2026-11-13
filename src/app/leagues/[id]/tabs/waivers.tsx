@@ -18,6 +18,9 @@ type DisplayTeam = {
   wins: number; draws: number; losses: number; points: number;
   isAvailable: boolean; ownerName?: string; ownerLogoUrl?: string | null;
   formTag?: 'hot' | 'cold' | null;
+  recentWins?: number | null;
+  recentLosses?: number | null;
+  recentDraws?: number | null;
 };
 type RosterStat = { rosteredPct: number | null; trend: 'up' | 'down' | null; pickups30d: number; drops30d: number; delta30d: number | null };
 
