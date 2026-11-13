@@ -353,6 +353,7 @@ function WaiversTab({
   const [claims, setClaims] = useState<WaiverClaim[]>([]);
   const [leagueHistory, setLeagueHistory] = useState<WaiverHistoryClaim[]>([]);
   const [expandedLosingBids, setExpandedLosingBids] = useState<Set<string>>(new Set());
+  const [deadlines, setDeadlines] = useState<Record<string, string>>({});
   const [pool, setPool] = useState<TeamWithRecord[]>([]); // available teams only (for claim form)
   const [allTeamStats, setAllTeamStats] = useState<TeamWithRecord[]>([]); // all teams with stats (for browser)
   const [allLeagueTeams, setAllLeagueTeams] = useState<TeamWithRecord[]>([]);
@@ -397,11 +398,13 @@ function WaiversTab({
       api.get<TeamWithRecord[]>(`/leagues/${leagueId}/waiver-pool?includeAll=true`).catch(() => [] as TeamWithRecord[]),
       api.get<SportGroup[]>(`/leagues/${leagueId}/sport-teams`).catch(() => [] as SportGroup[]),
       api.get<{ teamId: string; sportKey: string }[]>('/sports/rankings').catch(() => [] as { teamId: string; sportKey: string }[]),
-    ]).then(([c, hist, p, allStats, groups, rankings]) => {
+      api.get<Record<string, string>>('/sports/deadlines').catch(() => ({} as Record<string, string>)),
+    ]).then(([c, hist, p, allStats, groups, rankings, dlData]) => {
       setClaims(c);
       setLeagueHistory(hist);
       setPool(p);
       setAllTeamStats(allStats);
+      setDeadlines(dlData);
       const teams = groups.flatMap(g => g.teams.map(t => ({
         id: t.id, name: t.name, shortName: t.shortName,
         sportLeagueId: t.sportLeagueId, logoUrl: t.logoUrl,
@@ -1118,8 +1121,22 @@ function WaiversTab({
                   )}
                 </div>
                 <div className="flex items-center justify-center flex-shrink-0">
-                  {t.isAvailable ? (
-                    canSubmit ? (
+                  {t.isAvailable ? (() => {
+                    const sportKey = t.id.substring(0, t.id.indexOf('_'));
+                    const dl = deadlines[sportKey];
+                    const today = new Date().toISOString().slice(0, 10);
+                    const pastDeadline = dl ? today > dl : false;
+                    if (pastDeadline) {
+                      return (
+                        <span
+                          title={`Transaction deadline has passed (${dl})`}
+                          className="text-[11px] text-copy-3 font-medium px-2 py-0.5 bg-field border border-line rounded-full whitespace-nowrap cursor-default"
+                        >
+                          Closed
+                        </span>
+                      );
+                    }
+                    return canSubmit ? (
                       <button
                         onClick={e => { e.stopPropagation(); openAddForm(t.id); }}
                         className="text-xs bg-brand hover:bg-brand-2 text-white px-3 py-1.5 rounded-lg font-medium transition-colors whitespace-nowrap"
@@ -1130,8 +1147,8 @@ function WaiversTab({
                       <span className="text-[11px] text-positive font-medium px-2 py-0.5 bg-positive-bg border border-positive/20 rounded-full whitespace-nowrap">
                         Free
                       </span>
-                    )
-                  ) : (
+                    );
+                  })() : (
                     t.ownerLogoUrl ? (
                       <img src={t.ownerLogoUrl} alt={t.ownerName ?? ''} className="w-7 h-7 rounded-full object-cover" />
                     ) : (
@@ -1267,7 +1284,7 @@ function WaiversTab({
                         )}
                       </div>
                       {/* Status badge */}
-                      <div className="flex-shrink-0 flex items-center gap-2">
+                      <div className="flex-shrink-0 flex items-center justify-end gap-2 min-w-[7.5rem]">
                         {winner ? (
                           <span className="text-[11px] font-semibold text-positive bg-positive/10 border border-positive/20 px-2 py-0.5 rounded-full leading-none">Approved</span>
                         ) : (
