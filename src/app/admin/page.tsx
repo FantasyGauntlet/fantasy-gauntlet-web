@@ -836,7 +836,7 @@ export default function AdminPage() {
   }
 
   // ── Announcements ──────────────────────────────────────────────────────────
-  interface Announcement { id: string; title: string; body: string; channels: { website: boolean; email: boolean }; scheduledAt: string | null; sentAt: string | null; createdAt: string; }
+  interface Announcement { id: string; title: string; body: string; imageUrl?: string | null; channels: { website: boolean; email: boolean }; scheduledAt: string | null; sentAt: string | null; createdAt: string; }
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [annLoading, setAnnLoading] = useState(false);
   const [annTitle, setAnnTitle] = useState('');
@@ -850,6 +850,26 @@ export default function AdminPage() {
   const [annSending, setAnnSending] = useState<Record<string, boolean>>({});
   const [annTesting, setAnnTesting] = useState<Record<string, boolean>>({});
   const [annPreviewing, setAnnPreviewing] = useState(false);
+  const [annImageUrl, setAnnImageUrl] = useState<string | null>(null);
+  const [annImageUploading, setAnnImageUploading] = useState(false);
+
+  async function uploadAnnouncementImage(file: File) {
+    setAnnImageUploading(true);
+    setAnnError(null);
+    try {
+      const { ref, uploadBytes, getDownloadURL } = await import('firebase/storage');
+      const { storage } = await import('@/lib/firebase');
+      const ext = file.type.split('/')[1] ?? 'png';
+      const storageRef = ref(storage, `announcements/images/${crypto.randomUUID()}.${ext}`);
+      const snap = await uploadBytes(storageRef, file);
+      const url = await getDownloadURL(snap.ref);
+      setAnnImageUrl(url);
+    } catch (e: unknown) {
+      setAnnError(e instanceof Error ? e.message : 'Image upload failed');
+    } finally {
+      setAnnImageUploading(false);
+    }
+  }
 
   async function loadAnnouncements() {
     setAnnLoading(true);
@@ -868,10 +888,11 @@ export default function AdminPage() {
       await api.post('/admin/announcements', {
         title: annTitle.trim(),
         body: annBody.trim(),
+        imageUrl: annImageUrl,
         channels: { website: annWebsite, email: annEmail },
         scheduledAt: annScheduledAt ? new Date(annScheduledAt).toISOString() : null,
       });
-      setAnnTitle(''); setAnnBody(''); setAnnScheduledAt('');
+      setAnnTitle(''); setAnnBody(''); setAnnScheduledAt(''); setAnnImageUrl(null);
       setAnnSuccess(annScheduledAt ? 'Announcement scheduled.' : 'Announcement posted.');
       await loadAnnouncements();
     } catch (e: unknown) { setAnnError(e instanceof Error ? e.message : 'Failed to post'); }
@@ -887,6 +908,7 @@ export default function AdminPage() {
       const res = await api.post<{ sent: number }>('/admin/announcements/preview-test', {
         title: annTitle.trim(),
         body: annBody.trim(),
+        imageUrl: annImageUrl,
       });
       setAnnSuccess(`Test sent to ${res.sent} admin account${res.sent !== 1 ? 's' : ''}.`);
     } catch (e: unknown) { setAnnError(e instanceof Error ? e.message : 'Failed to send test'); }
@@ -2642,10 +2664,49 @@ export default function AdminPage() {
                 <textarea
                   value={annBody}
                   onChange={e => setAnnBody(e.target.value)}
+                  onPaste={e => {
+                    const items = Array.from(e.clipboardData.items);
+                    const img = items.find(i => i.type.startsWith('image/'));
+                    if (img) { e.preventDefault(); const f = img.getAsFile(); if (f) uploadAnnouncementImage(f); }
+                  }}
                   placeholder="Write the announcement body here…"
                   rows={5}
                   className={`${inputCls} resize-y`}
                 />
+              </div>
+
+              {/* Image attachment */}
+              <div>
+                <label className="block text-xs font-medium text-copy-2 mb-1">Image (optional)</label>
+                {annImageUrl ? (
+                  <div className="relative inline-block">
+                    <img src={annImageUrl} alt="Announcement preview" className="max-h-48 rounded-xl border border-line object-contain bg-field" />
+                    <button
+                      onClick={() => setAnnImageUrl(null)}
+                      className="absolute -top-2 -right-2 w-5 h-5 bg-danger text-white rounded-full flex items-center justify-center text-xs font-bold shadow-sm hover:bg-danger/80 transition-colors"
+                      title="Remove image"
+                    >×</button>
+                  </div>
+                ) : (
+                  <label className={`flex flex-col items-center justify-center gap-1.5 cursor-pointer border-2 border-dashed border-line hover:border-brand/50 rounded-xl px-4 py-5 transition-colors ${annImageUploading ? 'opacity-50 pointer-events-none' : ''}`}>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="sr-only"
+                      onChange={e => { const f = e.target.files?.[0]; if (f) uploadAnnouncementImage(f); e.target.value = ''; }}
+                    />
+                    {annImageUploading ? (
+                      <><Spinner size="sm" /><span className="text-xs text-copy-3">Uploading…</span></>
+                    ) : (
+                      <>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-copy-3">
+                          <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" />
+                        </svg>
+                        <span className="text-xs text-copy-3">Click to upload or paste an image</span>
+                      </>
+                    )}
+                  </label>
+                )}
               </div>
               <div className="flex flex-wrap gap-4 items-center">
                 <div className="flex items-center gap-4">
@@ -2720,6 +2781,7 @@ export default function AdminPage() {
                       </div>
                     </div>
                     <p className="text-xs text-copy-2 whitespace-pre-wrap line-clamp-3">{a.body}</p>
+                    {a.imageUrl && <img src={a.imageUrl} alt="" className="max-h-28 rounded-lg border border-line object-contain bg-field" />}
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-[11px] text-copy-3">
                         {a.sentAt

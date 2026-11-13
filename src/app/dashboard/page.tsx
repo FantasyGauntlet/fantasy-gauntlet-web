@@ -45,6 +45,7 @@ interface Announcement {
   id: string;
   title: string;
   body: string;
+  imageUrl?: string | null;
   channels: { website: boolean; email: boolean };
   scheduledAt: string | null;
   sentAt: string | null;
@@ -420,7 +421,10 @@ export default function DashboardPage() {
               </button>
             </div>
             <h2 className="text-lg font-bold text-copy mb-2">{popupAnn.title}</h2>
-            <p className="text-sm text-copy-2 leading-relaxed whitespace-pre-wrap mb-5">{popupAnn.body}</p>
+            <p className="text-sm text-copy-2 leading-relaxed whitespace-pre-wrap mb-4">{popupAnn.body}</p>
+            {popupAnn.imageUrl && (
+              <img src={popupAnn.imageUrl} alt="" className="w-full rounded-xl border border-line object-contain mb-4 max-h-64" />
+            )}
             {popupAnn.sentAt && (
               <p className="text-xs text-copy-3 mb-4">{new Date(popupAnn.sentAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
             )}
@@ -462,7 +466,10 @@ export default function DashboardPage() {
                       : new Date(a.createdAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
                   </p>
                   <h3 className="text-sm font-semibold text-copy mb-1">{a.title}</h3>
-                  <p className="text-sm text-copy-2 whitespace-pre-wrap leading-relaxed">{a.body}</p>
+                  <p className="text-sm text-copy-2 whitespace-pre-wrap leading-relaxed mb-2">{a.body}</p>
+                  {a.imageUrl && (
+                    <img src={a.imageUrl} alt="" className="w-full rounded-xl border border-line object-contain max-h-48" />
+                  )}
                 </div>
               ))}
             </div>
