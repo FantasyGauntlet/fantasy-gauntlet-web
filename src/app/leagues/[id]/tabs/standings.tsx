@@ -255,8 +255,18 @@ function StandingsTab({ leagueId, userId, fantasyTeams: fantasyTeamsProp, topZon
                                   <div className="min-w-0">
                                     <div className="flex items-center gap-1">
                                       <p className="text-xs font-medium truncate text-copy">{t.teamName}</p>
-                                      {t.formTag === 'hot' && <span className="text-sm flex-shrink-0" title="Hot streak">🔥</span>}
-                                      {t.formTag === 'cold' && <span className="text-sm flex-shrink-0" title="Cold stretch">🥶</span>}
+                                      {t.formTag === 'hot' && t.recentWins != null && (
+                                        <span className="inline-flex items-center gap-0.5 text-[9px] font-bold tracking-wide px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-400 border border-orange-500/20 flex-shrink-0 whitespace-nowrap">
+                                          <svg width="7" height="7" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M5 8V2M2 5l3-3 3 3"/></svg>
+                                          {t.recentWins}–{t.recentLosses}
+                                        </span>
+                                      )}
+                                      {t.formTag === 'cold' && t.recentWins != null && (
+                                        <span className="inline-flex items-center gap-0.5 text-[9px] font-bold tracking-wide px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 flex-shrink-0 whitespace-nowrap">
+                                          <svg width="7" height="7" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M5 2v6M2 5l3 3 3-3"/></svg>
+                                          {t.recentWins}–{t.recentLosses}
+                                        </span>
+                                      )}
                                       {isWildCard && <span className="text-xs bg-warn-bg text-warn border border-warn/20 px-1.5 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">Wild Card</span>}
                                       {liveTeamIds?.has(t.teamId) && (
                                         <span className="relative flex h-2 w-2 flex-shrink-0">

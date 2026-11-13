@@ -47,7 +47,19 @@ function TrendCard({
           }
         </div>
         <div className="w-full">
-          <p className="text-xs font-semibold text-copy leading-snug line-clamp-2">{t.name}{t.formTag === 'hot' ? ' 🔥' : t.formTag === 'cold' ? ' 🥶' : ''}</p>
+          <p className="text-xs font-semibold text-copy leading-snug line-clamp-2">{t.name}</p>
+          {t.formTag === 'hot' && t.recentWins != null && (
+            <span className="inline-flex items-center gap-0.5 text-[8px] font-bold px-1 py-0.5 rounded bg-orange-500/10 text-orange-400 border border-orange-500/20 flex-shrink-0 whitespace-nowrap mt-0.5">
+              <svg width="6" height="6" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M5 8V2M2 5l3-3 3 3"/></svg>
+              {t.recentWins}–{t.recentLosses}
+            </span>
+          )}
+          {t.formTag === 'cold' && t.recentWins != null && (
+            <span className="inline-flex items-center gap-0.5 text-[8px] font-bold px-1 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 flex-shrink-0 whitespace-nowrap mt-0.5">
+              <svg width="6" height="6" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M5 2v6M2 5l3 3 3-3"/></svg>
+              {t.recentWins}–{t.recentLosses}
+            </span>
+          )}
           <p className="text-[10px] text-copy-3 mt-0.5">{formatLeagueName(t.sportLeagueId)}</p>
         </div>
         <div>
@@ -131,8 +143,18 @@ function ClaimCard({
                 <div className="flex items-center gap-2">
                   {dropTeam?.logoUrl && <img src={dropTeam.logoUrl} alt={dropTeam.name} className="w-6 h-6 object-contain flex-shrink-0" />}
                   <p className="font-semibold text-copy text-xs leading-snug">{dropTeam?.name ?? claim.dropTeamId}</p>
-                  {dropTeam?.formTag === 'hot' && <span className="text-xs" title="Hot streak">🔥</span>}
-                  {dropTeam?.formTag === 'cold' && <span className="text-xs" title="Cold stretch">🥶</span>}
+                  {dropTeam?.formTag === 'hot' && dropTeam.recentWins != null && (
+                    <span className="inline-flex items-center gap-0.5 text-[8px] font-bold px-1 py-0.5 rounded bg-orange-500/10 text-orange-400 border border-orange-500/20 flex-shrink-0 whitespace-nowrap">
+                      <svg width="6" height="6" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M5 8V2M2 5l3-3 3 3"/></svg>
+                      {dropTeam.recentWins}–{dropTeam.recentLosses}
+                    </span>
+                  )}
+                  {dropTeam?.formTag === 'cold' && dropTeam.recentWins != null && (
+                    <span className="inline-flex items-center gap-0.5 text-[8px] font-bold px-1 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 flex-shrink-0 whitespace-nowrap">
+                      <svg width="6" height="6" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M5 2v6M2 5l3 3 3-3"/></svg>
+                      {dropTeam.recentWins}–{dropTeam.recentLosses}
+                    </span>
+                  )}
                 </div>
                 {dropTeam && (
                   <>
@@ -160,8 +182,18 @@ function ClaimCard({
               <div className="flex items-center gap-2">
                 {addTeam?.logoUrl && <img src={addTeam.logoUrl} alt={addTeam.name} className="w-6 h-6 object-contain flex-shrink-0" />}
                 <p className="font-semibold text-copy text-xs leading-snug">{addTeam?.name ?? claim.addTeamId}</p>
-                {addTeam?.formTag === 'hot' && <span className="text-xs" title="Hot streak">🔥</span>}
-                {addTeam?.formTag === 'cold' && <span className="text-xs" title="Cold stretch">🥶</span>}
+                {addTeam?.formTag === 'hot' && addTeam.recentWins != null && (
+                  <span className="inline-flex items-center gap-0.5 text-[8px] font-bold px-1 py-0.5 rounded bg-orange-500/10 text-orange-400 border border-orange-500/20 flex-shrink-0 whitespace-nowrap">
+                    <svg width="6" height="6" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M5 8V2M2 5l3-3 3 3"/></svg>
+                    {addTeam.recentWins}–{addTeam.recentLosses}
+                  </span>
+                )}
+                {addTeam?.formTag === 'cold' && addTeam.recentWins != null && (
+                  <span className="inline-flex items-center gap-0.5 text-[8px] font-bold px-1 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 flex-shrink-0 whitespace-nowrap">
+                    <svg width="6" height="6" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M5 2v6M2 5l3 3 3-3"/></svg>
+                    {addTeam.recentWins}–{addTeam.recentLosses}
+                  </span>
+                )}
               </div>
               {addTeam && (
                 <>
@@ -750,8 +782,18 @@ function WaiversTab({
                     <div className="flex items-center gap-2 mb-1">
                       {t.logoUrl && <img src={t.logoUrl} alt={t.name} className="w-6 h-6 object-contain flex-shrink-0" />}
                       <p className="font-medium text-xs leading-snug">{t.name}</p>
-                      {t.formTag === 'hot' && <span className="text-xs flex-shrink-0">🔥</span>}
-                      {t.formTag === 'cold' && <span className="text-xs flex-shrink-0">🥶</span>}
+                      {t.formTag === 'hot' && t.recentWins != null && (
+                        <span className="inline-flex items-center gap-0.5 text-[8px] font-bold px-1 py-0.5 rounded bg-orange-500/10 text-orange-400 border border-orange-500/20 flex-shrink-0 whitespace-nowrap">
+                          <svg width="6" height="6" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M5 8V2M2 5l3-3 3 3"/></svg>
+                          {t.recentWins}–{t.recentLosses}
+                        </span>
+                      )}
+                      {t.formTag === 'cold' && t.recentWins != null && (
+                        <span className="inline-flex items-center gap-0.5 text-[8px] font-bold px-1 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 flex-shrink-0 whitespace-nowrap">
+                          <svg width="6" height="6" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M5 2v6M2 5l3 3 3-3"/></svg>
+                          {t.recentWins}–{t.recentLosses}
+                        </span>
+                      )}
                     </div>
                     <p className="text-xs text-copy-3">{formatLeagueName(t.sportLeagueId)}</p>
                   </button>
