@@ -9,22 +9,29 @@ import { Spinner, Lightbox, formatLeagueName, formatRecord, SPORT_ORDER } from '
 import type { Standing, FantasyTeam, RankHistoryEntry } from '../_types';
 import { loadPrevRanks, saveRankSnapshot } from '@/lib/rankSnapshot';
 
-function Sparkline({ history, userId, memberCount }: { history: RankHistoryEntry[]; userId: string; memberCount: number }) {
+function Sparkline({ history, userId, memberCount, w = 48, h = 16 }: { history: RankHistoryEntry[]; userId: string; memberCount: number; w?: number; h?: number }) {
   const pts = history.map(h => h.ranks[userId]).filter((r): r is number => r !== undefined);
   if (pts.length < 2) return null;
-  const W = 48, H = 16, PAD = 2;
+  const PAD = 2;
   const range = Math.max(memberCount - 1, 1);
-  const toX = (i: number) => (i / (pts.length - 1)) * W;
-  const toY = (rank: number) => PAD + ((rank - 1) / range) * (H - PAD * 2);
+  const toX = (i: number) => (i / (pts.length - 1)) * w;
+  const toY = (rank: number) => PAD + ((rank - 1) / range) * (h - PAD * 2);
   const polyPts = pts.map((r, i) => `${toX(i).toFixed(1)},${toY(r).toFixed(1)}`).join(' ');
   const first = pts[0], last = pts[pts.length - 1];
   const color = last < first ? 'var(--color-positive)' : last > first ? 'var(--color-danger)' : 'var(--color-copy-3)';
+  const dotR = w > 100 ? 3 : 2;
+  const sw = w > 100 ? 2 : 1.5;
   return (
-    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ overflow: 'visible' }}>
-      <polyline points={polyPts} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.75" />
-      <circle cx={toX(pts.length - 1)} cy={toY(last)} r="2" fill={color} />
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{ overflow: 'visible' }}>
+      <polyline points={polyPts} fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" opacity="0.8" />
+      <circle cx={toX(pts.length - 1)} cy={toY(last)} r={dotR} fill={color} />
     </svg>
   );
+}
+
+function formatWeekOf(weekOf: string): string {
+  const d = new Date(weekOf + 'T00:00:00Z');
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 }
 
 function StandingsTab({ leagueId, userId, fantasyTeams: fantasyTeamsProp, topZone, bottomZone, ownerNameByUserId, liveTeamIds, initialStandings, selectedSports, maxWildcard, draftOrder }: { leagueId: string; userId?: string; fantasyTeams: FantasyTeam[]; topZone?: number | null; bottomZone?: number | null; ownerNameByUserId: Record<string, string>; liveTeamIds?: Set<string>; initialStandings?: Standing[]; selectedSports?: string[]; maxWildcard?: number; draftOrder?: string[]; }) {
@@ -40,9 +47,22 @@ function StandingsTab({ leagueId, userId, fantasyTeams: fantasyTeamsProp, topZon
   const { openProfile } = useTeamProfile();
 
   const [prevRanks] = useState<Record<string, number>>(() => loadPrevRanks(leagueId));
+  const [sparkPopover, setSparkPopover] = useState<{ userId: string; rect: DOMRect } | null>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
   const storedRef = useRef(false);
   // Track whether REST has returned authoritative data so onSnapshot never clobbers it
   const restLoadedRef = useRef(false);
+
+  useEffect(() => {
+    if (!sparkPopover) return;
+    const handler = (e: MouseEvent) => {
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+        setSparkPopover(null);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [sparkPopover]);
 
   useEffect(() => {
     if (standings.length === 0 || storedRef.current) return;
@@ -213,7 +233,14 @@ function StandingsTab({ leagueId, userId, fantasyTeams: fantasyTeamsProp, topZon
                       </div>
                     </div>
                   </td>
-                  <td className="px-3 py-3.5 hidden sm:table-cell">
+                  <td
+                    className="px-3 py-3.5 hidden sm:table-cell"
+                    onClick={e => {
+                      e.stopPropagation();
+                      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                      setSparkPopover(prev => prev?.userId === s.userId ? null : { userId: s.userId, rect });
+                    }}
+                  >
                     <Sparkline history={rankHistory} userId={s.userId} memberCount={standings.length} />
                   </td>
                   <td className="px-4 py-3.5 text-right">
@@ -362,6 +389,49 @@ function StandingsTab({ leagueId, userId, fantasyTeams: fantasyTeamsProp, topZon
         </tbody>
       </table>
       <Lightbox url={lightboxUrl} onClose={() => setLightboxUrl(null)} />
+      {sparkPopover && (() => {
+        const { userId, rect } = sparkPopover;
+        const name = nameByUserId.get(userId) ?? standings.find(s => s.userId === userId)?.displayName ?? '';
+        const weeks = rankHistory.filter(h => h.ranks[userId] !== undefined);
+        const spaceBelow = typeof window !== 'undefined' ? window.innerHeight - rect.bottom : 999;
+        const above = spaceBelow < 220;
+        const topPx = above ? rect.top - 8 : rect.bottom + 8;
+        const leftPx = typeof window !== 'undefined'
+          ? Math.min(Math.max(rect.left + rect.width / 2 - 112, 8), window.innerWidth - 240)
+          : rect.left;
+        return (
+          <div
+            ref={popoverRef}
+            style={{ position: 'fixed', top: topPx, left: leftPx, transform: above ? 'translateY(-100%)' : undefined, zIndex: 50 }}
+            className="w-56 bg-card border border-line rounded-xl shadow-2xl p-3"
+          >
+            <p className="text-xs font-semibold text-copy mb-2 truncate">{name}</p>
+            <div className="mb-3">
+              <Sparkline history={rankHistory} userId={userId} memberCount={standings.length} w={200} h={56} />
+            </div>
+            <div className="space-y-1">
+              {[...weeks].reverse().map((h, i, arr) => {
+                const rank = h.ranks[userId];
+                const prevRank = arr[i + 1]?.ranks[userId];
+                const diff = prevRank != null ? prevRank - rank : null;
+                return (
+                  <div key={h.weekOf} className="flex items-center justify-between text-xs">
+                    <span className="text-copy-3">{formatWeekOf(h.weekOf)}</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-semibold text-copy">#{rank}</span>
+                      {diff != null && diff !== 0 && (
+                        <span className={`font-bold ${diff > 0 ? 'text-positive' : 'text-danger'}`}>
+                          {diff > 0 ? `↑${diff}` : `↓${Math.abs(diff)}`}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
