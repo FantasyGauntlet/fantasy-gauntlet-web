@@ -465,9 +465,17 @@ function WaiversTab({
   }), [allLeagueTeams, comprehensiveTeamMap, ownerMap]);
 
   const filteredTeams = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
     let list = browseAvailability === 'available'
       ? allDisplayTeams.filter(t => t.isAvailable)
       : allDisplayTeams;
+    if (browseSort === 'best') {
+      list = list.filter(t => {
+        const sportKey = t.id.substring(0, t.id.indexOf('_'));
+        const dl = deadlines[sportKey];
+        return !dl || today <= dl;
+      });
+    }
     if (browseSport !== 'all') list = list.filter(t => t.sportLeagueId === browseSport);
     if (browseSearch.trim()) {
       const q = browseSearch.trim().toLowerCase();
@@ -486,7 +494,7 @@ function WaiversTab({
       return bP - aP;
     });
     return [...list].sort((a, b) => a.name.localeCompare(b.name));
-  }, [allDisplayTeams, browseAvailability, browseSport, browseSearch, browseSort, rosterStats, bestRankMap]);
+  }, [allDisplayTeams, browseAvailability, browseSport, browseSearch, browseSort, rosterStats, bestRankMap, deadlines]);
 
   const myRosterTeams = useMemo(() =>
     (myTeam?.ownedTeamIds ?? []).map(id => comprehensiveTeamMap.get(id)).filter(Boolean) as TeamWithRecord[],
