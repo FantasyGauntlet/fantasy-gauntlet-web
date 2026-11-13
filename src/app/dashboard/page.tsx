@@ -760,7 +760,7 @@ export default function DashboardPage() {
         });
         const deadlineItems = Object.entries(sportDeadlines)
           .map(([sport, iso]) => ({ sport, date: new Date(iso), days: Math.ceil((new Date(iso).getTime() - now) / 86400000) }))
-          .filter(d => d.days > 0 && d.days <= 10)
+          .filter(d => d.days > 0 && d.days <= 30)
           .sort((a, b) => a.date.getTime() - b.date.getTime());
 
         if (!endingSoon.length && !deadlineItems.length) return null;
@@ -775,7 +775,7 @@ export default function DashboardPage() {
             {deadlineItems.map(d => (
               <div key={d.sport} className="flex items-center justify-between">
                 <span className="text-sm text-copy-2">{formatSport(d.sport)} transaction deadline</span>
-                <span className="text-xs font-medium text-warn">{d.days === 1 ? 'Tomorrow' : `${d.days} days`}</span>
+                <span className="text-xs font-medium text-warn">{d.days === 1 ? 'Tomorrow' : d.days <= 7 ? `${d.days} days` : d.date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
               </div>
             ))}
             {endingSoon.map(l => {
@@ -783,7 +783,7 @@ export default function DashboardPage() {
               return (
                 <Link key={l.id} href={`/leagues/${l.id}`} className="flex items-center justify-between group">
                   <span className="text-sm text-copy-2 group-hover:text-copy transition-colors truncate">{l.name} ends</span>
-                  <span className="text-xs font-medium text-warn flex-shrink-0 ml-2">{days === 1 ? 'Tomorrow' : `${days} days`}</span>
+                  <span className="text-xs font-medium text-warn flex-shrink-0 ml-2">{days === 1 ? 'Tomorrow' : days <= 7 ? `${days} days` : new Date(l.endDate! + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
                 </Link>
               );
             })}
