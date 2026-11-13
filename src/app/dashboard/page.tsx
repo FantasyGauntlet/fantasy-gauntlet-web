@@ -52,6 +52,24 @@ interface Announcement {
   createdAt: string;
 }
 
+interface DashStanding {
+  userId: string; rank: number; totalPoints: number;
+  teamBreakdown: Array<{ teamId: string; teamName: string; sport: string; sportLeagueId: string; points: number; formTag?: 'hot' | 'cold' | null }>;
+}
+
+interface RankHistoryEntry { weekOf: string; ranks: Record<string, number>; }
+
+interface LeagueSummary { myPoints: number | null; rankDelta: number | null; }
+
+interface WaiverActivity {
+  id: string; leagueId: string; leagueName: string;
+  claimantDisplayName: string;
+  addTeamName?: string; dropTeamName?: string;
+  reviewedAt: string | null; requestedAt: string; status: string;
+}
+
+interface BestTeam { teamName: string; sport: string; points: number; formTag: 'hot' | 'cold' | null; }
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const SPORT_ACRONYMS = new Set(['nhl', 'nba', 'nfl', 'mlb', 'ucl', 'ncaa', 'mls', 'fifa', 'ufc']);
@@ -71,6 +89,16 @@ function formatSeason(start?: string, end?: string): string | null {
   if (start && end) return `${fmt(start)} – ${fmt(end)}`;
   if (start) return `From ${fmt(start)}`;
   return null;
+}
+
+function formatTimeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const h = Math.floor(diff / 3600000);
+  if (h < 1) return 'just now';
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(diff / 86400000);
+  if (d < 7) return `${d}d ago`;
+  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
 function draftCountdown(scheduledStartAt?: string | null): string {
@@ -301,6 +329,11 @@ export default function DashboardPage() {
 
   const [fetchKey, setFetchKey] = useState(0);
 
+  const [leagueSummaries, setLeagueSummaries] = useState<Map<string, LeagueSummary>>(new Map());
+  const [recentActivity, setRecentActivity] = useState<WaiverActivity[]>([]);
+  const [sportDeadlines, setSportDeadlines] = useState<Record<string, string>>({});
+  const [bestTeam, setBestTeam] = useState<BestTeam | null>(null);
+
   useEffect(() => {
     if (authLoading || !user) return;
     setLoading(true);
@@ -313,6 +346,72 @@ export default function DashboardPage() {
       .then(setPendingInvites)
       .catch(() => {});
   }, [authLoading, user, fetchKey]);
+
+  // Fetch standings summaries + waiver activity for all active leagues
+  useEffect(() => {
+    if (authLoading || !user) return;
+    const active = leagues.filter(l => l.state === 'active');
+    if (!active.length) { setLeagueSummaries(new Map()); setRecentActivity([]); setBestTeam(null); return; }
+
+    // Standings: rank delta + points + best team
+    Promise.all(
+      active.map(league =>
+        api.get<{ standings: DashStanding[]; rankHistory: RankHistoryEntry[] }>(`/leagues/${league.id}/standings`)
+          .then(({ standings, rankHistory }) => ({ leagueId: league.id, standings, rankHistory }))
+          .catch(() => null)
+      )
+    ).then(results => {
+      const map = new Map<string, LeagueSummary>();
+      let best: BestTeam | null = null;
+      let bestPoints = -1;
+
+      for (const r of results) {
+        if (!r) continue;
+        const mine = r.standings.find(s => s.userId === user.uid);
+        if (!mine) continue;
+
+        let rankDelta: number | null = null;
+        if (r.rankHistory.length >= 2) {
+          const sorted = [...r.rankHistory].sort((a, b) => b.weekOf.localeCompare(a.weekOf));
+          const cur = sorted[0].ranks[user.uid];
+          const prev = sorted[1].ranks[user.uid];
+          if (cur != null && prev != null) rankDelta = prev - cur;
+        }
+        map.set(r.leagueId, { myPoints: mine.totalPoints ?? null, rankDelta });
+
+        // Best performing team: prefer hot-tagged, then highest points
+        for (const tb of mine.teamBreakdown ?? []) {
+          const isHot = tb.formTag === 'hot';
+          if (tb.points > bestPoints || (isHot && (!best || best.formTag !== 'hot'))) {
+            if (!best || tb.points > bestPoints || (isHot && best.formTag !== 'hot')) {
+              bestPoints = tb.points;
+              best = { teamName: tb.teamName, sport: tb.sport, points: tb.points, formTag: tb.formTag ?? null };
+            }
+          }
+        }
+      }
+      setLeagueSummaries(map);
+      setBestTeam(best);
+    });
+
+    // Waiver activity across all active leagues
+    Promise.all(
+      active.map(league =>
+        api.get<Array<{ id: string; claimantDisplayName: string; addTeamName?: string; dropTeamName?: string; reviewedAt: string | null; requestedAt: string; status: string }>>(`/leagues/${league.id}/waivers/history`)
+          .then(claims => claims.map(c => ({ ...c, leagueId: league.id, leagueName: league.name })))
+          .catch(() => [] as WaiverActivity[])
+      )
+    ).then(results => {
+      const all = results.flat()
+        .filter(c => c.status === 'approved')
+        .sort((a, b) => (b.reviewedAt ?? b.requestedAt).localeCompare(a.reviewedAt ?? a.requestedAt))
+        .slice(0, 6);
+      setRecentActivity(all);
+    });
+
+    // Sport transaction deadlines
+    api.get<Record<string, string>>('/sports/deadlines').then(setSportDeadlines).catch(() => {});
+  }, [authLoading, user, leagues]);
 
   async function acceptInvite(invite: PendingInvite) {
     setAcceptingInvite(s => ({ ...s, [invite.id]: true }));
@@ -547,6 +646,66 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {/* This Week */}
+      {leagueSummaries.size > 0 && (() => {
+        const activeWithRank = activeLeagues.filter(l => l.state === 'active' && l.myRank != null);
+        if (!activeWithRank.length) return null;
+        return (
+          <div>
+            <h2 className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-3">This Week</h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              {activeWithRank.map(league => {
+                const summary = leagueSummaries.get(league.id);
+                const delta = summary?.rankDelta ?? null;
+                // Best percentile = best rank
+                const pct = league.myRank != null && league.totalMembers ? (league.totalMembers - league.myRank) / league.totalMembers : -1;
+                const isBest = pct >= 0 && activeWithRank.every(l2 => {
+                  const p2 = l2.myRank != null && l2.totalMembers ? (l2.totalMembers - l2.myRank) / l2.totalMembers : -1;
+                  return pct >= p2;
+                });
+                return (
+                  <Link key={league.id} href={`/leagues/${league.id}`}
+                    className={`group rounded-xl p-3 border transition-colors ${isBest ? 'bg-brand-dim border-brand/30 hover:border-brand/60' : 'bg-card border-line hover:border-brand/30'}`}
+                  >
+                    <p className="text-[11px] text-copy-3 truncate mb-2 group-hover:text-copy-2 transition-colors">{league.name}</p>
+                    <div className="flex items-end justify-between gap-1">
+                      <div>
+                        <span className={`text-xl font-bold tabular-nums ${isBest ? 'text-brand' : 'text-copy'}`}>#{league.myRank}</span>
+                        {league.totalMembers && <span className="text-[11px] text-copy-3 ml-0.5">/{league.totalMembers}</span>}
+                      </div>
+                      {delta != null && delta !== 0 && (
+                        <span className={`text-xs font-bold flex items-center gap-0.5 pb-0.5 ${delta > 0 ? 'text-positive' : 'text-danger'}`}>
+                          {delta > 0 ? '↑' : '↓'}{Math.abs(delta)}
+                        </span>
+                      )}
+                    </div>
+                    {summary?.myPoints != null && (
+                      <p className="text-[11px] text-copy-3 mt-1 tabular-nums">{summary.myPoints.toFixed(1)} pts</p>
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Best performer */}
+      {bestTeam && (
+        <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${bestTeam.formTag === 'hot' ? 'bg-orange-500/5 border-orange-500/20' : 'bg-card border-line'}`}>
+          <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${bestTeam.formTag === 'hot' ? 'bg-orange-500/10 border border-orange-500/20' : 'bg-field border border-line'}`}>
+            {bestTeam.formTag === 'hot'
+              ? <svg width="13" height="13" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="text-orange-400"><path d="M5 8V2M2 5l3-3 3 3"/></svg>
+              : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-copy-3"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            }
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-copy truncate">{bestTeam.teamName}</p>
+            <p className="text-xs text-copy-3">{bestTeam.formTag === 'hot' ? 'Hot team on your roster' : 'Top scorer on your roster'} · {formatSport(bestTeam.sport)} · {bestTeam.points.toFixed(1)} pts</p>
+          </div>
+        </div>
+      )}
+
       {/* Error */}
       {error && (
         <div className="bg-danger-bg border border-danger/20 rounded-xl p-4 flex items-center justify-between gap-4">
@@ -622,6 +781,47 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+      {/* Upcoming deadlines */}
+      {(() => {
+        const now = Date.now();
+        const endingSoon = activeLeagues.filter(l => {
+          if (!l.endDate) return false;
+          const days = (new Date(l.endDate + 'T00:00:00').getTime() - now) / 86400000;
+          return days > 0 && days <= 30;
+        });
+        const deadlineItems = Object.entries(sportDeadlines)
+          .map(([sport, iso]) => ({ sport, date: new Date(iso), days: Math.ceil((new Date(iso).getTime() - now) / 86400000) }))
+          .filter(d => d.days > 0 && d.days <= 10)
+          .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+        if (!endingSoon.length && !deadlineItems.length) return null;
+        return (
+          <div className="bg-warn/5 border border-warn/20 rounded-xl px-4 py-3 space-y-1.5">
+            <div className="flex items-center gap-1.5 mb-2">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-warn">
+                <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+              </svg>
+              <span className="text-xs font-semibold text-warn uppercase tracking-widest">Coming Up</span>
+            </div>
+            {deadlineItems.map(d => (
+              <div key={d.sport} className="flex items-center justify-between">
+                <span className="text-sm text-copy-2">{formatSport(d.sport)} transaction deadline</span>
+                <span className="text-xs font-medium text-warn">{d.days === 1 ? 'Tomorrow' : `${d.days} days`}</span>
+              </div>
+            ))}
+            {endingSoon.map(l => {
+              const days = Math.ceil((new Date(l.endDate! + 'T00:00:00').getTime() - now) / 86400000);
+              return (
+                <Link key={l.id} href={`/leagues/${l.id}`} className="flex items-center justify-between group">
+                  <span className="text-sm text-copy-2 group-hover:text-copy transition-colors truncate">{l.name} ends</span>
+                  <span className="text-xs font-medium text-warn flex-shrink-0 ml-2">{days === 1 ? 'Tomorrow' : `${days} days`}</span>
+                </Link>
+              );
+            })}
+          </div>
+        );
+      })()}
 
       {/* League grid */}
       {!error && loading ? (
@@ -736,6 +936,38 @@ export default function DashboardPage() {
           {activeLeagues.length === 0 && pastLeagues.length === 0 && null}
         </div>
       ) : null}
+
+      {/* Recent activity */}
+      {recentActivity.length > 0 && (
+        <div>
+          <h2 className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-3">Recent Activity</h2>
+          <div className="bg-card border border-line rounded-2xl divide-y divide-line/40 overflow-hidden">
+            {recentActivity.map(item => {
+              const when = formatTimeAgo(item.reviewedAt ?? item.requestedAt);
+              const action = item.addTeamName
+                ? `${item.claimantDisplayName} added ${item.addTeamName}${item.dropTeamName ? `, dropped ${item.dropTeamName}` : ''}`
+                : `${item.claimantDisplayName} made a waiver claim`;
+              return (
+                <Link key={item.id} href={`/leagues/${item.leagueId}`}
+                  className="flex items-center gap-3 px-4 py-3 hover:bg-field/50 transition-colors group"
+                >
+                  <div className="w-7 h-7 rounded-lg bg-field border border-line flex items-center justify-center flex-shrink-0">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-copy-3">
+                      <polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 014-4h14"/>
+                      <polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 01-4 4H3"/>
+                    </svg>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-copy truncate group-hover:text-brand transition-colors">{action}</p>
+                    <p className="text-xs text-copy-3 mt-0.5">{item.leagueName}</p>
+                  </div>
+                  <span className="text-xs text-copy-3 flex-shrink-0 tabular-nums">{when}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
