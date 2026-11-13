@@ -149,41 +149,49 @@ function LeagueRow({ league, muted = false, starred = false, onToggleStar }: { l
           </span>
         )}
       </div>
-      <span className={`flex-shrink-0 text-xs font-medium px-2 py-0.5 rounded-full border inline-flex items-center gap-1 ${meta.cls}`}>
-        <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70 flex-shrink-0" />
-        {meta.label}
-      </span>
-      {league.selectedSports && league.selectedSports.length > 0 && (
-        <div className="hidden sm:flex items-center gap-1 flex-shrink-0">
-          {league.selectedSports.slice(0, 2).map(s => (
-            <span key={s} className="text-[11px] bg-field border border-line text-copy-3 px-1.5 py-0.5 rounded">
+      {/* Right-side columns — each has a fixed width so rows stay aligned */}
+      <div className="flex items-center gap-4 flex-shrink-0">
+        {/* Status badge */}
+        <div className="w-[4.5rem] flex justify-center">
+          <span className={`whitespace-nowrap text-xs font-medium px-2 py-0.5 rounded-full border inline-flex items-center gap-1 ${meta.cls}`}>
+            <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70 flex-shrink-0" />
+            {meta.label}
+          </span>
+        </div>
+        {/* Sport tags */}
+        <div className="hidden sm:flex items-center gap-1 w-32">
+          {league.selectedSports && league.selectedSports.slice(0, 2).map(s => (
+            <span key={s} className="text-[11px] bg-field border border-line text-copy-3 px-1.5 py-0.5 rounded whitespace-nowrap">
               {formatSport(s)}
             </span>
           ))}
-          {league.selectedSports.length > 2 && (
-            <span className="text-[11px] text-copy-3" title={league.selectedSports.slice(2).map(formatSport).join(', ')}>
+          {league.selectedSports && league.selectedSports.length > 2 && (
+            <span className="text-[11px] text-copy-3 flex-shrink-0" title={league.selectedSports.slice(2).map(formatSport).join(', ')}>
               +{league.selectedSports.length - 2}
             </span>
           )}
         </div>
-      )}
-      <div className="hidden sm:flex items-center gap-3 text-xs text-copy-3 flex-shrink-0">
-        <span className="flex items-center gap-1">
+        {/* Member count */}
+        <div className="hidden sm:flex items-center gap-1 text-xs text-copy-3 w-10 flex-shrink-0">
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" />
             <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
           </svg>
-          {league.memberCount}{league.maxMembers ? ` / ${league.maxMembers}` : ''}
-        </span>
-        {countdown ? (
-          <span className="text-warn font-medium">{countdown}</span>
-        ) : season ? (
-          <span>{season}</span>
-        ) : null}
+          <span className="tabular-nums">{league.memberCount}{league.maxMembers ? ` / ${league.maxMembers}` : ''}</span>
+        </div>
+        {/* Season / countdown */}
+        <div className="hidden sm:block text-xs text-copy-3 w-28 text-right flex-shrink-0">
+          {countdown
+            ? <span className="text-warn font-medium whitespace-nowrap">{countdown}</span>
+            : season
+              ? <span className="whitespace-nowrap">{season}</span>
+              : null}
+        </div>
+        {/* Chevron */}
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-copy-3 flex-shrink-0 opacity-0 group-hover:opacity-60 transition-opacity">
+          <polyline points="9 18 15 12 9 6" />
+        </svg>
       </div>
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-copy-3 flex-shrink-0 opacity-0 group-hover:opacity-60 transition-opacity">
-        <polyline points="9 18 15 12 9 6" />
-      </svg>
     </Link>
   );
 }
