@@ -62,7 +62,7 @@ function RosterTab({
   useEffect(() => {
     api.get<SportGroup[]>(`/leagues/${leagueId}/sport-teams`)
       .then(setSportGroups).catch(() => {}).finally(() => setLoadingTeams(false));
-    api.get<Standing[]>(`/leagues/${leagueId}/standings`).then(setStandings).catch(() => {});
+    api.get<{ standings: Standing[] }>(`/leagues/${leagueId}/standings`).then(({ standings }) => setStandings(standings)).catch(() => {});
     api.get<Trade[]>(`/leagues/${leagueId}/trades`).then(setTrades).catch(() => {});
     const poll = setInterval(() => {
       api.get<Trade[]>(`/leagues/${leagueId}/trades`).then(setTrades).catch(() => {});

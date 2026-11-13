@@ -89,8 +89,8 @@ export default function LeaguePage() {
     ]).then(([l, m, ft]) => {
       setLeague(l); setMembers(m); setFantasyTeams(ft);
       if (l.state === 'active' || l.state === 'completed') {
-        api.get<Standing[]>(`/leagues/${id}/standings`)
-          .then(standings => {
+        api.get<{ standings: Standing[] }>(`/leagues/${id}/standings`)
+          .then(({ standings }) => {
             const mine = standings.find(s => s.userId === user?.uid);
             if (mine) setMyStanding(mine);
           }).catch(() => {});

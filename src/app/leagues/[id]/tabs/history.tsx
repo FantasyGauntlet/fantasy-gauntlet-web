@@ -37,8 +37,8 @@ function HistoryTab({ leagueId, leagueGroupId, previousLeagueId }: { leagueId: s
     if (!selectedId) return;
     setLoadingStandings(true);
     setStandings(null);
-    api.get<Standing[]>(`/leagues/${selectedId}/standings`)
-      .then(setStandings)
+    api.get<{ standings: Standing[] }>(`/leagues/${selectedId}/standings`)
+      .then(({ standings }) => setStandings(standings))
       .catch(() => setStandings([]))
       .finally(() => setLoadingStandings(false));
   }, [selectedId]);
