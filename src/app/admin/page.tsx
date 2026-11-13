@@ -849,6 +849,7 @@ export default function AdminPage() {
   const [annSuccess, setAnnSuccess] = useState<string | null>(null);
   const [annSending, setAnnSending] = useState<Record<string, boolean>>({});
   const [annTesting, setAnnTesting] = useState<Record<string, boolean>>({});
+  const [annPreviewing, setAnnPreviewing] = useState(false);
 
   async function loadAnnouncements() {
     setAnnLoading(true);
@@ -875,6 +876,21 @@ export default function AdminPage() {
       await loadAnnouncements();
     } catch (e: unknown) { setAnnError(e instanceof Error ? e.message : 'Failed to post'); }
     finally { setAnnSubmitting(false); }
+  }
+
+  async function previewAnnouncement() {
+    if (!annTitle.trim() || !annBody.trim()) { setAnnError('Title and body are required to test'); return; }
+    setAnnPreviewing(true);
+    setAnnError(null);
+    setAnnSuccess(null);
+    try {
+      const res = await api.post<{ sent: number }>('/admin/announcements/preview-test', {
+        title: annTitle.trim(),
+        body: annBody.trim(),
+      });
+      setAnnSuccess(`Test sent to ${res.sent} admin account${res.sent !== 1 ? 's' : ''}.`);
+    } catch (e: unknown) { setAnnError(e instanceof Error ? e.message : 'Failed to send test'); }
+    finally { setAnnPreviewing(false); }
   }
 
   async function sendAnnouncement(id: string) {
@@ -2652,13 +2668,23 @@ export default function AdminPage() {
                   />
                 </div>
               </div>
-              <button
-                onClick={submitAnnouncement}
-                disabled={annSubmitting}
-                className="bg-brand hover:bg-brand-2 disabled:opacity-50 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-colors"
-              >
-                {annSubmitting ? 'Posting…' : annScheduledAt ? 'Schedule' : 'Post Now'}
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={previewAnnouncement}
+                  disabled={annPreviewing || annSubmitting}
+                  className="border border-line hover:border-line-2 text-copy-2 hover:text-copy bg-field hover:bg-card disabled:opacity-50 text-sm font-semibold px-5 py-2.5 rounded-xl transition-colors"
+                  title="Send to admin accounts only — does not post publicly"
+                >
+                  {annPreviewing ? 'Sending test…' : 'Test (admins only)'}
+                </button>
+                <button
+                  onClick={submitAnnouncement}
+                  disabled={annSubmitting || annPreviewing}
+                  className="bg-brand hover:bg-brand-2 disabled:opacity-50 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-colors"
+                >
+                  {annSubmitting ? 'Posting…' : annScheduledAt ? 'Schedule' : 'Post Now'}
+                </button>
+              </div>
             </div>
 
             {/* History */}
