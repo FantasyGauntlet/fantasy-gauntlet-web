@@ -54,7 +54,7 @@ interface Announcement {
 
 interface DashStanding {
   userId: string; rank: number; totalPoints: number;
-  teamBreakdown: Array<{ teamId: string; teamName: string; sport: string; sportLeagueId: string; points: number; formTag?: 'hot' | 'cold' | null }>;
+  teamBreakdown: Array<{ teamId: string; teamName: string; sport: string; sportLeagueId: string; points: number; logoUrl?: string | null; formTag?: 'hot' | 'cold' | null; seasonActive?: boolean }>;
 }
 
 interface RankHistoryEntry { weekOf: string; ranks: Record<string, number>; }
@@ -64,11 +64,12 @@ interface LeagueSummary { myPoints: number | null; rankDelta: number | null; }
 interface WaiverActivity {
   id: string; leagueId: string; leagueName: string;
   claimantDisplayName: string;
-  addTeamName?: string; dropTeamName?: string;
+  addTeamName?: string; addTeamLogoUrl?: string | null;
+  dropTeamName?: string; dropTeamLogoUrl?: string | null;
   reviewedAt: string | null; requestedAt: string; status: string;
 }
 
-interface BestTeam { teamName: string; sport: string; points: number; formTag: 'hot' | 'cold' | null; }
+interface BestTeam { teamName: string; sport: string; points: number; formTag: 'hot' | 'cold' | null; logoUrl?: string | null; }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -385,7 +386,7 @@ export default function DashboardPage() {
           const isHot = tb.formTag === 'hot';
           if (!best || tb.points > bestPoints || (isHot && best.formTag !== 'hot')) {
             bestPoints = tb.points;
-            best = { teamName: tb.teamName, sport: tb.sport, points: tb.points, formTag: tb.formTag ?? null };
+            best = { teamName: tb.teamName, sport: tb.sport, points: tb.points, formTag: tb.formTag ?? null, logoUrl: tb.logoUrl ?? null };
           }
         }
       }
@@ -396,7 +397,7 @@ export default function DashboardPage() {
     // Waiver activity across all active leagues
     Promise.all(
       active.map(league =>
-        api.get<Array<{ id: string; claimantDisplayName: string; addTeamName?: string; dropTeamName?: string; reviewedAt: string | null; requestedAt: string; status: string }>>(`/leagues/${league.id}/waivers/history`)
+        api.get<Array<{ id: string; claimantDisplayName: string; addTeamName?: string; addTeamLogoUrl?: string | null; dropTeamName?: string; dropTeamLogoUrl?: string | null; reviewedAt: string | null; requestedAt: string; status: string }>>(`/leagues/${league.id}/waivers/history`)
           .then(claims => claims.map(c => ({ ...c, leagueId: league.id, leagueName: league.name })))
           .catch(() => [] as WaiverActivity[])
       )
@@ -692,10 +693,12 @@ export default function DashboardPage() {
       {/* Best performer */}
       {bestTeam && (
         <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${bestTeam.formTag === 'hot' ? 'bg-orange-500/5 border-orange-500/20' : 'bg-card border-line'}`}>
-          <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${bestTeam.formTag === 'hot' ? 'bg-orange-500/10 border border-orange-500/20' : 'bg-field border border-line'}`}>
-            {bestTeam.formTag === 'hot'
-              ? <svg width="13" height="13" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="text-orange-400"><path d="M5 8V2M2 5l3-3 3 3"/></svg>
-              : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-copy-3"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden ${bestTeam.formTag === 'hot' ? 'bg-orange-500/10 border border-orange-500/20' : 'bg-field border border-line'}`}>
+            {bestTeam.logoUrl
+              ? <img src={bestTeam.logoUrl} alt={bestTeam.teamName} className="w-6 h-6 object-contain" />
+              : bestTeam.formTag === 'hot'
+                ? <svg width="13" height="13" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="text-orange-400"><path d="M5 8V2M2 5l3-3 3 3"/></svg>
+                : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-copy-3"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
             }
           </div>
           <div className="flex-1 min-w-0">
@@ -950,11 +953,14 @@ export default function DashboardPage() {
                 <Link key={item.id} href={`/leagues/${item.leagueId}`}
                   className="flex items-center gap-3 px-4 py-3 hover:bg-field/50 transition-colors group"
                 >
-                  <div className="w-7 h-7 rounded-lg bg-field border border-line flex items-center justify-center flex-shrink-0">
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-copy-3">
-                      <polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 014-4h14"/>
-                      <polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 01-4 4H3"/>
-                    </svg>
+                  <div className="w-7 h-7 rounded-lg bg-field border border-line flex items-center justify-center flex-shrink-0 overflow-hidden">
+                    {item.addTeamLogoUrl
+                      ? <img src={item.addTeamLogoUrl} alt={item.addTeamName ?? ''} className="w-5 h-5 object-contain" />
+                      : <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-copy-3">
+                          <polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 014-4h14"/>
+                          <polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 01-4 4H3"/>
+                        </svg>
+                    }
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-copy truncate group-hover:text-brand transition-colors">{action}</p>
