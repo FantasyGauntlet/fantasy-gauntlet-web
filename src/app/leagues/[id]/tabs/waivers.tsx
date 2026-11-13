@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect, useMemo } from 'react';
 import { api } from '@/lib/api';
@@ -135,7 +135,7 @@ function ClaimCard({
                   <>
                     <p className="text-xs text-copy-3 mt-0.5">{formatLeagueName(dropTeam.sportLeagueId)}</p>
                     <p className="text-xs text-copy-2 mt-0.5">
-                      {formatRecord(dropTeam.wins, dropTeam.draws, dropTeam.losses, dropTeam.sport)} · {dropTeam.points.toFixed(1)} pts
+                      {formatRecord(dropTeam.wins, dropTeam.draws, dropTeam.losses, dropTeam.sport)} Â· {dropTeam.points.toFixed(1)} pts
                     </p>
                   </>
                 )}
@@ -143,7 +143,7 @@ function ClaimCard({
             ) : (
               <div className="flex-1 bg-field border border-line/60 rounded-xl px-3 py-2.5">
                 <p className="text-xs text-copy-3 mb-1">Drop</p>
-                <p className="text-xs text-copy-3 italic">None — add only</p>
+                <p className="text-xs text-copy-3 italic">None â€” add only</p>
               </div>
             )}
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-copy-3 flex-shrink-0">
@@ -162,7 +162,7 @@ function ClaimCard({
                 <>
                   <p className="text-xs text-copy-3 mt-0.5">{formatLeagueName(addTeam.sportLeagueId)}</p>
                   <p className="text-xs text-copy-2 mt-0.5">
-                    {formatRecord(addTeam.wins, addTeam.draws, addTeam.losses, addTeam.sport)} · {addTeam.points.toFixed(1)} pts
+                    {formatRecord(addTeam.wins, addTeam.draws, addTeam.losses, addTeam.sport)} Â· {addTeam.points.toFixed(1)} pts
                   </p>
                 </>
               )}
@@ -178,7 +178,7 @@ function ClaimCard({
             )}
             <p className="text-xs text-copy-3">
               {new Date(claim.requestedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-              {' · '}
+              {' Â· '}
               {new Date(claim.requestedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </p>
             {claim.reviewedAt && (
@@ -199,7 +199,7 @@ function ClaimCard({
           )}
         </div>
 
-        {/* Edit + Withdraw — own pending claim */}
+        {/* Edit + Withdraw â€” own pending claim */}
         {onWithdraw && claim.status === 'pending' && !isCommissioner && (
           <div className="flex-shrink-0 flex flex-col gap-1.5 items-end">
             {editMode ? (
@@ -266,7 +266,7 @@ function ClaimCard({
           </div>
         )}
 
-        {/* Commissioner delete — any claim, any status */}
+        {/* Commissioner delete â€” any claim, any status */}
         {onWithdraw && isCommissioner && (
           <div className="flex-shrink-0">
             <button
@@ -367,18 +367,22 @@ function WaiversTab({
   const [browseAvailability, setBrowseAvailability] = useState<'available' | 'all'>('available');
   const [bestRankMap, setBestRankMap] = useState<Map<string, number>>(new Map());
 
-  // Waiver claim form
+  // Waiver claim form (single claim)
   const [showForm, setShowForm] = useState(false);
   const [dropTeamId, setDropTeamId] = useState('');
-  // Each slot is one priority claim (all share the same drop)
-  const [slots, setSlots] = useState<{ addTeamId: string; faabBid: number; search: string }[]>([
-    { addTeamId: '', faabBid: 0, search: '' },
-  ]);
-  const [dragIdx, setDragIdx] = useState<number | null>(null);
-  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+  const [addTeamId, setAddTeamId] = useState('');
+  const [addSearch, setAddSearch] = useState('');
+  const [faabBid, setFaabBid] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [submitSuccess, setSubmitSuccess] = useState('');
+
+  // Pending moves modal
+  const [showPendingModal, setShowPendingModal] = useState(false);
+  const [pendingOrder, setPendingOrder] = useState<string[]>([]);
+  const [reorderDragIdx, setReorderDragIdx] = useState<number | null>(null);
+  const [reorderDragOverIdx, setReorderDragOverIdx] = useState<number | null>(null);
+  const [reordering, setReordering] = useState(false);
 
   // Commissioner state
   const [denyingId, setDenyingId] = useState<string | null>(null);
@@ -502,12 +506,46 @@ function WaiversTab({
   const myTeamUserId = myTeam?.userId;
   const canSubmit = !!myTeam;
 
-  function updateSlot(i: number, updates: Partial<{ addTeamId: string; faabBid: number; search: string }>) {
-    setSlots(prev => prev.map((s, idx) => idx === i ? { ...s, ...updates } : s));
+  function openAddForm(teamId?: string) {
+    if (teamId) setAddTeamId(teamId);
+    setShowForm(true);
   }
 
-  function moveSlot(fromIdx: number, toIdx: number) {
-    setSlots(prev => {
+  function closeForm() {
+    setShowForm(false);
+    setDropTeamId('');
+    setAddTeamId('');
+    setAddSearch('');
+    setFaabBid(0);
+    setSubmitError('');
+  }
+
+  async function submitClaim() {
+    if (!addTeamId) return;
+    if (!isUnderRosterSize && !dropTeamId) return;
+    setSubmitting(true); setSubmitError('');
+    try {
+      const body: Record<string, unknown> = { addTeamId };
+      if (dropTeamId) body.dropTeamId = dropTeamId;
+      if (waiverType === 'faab') body.faabBid = faabBid;
+      const claim = await api.post<WaiverClaim>(`/leagues/${leagueId}/waivers`, body);
+      setClaims(c => [...c, claim]);
+      closeForm();
+      setSubmitSuccess('Claim submitted.');
+      setTimeout(() => setSubmitSuccess(''), 4000);
+    } catch (e: unknown) {
+      setSubmitError(e instanceof Error ? e.message : 'Failed to submit claim');
+    } finally { setSubmitting(false); }
+  }
+
+  function openPendingModal() {
+    const sorted = [...pending].sort((a, b) => (a.priority ?? 1) - (b.priority ?? 1));
+    setPendingOrder(sorted.map(c => c.id));
+    setShowPendingModal(true);
+  }
+
+  function movePending(fromIdx: number, toIdx: number) {
+    setPendingOrder(prev => {
       const next = [...prev];
       const [moved] = next.splice(fromIdx, 1);
       next.splice(toIdx, 0, moved);
@@ -515,47 +553,18 @@ function WaiversTab({
     });
   }
 
-  function openAddForm(teamId?: string) {
-    if (teamId) updateSlot(0, { addTeamId: teamId });
-    setShowForm(true);
-  }
-
-  function closeForm() {
-    setShowForm(false);
-    setDropTeamId('');
-    setSlots([{ addTeamId: '', faabBid: 0, search: '' }]);
-    setSubmitError('');
-  }
-
-  async function submitClaim() {
-    const filledSlots = slots.filter(s => s.addTeamId);
-    if (!filledSlots.length) return;
-    if (!isUnderRosterSize && !dropTeamId) return;
-    setSubmitting(true); setSubmitError('');
+  async function saveReorder() {
+    setReordering(true);
     try {
-      if (filledSlots.length === 1) {
-        const body: Record<string, unknown> = { addTeamId: filledSlots[0].addTeamId };
-        if (dropTeamId) body.dropTeamId = dropTeamId;
-        if (waiverType === 'faab') body.faabBid = filledSlots[0].faabBid;
-        const claim = await api.post<WaiverClaim>(`/leagues/${leagueId}/waivers`, body);
-        setClaims(c => [claim, ...c]);
-      } else {
-        const body: Record<string, unknown> = {
-          claims: filledSlots.map(s => ({
-            addTeamId: s.addTeamId,
-            ...(waiverType === 'faab' ? { faabBid: s.faabBid } : {}),
-          })),
-        };
-        if (dropTeamId) body.dropTeamId = dropTeamId;
-        const newClaims = await api.post<WaiverClaim[]>(`/leagues/${leagueId}/waivers/group`, body);
-        setClaims(c => [...newClaims, ...c]);
-      }
-      closeForm();
-      setSubmitSuccess(filledSlots.length > 1 ? `Priority group of ${filledSlots.length} claims submitted.` : 'Claim submitted.');
-      setTimeout(() => setSubmitSuccess(''), 4000);
+      await api.patch(`/leagues/${leagueId}/waivers/reorder`, { claimIds: pendingOrder });
+      setClaims(prev => prev.map(c => {
+        const idx = pendingOrder.indexOf(c.id);
+        return idx >= 0 ? { ...c, priority: idx + 1 } : c;
+      }));
+      setShowPendingModal(false);
     } catch (e: unknown) {
-      setSubmitError(e instanceof Error ? e.message : 'Failed to submit claim');
-    } finally { setSubmitting(false); }
+      setSubmitError(e instanceof Error ? e.message : 'Failed to save order');
+    } finally { setReordering(false); }
   }
 
   async function withdraw(claimId: string) {
@@ -643,7 +652,7 @@ function WaiversTab({
       {actionError && (
         <div className="bg-danger/10 border border-danger/30 text-danger text-sm rounded-xl px-4 py-3 flex items-center justify-between gap-3">
           <span>{actionError}</span>
-          <button onClick={() => setActionError(null)} className="flex-shrink-0 text-danger/70 hover:text-danger text-lg leading-none">×</button>
+          <button onClick={() => setActionError(null)} className="flex-shrink-0 text-danger/70 hover:text-danger text-lg leading-none">Ã—</button>
         </div>
       )}
       {/* Processing schedule banner */}
@@ -663,12 +672,21 @@ function WaiversTab({
           <h2 className="text-sm font-semibold text-copy">Waivers</h2>
         </div>
         <div className="flex items-center gap-2">
+          {canSubmit && pending.length > 0 && !showForm && (
+            <button
+              onClick={openPendingModal}
+              className="relative text-sm font-medium text-copy-2 border border-line bg-field hover:bg-field-2 px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5"
+            >
+              Pending Moves
+              <span className="bg-brand text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">{pending.length}</span>
+            </button>
+          )}
           {canSubmit && !showForm && (
             <button
               onClick={() => openAddForm()}
               className="bg-brand hover:bg-brand-2 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors"
             >
-              Waiver Claim
+              + Claim
             </button>
           )}
         </div>
@@ -680,7 +698,7 @@ function WaiversTab({
         </div>
       )}
 
-      {/* Waiver claim form */}
+      {/* Waiver claim form â€” single claim */}
       {showForm && canSubmit && (
         <div className="bg-card border border-line rounded-2xl p-5 space-y-5">
           <div className="flex items-center justify-between">
@@ -697,7 +715,7 @@ function WaiversTab({
             <p className="text-xs font-semibold text-copy-3 uppercase tracking-wider mb-2">
               1. Drop from your roster
               {isUnderRosterSize && (
-                <span className="ml-1.5 normal-case font-normal text-copy-3">(optional — you have room)</span>
+                <span className="ml-1.5 normal-case font-normal text-copy-3">(optional â€” you have room)</span>
               )}
             </p>
             {myRosterTeams.length === 0 ? (
@@ -726,176 +744,77 @@ function WaiversTab({
             )}
           </div>
 
-          {/* Step 2: Priority slots */}
-          <div className="space-y-3">
-            <p className="text-xs font-semibold text-copy-3 uppercase tracking-wider">
-              2. Add from available pool
-              {slots.length > 1 && <span className="ml-1.5 normal-case font-normal text-copy-3">· priority order — #1 is first choice</span>}
-            </p>
-
-            {slots.map((slot, i) => {
-              const slotTeam = slot.addTeamId ? comprehensiveTeamMap.get(slot.addTeamId) : null;
-              const slotPool = filteredPoolForSlot(slot.search).filter(t =>
-                !slots.some((s, si) => si !== i && s.addTeamId === t.id)
-              );
-              const isDragging = dragIdx === i;
-              const isDropTarget = dragOverIdx === i && dragIdx !== i;
-
+          {/* Step 2: Add team (single pick) */}
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-copy-3 uppercase tracking-wider">2. Add from available pool</p>
+            {addTeamId ? (() => {
+              const t = comprehensiveTeamMap.get(addTeamId);
               return (
-                <div
-                  key={i}
-                  draggable={slots.length > 1}
-                  onDragStart={() => { setDragIdx(i); setDragOverIdx(i); }}
-                  onDragOver={e => { e.preventDefault(); setDragOverIdx(i); }}
-                  onDrop={e => { e.preventDefault(); if (dragIdx !== null && dragIdx !== i) moveSlot(dragIdx, i); setDragIdx(null); setDragOverIdx(null); }}
-                  onDragEnd={() => { setDragIdx(null); setDragOverIdx(null); }}
-                  className="border rounded-xl overflow-hidden transition-all"
-                  style={{
-                    opacity: isDragging ? 0.45 : 1,
-                    borderColor: isDropTarget ? 'var(--color-brand)' : 'var(--color-line)',
-                    boxShadow: isDropTarget ? '0 0 0 1px var(--color-brand)' : undefined,
-                  }}
-                >
-                  <div className="flex items-center gap-2 px-3 py-2 bg-field/60 border-b border-line">
-                    {slots.length > 1 && (
-                      <svg
-                        width="14" height="14" viewBox="0 0 24 24" fill="currentColor"
-                        className="text-copy-3 flex-shrink-0 cursor-grab active:cursor-grabbing"
-                        style={{ touchAction: 'none' }}
-                      >
-                        <circle cx="9" cy="5" r="1.5" /><circle cx="15" cy="5" r="1.5" />
-                        <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
-                        <circle cx="9" cy="19" r="1.5" /><circle cx="15" cy="19" r="1.5" />
-                      </svg>
-                    )}
-                    <span className="text-[11px] font-bold text-brand tabular-nums">#{i + 1}</span>
-                    <span className="text-[11px] font-semibold text-copy-3 uppercase tracking-wide flex-1">
-                      {i === 0 ? 'First choice' : 'Backup'}
-                    </span>
-                    {slots.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => setSlots(prev => prev.filter((_, idx) => idx !== i))}
-                        className="text-copy-3 hover:text-danger transition-colors"
-                      >
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                          <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" />
-                        </svg>
-                      </button>
-                    )}
+                <div className="flex items-center gap-3 px-3 py-2.5 bg-brand/5 border border-brand/20 rounded-xl">
+                  {t?.logoUrl && <img src={t.logoUrl} alt={t.name} className="w-7 h-7 object-contain flex-shrink-0" />}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-copy truncate">{t?.name ?? addTeamId}</p>
+                    {t?.sportLeagueId && <p className="text-xs text-copy-3">{formatLeagueName(t.sportLeagueId)}</p>}
                   </div>
-
-                  <div className="p-3 space-y-2">
-                    {slotTeam ? (
-                      <div className="flex items-center gap-3 bg-brand-dim border border-brand/30 rounded-xl px-3 py-2.5">
-                        <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center">
-                          {slotTeam.logoUrl
-                            ? <img src={slotTeam.logoUrl} alt={slotTeam.name} className="w-8 h-8 object-contain" />
-                            : <div className="w-8 h-8 rounded bg-field-2 flex items-center justify-center text-copy-3 text-[10px] font-bold">{slotTeam.shortName?.slice(0, 2).toUpperCase() ?? '?'}</div>
-                          }
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-brand truncate">{slotTeam.name}</p>
-                          <p className="text-xs text-copy-3">{formatLeagueName(slotTeam.sportLeagueId)}</p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => updateSlot(i, { addTeamId: '', search: '' })}
-                          className="text-copy-3 hover:text-copy transition-colors p-1 flex-shrink-0"
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                            <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" />
-                          </svg>
-                        </button>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="relative">
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="absolute left-2.5 top-1/2 -translate-y-1/2 text-copy-3 pointer-events-none">
-                            <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" strokeLinecap="round" />
-                          </svg>
-                          <input
-                            type="text"
-                            value={slot.search}
-                            onChange={e => updateSlot(i, { search: e.target.value })}
-                            placeholder="Search available teams…"
-                            className="w-full bg-field border border-line-2 rounded-lg pl-7 pr-3 py-1.5 text-xs text-copy placeholder-copy-3 focus:outline-none focus:border-brand transition-colors"
-                          />
-                        </div>
-                        {slotPool.length === 0 ? (
-                          <p className="text-copy-3 text-xs py-2 text-center">No available teams found.</p>
-                        ) : (
-                          <div className="border border-line rounded-xl overflow-hidden max-h-48 overflow-y-auto divide-y divide-line/50">
-                            {slotPool.map(t => (
-                              <button
-                                key={t.id}
-                                type="button"
-                                onClick={() => updateSlot(i, { addTeamId: t.id, search: '' })}
-                                className="w-full flex items-center gap-3 px-3 py-2.5 transition-colors text-left hover:bg-field"
-                              >
-                                <div className="w-7 h-7 flex-shrink-0 flex items-center justify-center">
-                                  {t.logoUrl
-                                    ? <img src={t.logoUrl} alt={t.name} className="w-7 h-7 object-contain" />
-                                    : <div className="w-7 h-7 rounded bg-field-2 flex items-center justify-center text-copy-3 text-[10px] font-bold">{t.shortName?.slice(0, 2).toUpperCase() ?? '?'}</div>
-                                  }
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs font-medium text-copy truncate">{t.name}</p>
-                                  <p className="text-[10px] text-copy-3">{formatLeagueName(t.sportLeagueId)}</p>
-                                </div>
-                                <div className="text-right flex-shrink-0">
-                                  <p className="text-xs font-semibold text-copy tabular-nums">{t.points.toFixed(1)}</p>
-                                  <p className="text-[10px] text-copy-3">pts</p>
-                                </div>
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </>
-                    )}
-
-                    {/* Per-slot FAAB bid */}
-                    {waiverType === 'faab' && slotTeam && (
-                      <div className="flex items-center gap-2 pt-1">
-                        <span className="text-xs text-copy-3">Bid:</span>
-                        <span className="text-xs text-copy-2">$</span>
-                        <input
-                          type="number" min={0} step={1} max={myTeam?.faabRemaining ?? 0}
-                          value={slot.faabBid}
-                          onFocus={e => e.target.select()}
-                          onChange={e => { const v = e.target.valueAsNumber; updateSlot(i, { faabBid: isNaN(v) ? 0 : Math.max(0, Math.floor(v)) }); }}
-                          className="w-24 bg-field border border-line-2 rounded-lg px-3 py-1.5 text-xs text-copy focus:outline-none focus:border-brand transition-colors"
-                        />
-                      </div>
-                    )}
-                  </div>
+                  <button onClick={() => { setAddTeamId(''); setAddSearch(''); }} className="text-copy-3 hover:text-danger transition-colors p-1">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" /></svg>
+                  </button>
                 </div>
               );
-            })}
-
-            {/* Add backup slot */}
-            {slots[slots.length - 1].addTeamId && (
-              <button
-                type="button"
-                onClick={() => setSlots(prev => [...prev, { addTeamId: '', faabBid: 0, search: '' }])}
-                className="w-full flex items-center justify-center gap-1.5 text-xs font-medium text-brand border border-dashed border-brand/40 rounded-xl py-2.5 hover:bg-brand-dim transition-colors"
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <path d="M12 5v14M5 12h14" strokeLinecap="round" />
-                </svg>
-                Add backup claim
-              </button>
+            })() : (
+              <div className="border border-line rounded-xl overflow-hidden">
+                <div className="px-3 py-2 bg-field/60 border-b border-line">
+                  <input
+                    type="text"
+                    placeholder="Search available teamsâ€¦"
+                    value={addSearch}
+                    onChange={e => setAddSearch(e.target.value)}
+                    className="w-full bg-transparent text-xs text-copy placeholder:text-copy-3 outline-none"
+                    autoFocus
+                  />
+                </div>
+                <div className="max-h-48 overflow-y-auto divide-y divide-line/40">
+                  {filteredPoolForSlot(addSearch).slice(0, 20).map(t => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => { setAddTeamId(t.id); setAddSearch(''); }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-field-2 transition-colors text-left"
+                    >
+                      {t.logoUrl && <img src={t.logoUrl} alt={t.name} className="w-6 h-6 object-contain flex-shrink-0" />}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-copy truncate">{t.name}</p>
+                        <p className="text-[10px] text-copy-3">{formatLeagueName(t.sportLeagueId)}</p>
+                      </div>
+                    </button>
+                  ))}
+                  {filteredPoolForSlot(addSearch).length === 0 && (
+                    <p className="text-xs text-copy-3 px-3 py-3">No teams found.</p>
+                  )}
+                </div>
+              </div>
             )}
-
-            {myTeam && waiverType === 'faab' && (
-              <p className="text-xs text-copy-3">
-                Budget remaining: <span className="font-medium text-copy">${myTeam.faabRemaining ?? 0}</span>
-              </p>
+            {waiverType === 'faab' && addTeamId && (
+              <div className="flex items-center gap-3 mt-2">
+                <label className="text-xs font-medium text-copy-2">FAAB Bid</label>
+                <div className="flex items-center gap-1 border border-line rounded-lg px-2 py-1.5 bg-field">
+                  <span className="text-xs text-copy-3">$</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={myTeam?.faabRemaining ?? 0}
+                    value={faabBid}
+                    onChange={e => setFaabBid(Math.max(0, parseInt(e.target.value) || 0))}
+                    className="w-16 bg-transparent text-xs font-semibold text-copy outline-none tabular-nums"
+                  />
+                </div>
+                <span className="text-xs text-copy-3">of ${myTeam?.faabRemaining ?? 0} remaining</span>
+              </div>
             )}
           </div>
 
-          {/* Summary pill */}
-          {(dropTeamId || slots[0].addTeamId) && (
+          {/* Summary */}
+          {(dropTeamId || addTeamId) && (
             <div className="bg-field rounded-xl px-4 py-2.5 text-xs flex items-center gap-2 flex-wrap">
               {isUnderRosterSize && !dropTeamId ? (
                 <span className="text-copy-3 italic">No drop needed</span>
@@ -907,13 +826,9 @@ function WaiversTab({
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-copy-3 flex-shrink-0">
                 <path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              {slots.filter(s => s.addTeamId).length === 0 ? (
-                <span className="text-copy-3">Pick a team to add</span>
-              ) : slots.filter(s => s.addTeamId).length === 1 ? (
-                <span className="text-brand font-medium">{comprehensiveTeamMap.get(slots[0].addTeamId)?.name ?? slots[0].addTeamId}</span>
-              ) : (
-                <span className="text-brand font-medium">{slots.filter(s => s.addTeamId).length} priority claims</span>
-              )}
+              <span className={addTeamId ? 'text-brand font-medium' : 'text-copy-3'}>
+                {addTeamId ? (comprehensiveTeamMap.get(addTeamId)?.name ?? addTeamId) : 'Pick a team to add'}
+              </span>
             </div>
           )}
 
@@ -924,22 +839,102 @@ function WaiversTab({
           )}
 
           <div className="flex gap-2">
-            <button
-              onClick={closeForm}
-              className="flex-1 bg-field hover:bg-field-2 border border-line text-copy-2 text-sm font-medium py-2.5 rounded-xl transition-colors"
-            >
-              Cancel
-            </button>
+            <button onClick={closeForm} className="flex-1 bg-field hover:bg-field-2 border border-line text-copy-2 text-sm font-medium py-2.5 rounded-xl transition-colors">Cancel</button>
             <button
               onClick={submitClaim}
-              disabled={submitting || !slots[0].addTeamId || (!isUnderRosterSize && !dropTeamId)}
+              disabled={submitting || !addTeamId || (!isUnderRosterSize && !dropTeamId)}
               className="flex-1 bg-brand hover:bg-brand-2 disabled:opacity-40 text-white text-sm font-semibold py-2.5 rounded-xl transition-colors"
             >
-              {submitting ? 'Submitting...' : slots.filter(s => s.addTeamId).length > 1 ? `Submit ${slots.filter(s => s.addTeamId).length} Priority Claims` : 'Submit Claim'}
+              {submitting ? 'Submittingâ€¦' : 'Submit Claim'}
             </button>
           </div>
         </div>
       )}
+
+      {/* Pending Moves modal */}
+      {showPendingModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setShowPendingModal(false)}>
+          <div className="bg-card border border-line rounded-2xl w-full max-w-lg shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-line">
+              <div>
+                <h3 className="text-sm font-semibold text-copy">Pending Moves</h3>
+                <p className="text-xs text-copy-3 mt-0.5">Drag to set priority order Â· #1 processes first</p>
+              </div>
+              <button onClick={() => setShowPendingModal(false)} className="text-copy-3 hover:text-copy transition-colors p-1">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" /></svg>
+              </button>
+            </div>
+            <div className="divide-y divide-line/50 max-h-[60vh] overflow-y-auto">
+              {pendingOrder.map((claimId, idx) => {
+                const claim = pending.find(c => c.id === claimId);
+                if (!claim) return null;
+                const addTeam = comprehensiveTeamMap.get(claim.addTeamId);
+                const dropTeam = claim.dropTeamId ? comprehensiveTeamMap.get(claim.dropTeamId) : null;
+                const isDragging = reorderDragIdx === idx;
+                const isOver = reorderDragOverIdx === idx && reorderDragIdx !== idx;
+                return (
+                  <div
+                    key={claimId}
+                    draggable
+                    onDragStart={() => { setReorderDragIdx(idx); setReorderDragOverIdx(idx); }}
+                    onDragOver={e => { e.preventDefault(); setReorderDragOverIdx(idx); }}
+                    onDrop={e => { e.preventDefault(); if (reorderDragIdx !== null && reorderDragIdx !== idx) movePending(reorderDragIdx, idx); setReorderDragIdx(null); setReorderDragOverIdx(null); }}
+                    onDragEnd={() => { setReorderDragIdx(null); setReorderDragOverIdx(null); }}
+                    className="flex items-center gap-3 px-5 py-3.5 transition-colors select-none"
+                    style={{
+                      opacity: isDragging ? 0.4 : 1,
+                      background: isOver ? 'var(--color-field)' : undefined,
+                      borderLeft: isOver ? '2px solid var(--color-brand)' : '2px solid transparent',
+                    }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className="text-copy-3 flex-shrink-0 cursor-grab active:cursor-grabbing">
+                      <circle cx="9" cy="5" r="1.5" /><circle cx="15" cy="5" r="1.5" />
+                      <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
+                      <circle cx="9" cy="19" r="1.5" /><circle cx="15" cy="19" r="1.5" />
+                    </svg>
+                    <span className="text-xs font-bold text-brand tabular-nums w-5 flex-shrink-0">#{idx + 1}</span>
+                    <div className="flex-1 min-w-0 space-y-0.5">
+                      <div className="flex items-center gap-1.5">
+                        {addTeam?.logoUrl && <img src={addTeam.logoUrl} alt={addTeam.name} className="w-5 h-5 object-contain flex-shrink-0" />}
+                        <p className="text-xs font-semibold text-copy truncate">Add {addTeam?.name ?? claim.addTeamId}</p>
+                      </div>
+                      {dropTeam && (
+                        <p className="text-[11px] text-copy-3">Drop {dropTeam.name}</p>
+                      )}
+                      {waiverType === 'faab' && typeof claim.faabBid === 'number' && (
+                        <p className="text-[11px] text-brand font-medium">${claim.faabBid} bid</p>
+                      )}
+                    </div>
+                    <button
+                      onClick={async () => {
+                        await withdraw(claimId);
+                        setPendingOrder(prev => prev.filter(id => id !== claimId));
+                      }}
+                      className="text-[11px] text-copy-3 hover:text-danger transition-colors flex-shrink-0"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                );
+              })}
+              {pendingOrder.length === 0 && (
+                <p className="text-xs text-copy-3 px-5 py-6 text-center">No pending moves.</p>
+              )}
+            </div>
+            <div className="flex gap-2 px-5 py-4 border-t border-line">
+              <button onClick={() => setShowPendingModal(false)} className="flex-1 bg-field hover:bg-field-2 border border-line text-copy-2 text-sm font-medium py-2.5 rounded-xl transition-colors">Close</button>
+              <button
+                onClick={saveReorder}
+                disabled={reordering || pendingOrder.length === 0}
+                className="flex-1 bg-brand hover:bg-brand-2 disabled:opacity-40 text-white text-sm font-semibold py-2.5 rounded-xl transition-colors"
+              >
+                {reordering ? 'Savingâ€¦' : 'Save Order'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
 
       {/* Trending section */}
       {(() => {
@@ -1012,7 +1007,7 @@ function WaiversTab({
                 type="text"
                 value={browseSearch}
                 onChange={e => setBrowseSearch(e.target.value)}
-                placeholder="Search teams…"
+                placeholder="Search teamsâ€¦"
                 className="w-full bg-field border border-line-2 rounded-lg pl-6 pr-3 py-1.5 text-xs text-copy placeholder-copy-3 focus:outline-none focus:border-brand transition-colors"
               />
             </div>
@@ -1024,7 +1019,7 @@ function WaiversTab({
               <option value="best">Best Available</option>
               <option value="rostered">% Rostered</option>
               <option value="points">Most Points</option>
-              <option value="alpha">A–Z</option>
+              <option value="alpha">Aâ€“Z</option>
             </select>
             <div className="flex rounded-lg border border-line overflow-hidden text-xs font-medium">
               {(['available', 'all'] as const).map(v => (
@@ -1076,10 +1071,10 @@ function WaiversTab({
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <p className="text-sm font-semibold text-copy truncate">{t.name}</p>
                   {stats?.trend === 'up' && (
-                    <span className="text-[10px] font-semibold text-positive bg-positive/10 border border-positive/20 px-1.5 py-0.5 rounded-full leading-none flex-shrink-0">↑ Trending</span>
+                    <span className="text-[10px] font-semibold text-positive bg-positive/10 border border-positive/20 px-1.5 py-0.5 rounded-full leading-none flex-shrink-0">â†‘ Trending</span>
                   )}
                   {stats?.trend === 'down' && (
-                    <span className="text-[10px] font-semibold text-danger bg-danger/10 border border-danger/20 px-1.5 py-0.5 rounded-full leading-none flex-shrink-0">↓ Dropping</span>
+                    <span className="text-[10px] font-semibold text-danger bg-danger/10 border border-danger/20 px-1.5 py-0.5 rounded-full leading-none flex-shrink-0">â†“ Dropping</span>
                   )}
                 </div>
                 <div className="flex items-center gap-2 mt-0.5">
@@ -1165,7 +1160,7 @@ function WaiversTab({
         </div>
       </div>
 
-      {/* Pending claims — own only */}
+      {/* Pending claims â€” own only */}
       {myTeam && pending.length > 0 && (() => {
         const seenGroupIds = new Set<string>();
         const groups: WaiverClaim[][] = [];
@@ -1178,14 +1173,14 @@ function WaiversTab({
         return (
           <div>
             <p className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-2">
-              Your Pending Claims · {pending.length}
+              Your Pending Claims Â· {pending.length}
             </p>
             <div className="space-y-3">
               {groups.map((group, gi) => (
                 <div key={gi} className={group.length > 1 ? 'border border-brand/20 rounded-2xl overflow-hidden' : ''}>
                   {group.length > 1 && (
                     <div className="px-4 py-2 bg-brand-dim border-b border-brand/20">
-                      <p className="text-[11px] font-semibold text-brand">Priority group · {group.length} claims</p>
+                      <p className="text-[11px] font-semibold text-brand">Priority group Â· {group.length} claims</p>
                       <p className="text-[10px] text-copy-3 mt-0.5">If #1 is denied, #2 is tried next, and so on</p>
                     </div>
                   )}
@@ -1203,7 +1198,7 @@ function WaiversTab({
         );
       })()}
 
-      {/* Claim history — own resolved claims */}
+      {/* Claim history â€” own resolved claims */}
       {history.length > 0 && (
         <div>
           <p className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-2">Your History</p>
@@ -1215,7 +1210,7 @@ function WaiversTab({
         </div>
       )}
 
-      {/* League-wide transaction history — grouped by team, winner + collapsible losing bids */}
+      {/* League-wide transaction history â€” grouped by team, winner + collapsible losing bids */}
       {leagueHistory.length > 0 && (() => {
         // Group by addTeamId, preserving order (backend already sorts by reviewedAt desc then groups by bid)
         const seenTeams = new Set<string>();
@@ -1276,7 +1271,7 @@ function WaiversTab({
                               <span className="ml-1.5 text-brand font-medium">${winner.faabBid}</span>
                             )}
                             {winner.dropTeamName && (
-                              <span className="text-copy-3"> · dropped {winner.dropTeamName}</span>
+                              <span className="text-copy-3"> Â· dropped {winner.dropTeamName}</span>
                             )}
                           </p>
                         ) : (
@@ -1311,7 +1306,7 @@ function WaiversTab({
                         )}
                       </div>
                     </div>
-                    {/* Losing bids — collapsible */}
+                    {/* Losing bids â€” collapsible */}
                     {isExpanded && losers.length > 0 && (
                       <div className="bg-field/50 border-t border-line/40 divide-y divide-line/30">
                         {losers.map(loser => (
@@ -1327,7 +1322,7 @@ function WaiversTab({
                                 <p className="text-[11px] text-copy-3 mt-0.5 italic">{loser.denialReason}</p>
                               )}
                             </div>
-                            <span className="text-[11px] font-semibold text-danger/70 flex-shrink-0">✗ {loser.denialReason ?? 'denied'}</span>
+                            <span className="text-[11px] font-semibold text-danger/70 flex-shrink-0">âœ— {loser.denialReason ?? 'denied'}</span>
                           </div>
                         ))}
                       </div>
