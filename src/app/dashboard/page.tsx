@@ -41,6 +41,16 @@ interface PendingInvite {
   expiresAt: string;
 }
 
+interface Announcement {
+  id: string;
+  title: string;
+  body: string;
+  channels: { website: boolean; email: boolean };
+  scheduledAt: string | null;
+  sentAt: string | null;
+  createdAt: string;
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const SPORT_ACRONYMS = new Set(['nhl', 'nba', 'nfl', 'mlb', 'ucl', 'ncaa', 'mls', 'fifa', 'ufc']);
@@ -325,6 +335,33 @@ export default function DashboardPage() {
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
+  // ── Announcements ─────────────────────────────────────────────────────────
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [showChangelog, setShowChangelog] = useState(false);
+  const [popupAnn, setPopupAnn] = useState<Announcement | null>(null);
+
+  useEffect(() => {
+    if (authLoading || !user) return;
+    api.get<Announcement[]>('/announcements').then(list => {
+      setAnnouncements(list);
+      try {
+        const seen: string[] = JSON.parse(localStorage.getItem('fg_seen_announcements') ?? '[]');
+        const unseen = list.filter(a => !seen.includes(a.id));
+        if (unseen.length > 0) setPopupAnn(unseen[0]);
+      } catch { /* ignore */ }
+    }).catch(() => {});
+  }, [authLoading, user]);
+
+  function dismissPopup() {
+    if (!popupAnn) return;
+    try {
+      const seen: string[] = JSON.parse(localStorage.getItem('fg_seen_announcements') ?? '[]');
+      if (!seen.includes(popupAnn.id)) seen.push(popupAnn.id);
+      localStorage.setItem('fg_seen_announcements', JSON.stringify(seen));
+    } catch { /* ignore */ }
+    setPopupAnn(null);
+  }
+
   const [showPast, setShowPast] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>(() => {
     try { return (localStorage.getItem('fg_league_view') as 'grid' | 'list') ?? 'grid'; }
@@ -360,22 +397,118 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8">
+      {/* Announcement popup */}
+      {popupAnn && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={dismissPopup}>
+          <div
+            className="bg-card border border-line rounded-2xl p-6 w-full max-w-md shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-brand-dim border border-brand/20 flex items-center justify-center flex-shrink-0">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-brand">
+                    <path d="M22 10v6M2 10l10-5 10 5-10 5z" /><path d="M6 12v5c3 3 9 3 12 0v-5" />
+                  </svg>
+                </div>
+                <span className="text-xs font-semibold text-copy-3 uppercase tracking-widest">What's New</span>
+              </div>
+              <button onClick={dismissPopup} className="text-copy-3 hover:text-copy transition-colors p-1 -mr-1 -mt-1">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+            <h2 className="text-lg font-bold text-copy mb-2">{popupAnn.title}</h2>
+            <p className="text-sm text-copy-2 leading-relaxed whitespace-pre-wrap mb-5">{popupAnn.body}</p>
+            {popupAnn.sentAt && (
+              <p className="text-xs text-copy-3 mb-4">{new Date(popupAnn.sentAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
+            )}
+            <button
+              onClick={dismissPopup}
+              className="w-full bg-brand hover:bg-brand-2 text-white font-semibold text-sm py-2.5 rounded-xl transition-colors"
+            >
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Changelog drawer */}
+      {showChangelog && (
+        <div className="fixed inset-0 z-40 flex" onClick={() => setShowChangelog(false)}>
+          <div className="flex-1" />
+          <div
+            className="w-full max-w-sm bg-card border-l border-line h-full overflow-y-auto shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="sticky top-0 bg-card border-b border-line px-5 py-4 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-copy">Site Updates</h2>
+              <button onClick={() => setShowChangelog(false)} className="text-copy-3 hover:text-copy transition-colors">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-5 space-y-5">
+              {announcements.length === 0 && (
+                <p className="text-sm text-copy-3">No updates yet.</p>
+              )}
+              {announcements.map(a => (
+                <div key={a.id} className="border-b border-line pb-5 last:border-0 last:pb-0">
+                  <p className="text-xs text-copy-3 mb-1">
+                    {a.sentAt
+                      ? new Date(a.sentAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+                      : new Date(a.createdAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                  </p>
+                  <h3 className="text-sm font-semibold text-copy mb-1">{a.title}</h3>
+                  <p className="text-sm text-copy-2 whitespace-pre-wrap leading-relaxed">{a.body}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-copy-3 text-sm mb-0.5">{greeting}</p>
           <h1 className="text-2xl font-bold text-copy">{firstName}</h1>
         </div>
-        <Link
-          href="/leagues/new"
-          className="flex items-center gap-2 bg-brand hover:bg-brand-2 text-white font-semibold px-4 py-2.5 rounded-xl transition-colors text-sm flex-shrink-0"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-            <line x1="12" y1="5" x2="12" y2="19" />
-            <line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
-          New League
-        </Link>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {announcements.length > 0 && (
+            <button
+              onClick={() => setShowChangelog(true)}
+              title="Site updates"
+              className="relative flex items-center gap-1.5 text-copy-3 hover:text-copy border border-line hover:border-line-2 bg-field hover:bg-card px-3 py-2 rounded-xl transition-colors text-sm"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" />
+              </svg>
+              <span className="hidden sm:inline text-xs font-medium">What's New</span>
+              {(() => {
+                try {
+                  const seen: string[] = JSON.parse(localStorage.getItem('fg_seen_announcements') ?? '[]');
+                  const unseenCount = announcements.filter(a => !seen.includes(a.id)).length;
+                  return unseenCount > 0 ? (
+                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-brand text-white text-[10px] font-bold rounded-full flex items-center justify-center">{unseenCount}</span>
+                  ) : null;
+                } catch { return null; }
+              })()}
+            </button>
+          )}
+          <Link
+            href="/leagues/new"
+            className="flex items-center gap-2 bg-brand hover:bg-brand-2 text-white font-semibold px-4 py-2.5 rounded-xl transition-colors text-sm"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            New League
+          </Link>
+        </div>
       </div>
 
       {/* Stats */}

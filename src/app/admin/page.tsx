@@ -31,7 +31,7 @@ const SYNCS = [
   { key: 'records',      label: 'Sync Records',             endpoint: '/admin/ingestion/records' },
 ];
 
-type Tab = 'sync' | 'bonus' | 'preset' | 'deadlines' | 'leagues' | 'elimination' | 'users' | 'season-dates' | 'pricing' | 'odds';
+type Tab = 'sync' | 'bonus' | 'preset' | 'deadlines' | 'leagues' | 'elimination' | 'users' | 'season-dates' | 'pricing' | 'odds' | 'announcements';
 
 interface AdminUser { id: string; email: string; displayName: string; roles: string[]; isPremium: boolean; createdAt: string; }
 
@@ -835,6 +835,58 @@ export default function AdminPage() {
     setManualOddsSubmitting(false);
   }
 
+  // ── Announcements ──────────────────────────────────────────────────────────
+  interface Announcement { id: string; title: string; body: string; channels: { website: boolean; email: boolean }; scheduledAt: string | null; sentAt: string | null; createdAt: string; }
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [annLoading, setAnnLoading] = useState(false);
+  const [annTitle, setAnnTitle] = useState('');
+  const [annBody, setAnnBody] = useState('');
+  const [annWebsite, setAnnWebsite] = useState(true);
+  const [annEmail, setAnnEmail] = useState(false);
+  const [annScheduledAt, setAnnScheduledAt] = useState('');
+  const [annSubmitting, setAnnSubmitting] = useState(false);
+  const [annError, setAnnError] = useState<string | null>(null);
+  const [annSuccess, setAnnSuccess] = useState<string | null>(null);
+  const [annSending, setAnnSending] = useState<Record<string, boolean>>({});
+
+  async function loadAnnouncements() {
+    setAnnLoading(true);
+    try { setAnnouncements(await api.get<Announcement[]>('/admin/announcements')); }
+    catch (e: unknown) { setAnnError(e instanceof Error ? e.message : 'Failed to load'); }
+    finally { setAnnLoading(false); }
+  }
+
+  async function submitAnnouncement() {
+    if (!annTitle.trim() || !annBody.trim()) { setAnnError('Title and body are required'); return; }
+    if (!annWebsite && !annEmail) { setAnnError('Select at least one channel'); return; }
+    setAnnSubmitting(true);
+    setAnnError(null);
+    setAnnSuccess(null);
+    try {
+      await api.post('/admin/announcements', {
+        title: annTitle.trim(),
+        body: annBody.trim(),
+        channels: { website: annWebsite, email: annEmail },
+        scheduledAt: annScheduledAt ? new Date(annScheduledAt).toISOString() : null,
+      });
+      setAnnTitle(''); setAnnBody(''); setAnnScheduledAt('');
+      setAnnSuccess(annScheduledAt ? 'Announcement scheduled.' : 'Announcement posted.');
+      await loadAnnouncements();
+    } catch (e: unknown) { setAnnError(e instanceof Error ? e.message : 'Failed to post'); }
+    finally { setAnnSubmitting(false); }
+  }
+
+  async function sendAnnouncement(id: string) {
+    setAnnSending(s => ({ ...s, [id]: true }));
+    try {
+      await api.post(`/admin/announcements/${id}/send`, {});
+      await loadAnnouncements();
+    } catch (e: unknown) { alert(e instanceof Error ? e.message : 'Failed'); }
+    finally { setAnnSending(s => { const n = { ...s }; delete n[id]; return n; }); }
+  }
+
+  useEffect(() => { if (tab === 'announcements') loadAnnouncements(); }, [tab]);
+
   const tabs: { key: Tab; label: string }[] = [
     { key: 'sync',         label: 'Data Sync' },
     { key: 'bonus',        label: 'Bonus Points' },
@@ -844,8 +896,9 @@ export default function AdminPage() {
     { key: 'leagues',      label: 'Leagues' },
     { key: 'elimination',  label: 'Elimination' },
     { key: 'pricing',      label: 'Auction Pricing' },
-    { key: 'users',        label: 'Users' },
-    { key: 'odds',         label: 'Odds Rankings' },
+    { key: 'users',         label: 'Users' },
+    { key: 'odds',          label: 'Odds Rankings' },
+    { key: 'announcements', label: 'Announcements' },
   ];
 
   return (
@@ -2542,6 +2595,120 @@ export default function AdminPage() {
             </div>
           </div>
         )}
+        {tab === 'announcements' && (
+          <div className="space-y-5">
+            {/* Post form */}
+            <div className="bg-card border border-line rounded-2xl p-5 space-y-4">
+              <h2 className="text-sm font-semibold text-copy">Post Announcement</h2>
+              {annError && <p className="text-danger text-xs">{annError}</p>}
+              {annSuccess && <p className="text-positive text-xs">{annSuccess}</p>}
+              <div>
+                <label className="block text-xs font-medium text-copy-2 mb-1">Title</label>
+                <input
+                  value={annTitle}
+                  onChange={e => setAnnTitle(e.target.value)}
+                  placeholder="e.g. New feature: sparklines on standings"
+                  className={inputCls}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-copy-2 mb-1">Body</label>
+                <textarea
+                  value={annBody}
+                  onChange={e => setAnnBody(e.target.value)}
+                  placeholder="Write the announcement body here…"
+                  rows={5}
+                  className={`${inputCls} resize-y`}
+                />
+              </div>
+              <div className="flex flex-wrap gap-4 items-center">
+                <div className="flex items-center gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={annWebsite} onChange={e => setAnnWebsite(e.target.checked)} className="w-4 h-4 accent-brand" />
+                    <span className="text-sm text-copy">Website popup</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={annEmail} onChange={e => setAnnEmail(e.target.checked)} className="w-4 h-4 accent-brand" />
+                    <span className="text-sm text-copy">Email all users</span>
+                  </label>
+                </div>
+                <div className="flex-1 min-w-[200px]">
+                  <label className="block text-xs font-medium text-copy-2 mb-1">Schedule (optional)</label>
+                  <input
+                    type="datetime-local"
+                    value={annScheduledAt}
+                    onChange={e => setAnnScheduledAt(e.target.value)}
+                    className={inputCls}
+                  />
+                </div>
+              </div>
+              <button
+                onClick={submitAnnouncement}
+                disabled={annSubmitting}
+                className="bg-brand hover:bg-brand-2 disabled:opacity-50 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-colors"
+              >
+                {annSubmitting ? 'Posting…' : annScheduledAt ? 'Schedule' : 'Post Now'}
+              </button>
+            </div>
+
+            {/* History */}
+            <div className="bg-card border border-line rounded-2xl p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-sm font-semibold text-copy">History</h2>
+                <button onClick={loadAnnouncements} disabled={annLoading} className="text-xs text-copy-3 hover:text-copy-2 transition-colors">
+                  {annLoading ? 'Loading…' : 'Refresh'}
+                </button>
+              </div>
+              {announcements.length === 0 && !annLoading && (
+                <p className="text-xs text-copy-3">No announcements yet.</p>
+              )}
+              <div className="space-y-3">
+                {announcements.map(a => (
+                  <div key={a.id} className="border border-line rounded-xl p-4 space-y-1.5">
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="text-sm font-semibold text-copy">{a.title}</p>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {a.channels.website && (
+                          <span className="text-[10px] font-semibold uppercase tracking-wide text-info bg-info/10 px-2 py-0.5 rounded">web</span>
+                        )}
+                        {a.channels.email && (
+                          <span className="text-[10px] font-semibold uppercase tracking-wide text-warn bg-warn/10 px-2 py-0.5 rounded">email</span>
+                        )}
+                        {a.sentAt ? (
+                          <span className="text-[10px] font-semibold uppercase tracking-wide text-positive bg-positive/10 px-2 py-0.5 rounded">sent</span>
+                        ) : a.scheduledAt ? (
+                          <span className="text-[10px] font-semibold uppercase tracking-wide text-warn bg-warn/10 px-2 py-0.5 rounded">scheduled</span>
+                        ) : (
+                          <span className="text-[10px] font-semibold uppercase tracking-wide text-copy-3 bg-field px-2 py-0.5 rounded">draft</span>
+                        )}
+                      </div>
+                    </div>
+                    <p className="text-xs text-copy-2 whitespace-pre-wrap line-clamp-3">{a.body}</p>
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-[11px] text-copy-3">
+                        {a.sentAt
+                          ? `Sent ${new Date(a.sentAt).toLocaleString()}`
+                          : a.scheduledAt
+                            ? `Scheduled for ${new Date(a.scheduledAt).toLocaleString()}`
+                            : `Created ${new Date(a.createdAt).toLocaleString()}`}
+                      </p>
+                      {!a.sentAt && (
+                        <button
+                          onClick={() => sendAnnouncement(a.id)}
+                          disabled={!!annSending[a.id]}
+                          className="text-xs font-semibold text-brand hover:text-brand-2 disabled:opacity-50 transition-colors"
+                        >
+                          {annSending[a.id] ? 'Sending…' : 'Send now'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
       </main>
     </div>
   );
