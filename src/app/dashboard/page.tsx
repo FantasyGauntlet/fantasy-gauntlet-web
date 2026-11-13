@@ -631,41 +631,27 @@ export default function DashboardPage() {
         const activeWithRank = activeLeagues.filter(l => l.state === 'active' && l.myRank != null);
         if (!activeWithRank.length) return null;
         return (
-          <div>
-            <h2 className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-3">This Week</h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-              {activeWithRank.map(league => {
-                const summary = leagueSummaries.get(league.id);
-                const delta = summary?.rankDelta ?? null;
-                // Best percentile = best rank
-                const pct = league.myRank != null && league.totalMembers ? (league.totalMembers - league.myRank) / league.totalMembers : -1;
-                const isBest = pct >= 0 && activeWithRank.every(l2 => {
-                  const p2 = l2.myRank != null && l2.totalMembers ? (l2.totalMembers - l2.myRank) / l2.totalMembers : -1;
-                  return pct >= p2;
-                });
-                return (
-                  <Link key={league.id} href={`/leagues/${league.id}`}
-                    className={`group rounded-xl p-3 border transition-colors ${isBest ? 'bg-brand-dim border-brand/30 hover:border-brand/60' : 'bg-card border-line hover:border-brand/30'}`}
-                  >
-                    <p className="text-[11px] text-copy-3 truncate mb-2 group-hover:text-copy-2 transition-colors">{league.name}</p>
-                    <div className="flex items-end justify-between gap-1">
-                      <div>
-                        <span className={`text-xl font-bold tabular-nums ${isBest ? 'text-brand' : 'text-copy'}`}>#{league.myRank}</span>
-                        {league.totalMembers && <span className="text-[11px] text-copy-3 ml-0.5">/{league.totalMembers}</span>}
-                      </div>
-                      {delta != null && delta !== 0 && (
-                        <span className={`text-xs font-bold flex items-center gap-0.5 pb-0.5 ${delta > 0 ? 'text-positive' : 'text-danger'}`}>
-                          {delta > 0 ? '↑' : '↓'}{Math.abs(delta)}
-                        </span>
-                      )}
-                    </div>
-                    {summary?.myPoints != null && (
-                      <p className="text-[11px] text-copy-3 mt-1 tabular-nums">{summary.myPoints.toFixed(1)} pts</p>
-                    )}
-                  </Link>
-                );
-              })}
-            </div>
+          <div className="flex items-center gap-2 overflow-x-auto pb-0.5 -mb-0.5">
+            <span className="text-[10px] font-semibold text-copy-3 uppercase tracking-widest flex-shrink-0">This Week</span>
+            <div className="w-px h-3 bg-line flex-shrink-0" />
+            {activeWithRank.map(league => {
+              const summary = leagueSummaries.get(league.id);
+              const delta = summary?.rankDelta ?? null;
+              return (
+                <Link key={league.id} href={`/leagues/${league.id}`}
+                  className="group flex items-center gap-1.5 bg-field border border-line hover:border-brand/40 rounded-full px-3 py-1 transition-colors flex-shrink-0"
+                >
+                  <span className="text-xs text-copy-2 group-hover:text-copy transition-colors truncate max-w-[120px]">{league.name}</span>
+                  <span className="text-xs font-bold text-copy tabular-nums">#{league.myRank}</span>
+                  {league.totalMembers && <span className="text-[10px] text-copy-3">/{league.totalMembers}</span>}
+                  {delta != null && delta !== 0 && (
+                    <span className={`text-[10px] font-bold ${delta > 0 ? 'text-positive' : 'text-danger'}`}>
+                      {delta > 0 ? '↑' : '↓'}{Math.abs(delta)}
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
           </div>
         );
       })()}
