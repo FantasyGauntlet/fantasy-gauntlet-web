@@ -857,13 +857,13 @@ export default function AdminPage() {
     setAnnImageUploading(true);
     setAnnError(null);
     try {
-      const { ref, uploadBytes, getDownloadURL } = await import('firebase/storage');
-      const { storage } = await import('@/lib/firebase');
-      const ext = file.type.split('/')[1] ?? 'png';
-      const storageRef = ref(storage, `announcements/images/${crypto.randomUUID()}.${ext}`);
-      const snap = await uploadBytes(storageRef, file);
-      const url = await getDownloadURL(snap.ref);
-      setAnnImageUrl(url);
+      const buffer = await file.arrayBuffer();
+      const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
+      const res = await api.post<{ url: string }>('/admin/announcements/upload-image', {
+        base64,
+        mimeType: file.type,
+      });
+      setAnnImageUrl(res.url);
     } catch (e: unknown) {
       setAnnError(e instanceof Error ? e.message : 'Image upload failed');
     } finally {
