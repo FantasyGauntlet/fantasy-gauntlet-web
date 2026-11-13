@@ -850,6 +850,7 @@ export default function AdminPage() {
   const [annSending, setAnnSending] = useState<Record<string, boolean>>({});
   const [annTesting, setAnnTesting] = useState<Record<string, boolean>>({});
   const [annPreviewing, setAnnPreviewing] = useState(false);
+  const [annPopupPreview, setAnnPopupPreview] = useState(false);
   const [annImageUrl, setAnnImageUrl] = useState<string | null>(null);
   const [annImageUploading, setAnnImageUploading] = useState(false);
 
@@ -905,12 +906,20 @@ export default function AdminPage() {
     setAnnError(null);
     setAnnSuccess(null);
     try {
-      const res = await api.post<{ sent: number }>('/admin/announcements/preview-test', {
-        title: annTitle.trim(),
-        body: annBody.trim(),
-        imageUrl: annImageUrl,
-      });
-      setAnnSuccess(`Test sent to ${res.sent} admin account${res.sent !== 1 ? 's' : ''}.`);
+      const channels = { website: annWebsite, email: annEmail };
+      // Show popup preview immediately for website channel
+      if (annWebsite) setAnnPopupPreview(true);
+      // Send email to admins only if email channel is selected
+      if (annEmail) {
+        const res = await api.post<{ emailSent: number }>('/admin/announcements/preview-test', {
+          title: annTitle.trim(),
+          body: annBody.trim(),
+          channels,
+          imageUrl: annImageUrl,
+        });
+        if (res.emailSent > 0) setAnnSuccess(`Test email sent to ${res.emailSent} admin account${res.emailSent !== 1 ? 's' : ''}.`);
+      }
+      if (!annEmail && annWebsite) setAnnSuccess('Popup preview shown above.');
     } catch (e: unknown) { setAnnError(e instanceof Error ? e.message : 'Failed to send test'); }
     finally { setAnnPreviewing(false); }
   }
@@ -952,6 +961,35 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen bg-base">
       <NavBar />
+
+      {/* Announcement popup preview */}
+      {annPopupPreview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setAnnPopupPreview(false)}>
+          <div className="bg-card border border-line rounded-2xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-brand-dim border border-brand/20 flex items-center justify-center flex-shrink-0">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-brand">
+                    <path d="M22 10v6M2 10l10-5 10 5-10 5z" /><path d="M6 12v5c3 3 9 3 12 0v-5" />
+                  </svg>
+                </div>
+                <span className="text-xs font-semibold text-copy-3 uppercase tracking-widest">What's New · Preview</span>
+              </div>
+              <button onClick={() => setAnnPopupPreview(false)} className="text-copy-3 hover:text-copy transition-colors p-1 -mr-1 -mt-1">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+            <h2 className="text-lg font-bold text-copy mb-2">{annTitle || '(no title)'}</h2>
+            <p className="text-sm text-copy-2 leading-relaxed whitespace-pre-wrap mb-4">{annBody || '(no body)'}</p>
+            {annImageUrl && <img src={annImageUrl} alt="" className="w-full rounded-xl border border-line object-contain mb-4 max-h-64" />}
+            <button onClick={() => setAnnPopupPreview(false)} className="w-full bg-brand hover:bg-brand-2 text-white font-semibold text-sm py-2.5 rounded-xl transition-colors">
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Delete league modal */}
       {deleteConfirm && (() => {
