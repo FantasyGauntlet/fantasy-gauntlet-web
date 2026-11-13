@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState, useEffect, useMemo } from 'react';
 import { api } from '@/lib/api';
@@ -135,7 +135,7 @@ function ClaimCard({
                   <>
                     <p className="text-xs text-copy-3 mt-0.5">{formatLeagueName(dropTeam.sportLeagueId)}</p>
                     <p className="text-xs text-copy-2 mt-0.5">
-                      {formatRecord(dropTeam.wins, dropTeam.draws, dropTeam.losses, dropTeam.sport)} Â· {dropTeam.points.toFixed(1)} pts
+                      {formatRecord(dropTeam.wins, dropTeam.draws, dropTeam.losses, dropTeam.sport)} · {dropTeam.points.toFixed(1)} pts
                     </p>
                   </>
                 )}
@@ -143,7 +143,7 @@ function ClaimCard({
             ) : (
               <div className="flex-1 bg-field border border-line/60 rounded-xl px-3 py-2.5">
                 <p className="text-xs text-copy-3 mb-1">Drop</p>
-                <p className="text-xs text-copy-3 italic">None â€” add only</p>
+                <p className="text-xs text-copy-3 italic">None — add only</p>
               </div>
             )}
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-copy-3 flex-shrink-0">
@@ -162,7 +162,7 @@ function ClaimCard({
                 <>
                   <p className="text-xs text-copy-3 mt-0.5">{formatLeagueName(addTeam.sportLeagueId)}</p>
                   <p className="text-xs text-copy-2 mt-0.5">
-                    {formatRecord(addTeam.wins, addTeam.draws, addTeam.losses, addTeam.sport)} Â· {addTeam.points.toFixed(1)} pts
+                    {formatRecord(addTeam.wins, addTeam.draws, addTeam.losses, addTeam.sport)} · {addTeam.points.toFixed(1)} pts
                   </p>
                 </>
               )}
@@ -178,7 +178,7 @@ function ClaimCard({
             )}
             <p className="text-xs text-copy-3">
               {new Date(claim.requestedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-              {' Â· '}
+              {' · '}
               {new Date(claim.requestedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </p>
             {claim.reviewedAt && (
@@ -199,7 +199,7 @@ function ClaimCard({
           )}
         </div>
 
-        {/* Edit + Withdraw â€” own pending claim */}
+        {/* Edit + Withdraw — own pending claim */}
         {onWithdraw && claim.status === 'pending' && !isCommissioner && (
           <div className="flex-shrink-0 flex flex-col gap-1.5 items-end">
             {editMode ? (
@@ -266,7 +266,7 @@ function ClaimCard({
           </div>
         )}
 
-        {/* Commissioner delete â€” any claim, any status */}
+        {/* Commissioner delete — any claim, any status */}
         {onWithdraw && isCommissioner && (
           <div className="flex-shrink-0">
             <button
@@ -660,7 +660,7 @@ function WaiversTab({
       {actionError && (
         <div className="bg-danger/10 border border-danger/30 text-danger text-sm rounded-xl px-4 py-3 flex items-center justify-between gap-3">
           <span>{actionError}</span>
-          <button onClick={() => setActionError(null)} className="flex-shrink-0 text-danger/70 hover:text-danger text-lg leading-none">Ã—</button>
+          <button onClick={() => setActionError(null)} className="flex-shrink-0 text-danger/70 hover:text-danger text-lg leading-none">×</button>
         </div>
       )}
       {/* Processing schedule banner */}
@@ -706,7 +706,7 @@ function WaiversTab({
         </div>
       )}
 
-      {/* Waiver claim form â€” single claim */}
+      {/* Waiver claim form — single claim */}
       {showForm && canSubmit && (
         <div className="bg-card border border-line rounded-2xl p-5 space-y-5">
           <div className="flex items-center justify-between">
@@ -723,7 +723,7 @@ function WaiversTab({
             <p className="text-xs font-semibold text-copy-3 uppercase tracking-wider mb-2">
               1. Drop from your roster
               {isUnderRosterSize && (
-                <span className="ml-1.5 normal-case font-normal text-copy-3">(optional â€” you have room)</span>
+                <span className="ml-1.5 normal-case font-normal text-copy-3">(optional — you have room)</span>
               )}
             </p>
             {myRosterTeams.length === 0 ? (
@@ -774,7 +774,7 @@ function WaiversTab({
                 <div className="px-3 py-2 bg-field/60 border-b border-line">
                   <input
                     type="text"
-                    placeholder="Search available teamsâ€¦"
+                    placeholder="Search available teams..."
                     value={addSearch}
                     onChange={e => setAddSearch(e.target.value)}
                     className="w-full bg-transparent text-xs text-copy placeholder:text-copy-3 outline-none"
@@ -853,7 +853,7 @@ function WaiversTab({
               disabled={submitting || !addTeamId || (!isUnderRosterSize && !dropTeamId)}
               className="flex-1 bg-brand hover:bg-brand-2 disabled:opacity-40 text-white text-sm font-semibold py-2.5 rounded-xl transition-colors"
             >
-              {submitting ? 'Submittingâ€¦' : 'Submit Claim'}
+              {submitting ? 'Submitting...' : 'Submit Claim'}
             </button>
           </div>
         </div>
@@ -866,7 +866,7 @@ function WaiversTab({
             <div className="flex items-center justify-between px-5 py-4 border-b border-line">
               <div>
                 <h3 className="text-sm font-semibold text-copy">Pending Moves</h3>
-                <p className="text-xs text-copy-3 mt-0.5">Drag to set priority order Â· #1 processes first</p>
+                <p className="text-xs text-copy-3 mt-0.5">Drag to set priority order · #1 processes first</p>
               </div>
               <button onClick={() => setShowPendingModal(false)} className="text-copy-3 hover:text-copy transition-colors p-1">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" /></svg>
@@ -936,7 +936,7 @@ function WaiversTab({
                 disabled={reordering || pendingOrder.length === 0}
                 className="flex-1 bg-brand hover:bg-brand-2 disabled:opacity-40 text-white text-sm font-semibold py-2.5 rounded-xl transition-colors"
               >
-                {reordering ? 'Savingâ€¦' : 'Save Order'}
+                {reordering ? 'Saving...' : 'Save Order'}
               </button>
             </div>
           </div>
@@ -1015,7 +1015,7 @@ function WaiversTab({
                 type="text"
                 value={browseSearch}
                 onChange={e => setBrowseSearch(e.target.value)}
-                placeholder="Search teamsâ€¦"
+                placeholder="Search teams..."
                 className="w-full bg-field border border-line-2 rounded-lg pl-6 pr-3 py-1.5 text-xs text-copy placeholder-copy-3 focus:outline-none focus:border-brand transition-colors"
               />
             </div>
@@ -1027,7 +1027,7 @@ function WaiversTab({
               <option value="best">Best Available</option>
               <option value="rostered">% Rostered</option>
               <option value="points">Most Points</option>
-              <option value="alpha">Aâ€“Z</option>
+              <option value="alpha">A–Z</option>
             </select>
             <div className="flex rounded-lg border border-line overflow-hidden text-xs font-medium">
               {(['available', 'all'] as const).map(v => (
@@ -1079,10 +1079,10 @@ function WaiversTab({
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <p className="text-sm font-semibold text-copy truncate">{t.name}</p>
                   {stats?.trend === 'up' && (
-                    <span className="text-[10px] font-semibold text-positive bg-positive/10 border border-positive/20 px-1.5 py-0.5 rounded-full leading-none flex-shrink-0">â†‘ Trending</span>
+                    <span className="text-[10px] font-semibold text-positive bg-positive/10 border border-positive/20 px-1.5 py-0.5 rounded-full leading-none flex-shrink-0">↑ Trending</span>
                   )}
                   {stats?.trend === 'down' && (
-                    <span className="text-[10px] font-semibold text-danger bg-danger/10 border border-danger/20 px-1.5 py-0.5 rounded-full leading-none flex-shrink-0">â†“ Dropping</span>
+                    <span className="text-[10px] font-semibold text-danger bg-danger/10 border border-danger/20 px-1.5 py-0.5 rounded-full leading-none flex-shrink-0">↓ Dropping</span>
                   )}
                 </div>
                 <div className="flex items-center gap-2 mt-0.5">
@@ -1168,7 +1168,7 @@ function WaiversTab({
         </div>
       </div>
 
-      {/* Pending claims â€” own only */}
+      {/* Pending claims — own only */}
       {myTeam && pending.length > 0 && (() => {
         const seenGroupIds = new Set<string>();
         const groups: WaiverClaim[][] = [];
@@ -1181,14 +1181,14 @@ function WaiversTab({
         return (
           <div>
             <p className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-2">
-              Your Pending Claims Â· {pending.length}
+              Your Pending Claims · {pending.length}
             </p>
             <div className="space-y-3">
               {groups.map((group, gi) => (
                 <div key={gi} className={group.length > 1 ? 'border border-brand/20 rounded-2xl overflow-hidden' : ''}>
                   {group.length > 1 && (
                     <div className="px-4 py-2 bg-brand-dim border-b border-brand/20">
-                      <p className="text-[11px] font-semibold text-brand">Priority group Â· {group.length} claims</p>
+                      <p className="text-[11px] font-semibold text-brand">Priority group · {group.length} claims</p>
                       <p className="text-[10px] text-copy-3 mt-0.5">If #1 is denied, #2 is tried next, and so on</p>
                     </div>
                   )}
@@ -1206,7 +1206,7 @@ function WaiversTab({
         );
       })()}
 
-      {/* Claim history â€” own resolved claims */}
+      {/* Claim history — own resolved claims */}
       {history.length > 0 && (
         <div>
           <p className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-2">Your History</p>
@@ -1218,7 +1218,7 @@ function WaiversTab({
         </div>
       )}
 
-      {/* League-wide transaction history â€” grouped by team, winner + collapsible losing bids */}
+      {/* League-wide transaction history — grouped by team, winner + collapsible losing bids */}
       {leagueHistory.length > 0 && (() => {
         // Group by addTeamId, preserving order (backend already sorts by reviewedAt desc then groups by bid)
         const seenTeams = new Set<string>();
@@ -1279,7 +1279,7 @@ function WaiversTab({
                               <span className="ml-1.5 text-brand font-medium">${winner.faabBid}</span>
                             )}
                             {winner.dropTeamName && (
-                              <span className="text-copy-3"> Â· dropped {winner.dropTeamName}</span>
+                              <span className="text-copy-3"> · dropped {winner.dropTeamName}</span>
                             )}
                           </p>
                         ) : (
@@ -1319,7 +1319,7 @@ function WaiversTab({
                         </div>
                       </div>
                     </div>
-                    {/* Losing bids â€” collapsible */}
+                    {/* Losing bids — collapsible */}
                     {isExpanded && losers.length > 0 && (
                       <div className="bg-field/50 border-t border-line/40 divide-y divide-line/30">
                         {losers.map(loser => (
@@ -1335,7 +1335,7 @@ function WaiversTab({
                                 <p className="text-[11px] text-copy-3 mt-0.5 italic">{loser.denialReason}</p>
                               )}
                             </div>
-                            <span className="text-[11px] font-semibold text-danger/70 flex-shrink-0">âœ— {loser.denialReason ?? 'denied'}</span>
+                            <span className="text-[11px] font-semibold text-danger/70 flex-shrink-0">✗ {loser.denialReason ?? 'denied'}</span>
                           </div>
                         ))}
                       </div>
