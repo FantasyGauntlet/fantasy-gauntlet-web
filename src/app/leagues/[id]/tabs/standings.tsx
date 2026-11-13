@@ -174,7 +174,7 @@ function StandingsTab({ leagueId, userId, fantasyTeams: fantasyTeamsProp, topZon
           <tr className="border-b border-line bg-field/50">
             <th className="text-left px-4 py-3 text-xs font-semibold text-copy-3 uppercase tracking-wider">Rank</th>
             <th className="text-left px-4 py-3 text-xs font-semibold text-copy-3 uppercase tracking-wider">Manager</th>
-            <th className="px-3 py-3 hidden sm:table-cell" aria-label="Rank trend" />
+            <th className="text-center px-3 py-3 text-xs font-semibold text-copy-3 uppercase tracking-wider hidden sm:table-cell">Trend</th>
             <th className="text-right px-4 py-3 text-xs font-semibold text-copy-3 uppercase tracking-wider">Points</th>
             <th className="text-right px-4 py-3 text-xs font-semibold text-copy-3 uppercase tracking-wider hidden sm:table-cell">Active</th>
             <th className="text-right px-4 py-3 text-xs font-semibold text-copy-3 uppercase tracking-wider hidden sm:table-cell">Bonus</th>
