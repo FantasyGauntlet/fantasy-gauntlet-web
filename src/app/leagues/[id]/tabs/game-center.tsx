@@ -9,8 +9,16 @@ import type { FantasyTeam, ScoreboardGame } from '../_types';
 function formatMatchTime(scheduledAt: string): string {
   if (!scheduledAt) return 'TBD';
   const d = new Date(scheduledAt);
-  if (isNaN(d.getTime())) return 'TBD';
-  return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  const now = new Date();
+  if (isNaN(d.getTime())) {
+    // Fallback: show just the date if the time is unparseable
+    const dateOnly = new Date(`${scheduledAt.slice(0, 10)}T12:00:00Z`);
+    if (isNaN(dateOnly.getTime())) return 'TBD';
+    return dateOnly.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  }
+  const time = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  if (d.toDateString() === now.toDateString()) return time;
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ` · ${time}`;
 }
 
 function formatGameTime(scheduledAt: string): string {
@@ -97,7 +105,7 @@ function MatchRow({ game, isMyHome, isMyAway }: {
       </div>
 
       {/* Center: score or time — fixed width so every row aligns */}
-      <div className="flex-shrink-0 flex items-center justify-center gap-0.5 w-[5.5rem]">
+      <div className="flex-shrink-0 flex items-center justify-center gap-0.5 w-[7rem]">
         {showScore ? (
           <>
             <span className="text-xs font-bold tabular-nums w-5 text-right text-copy">
@@ -301,6 +309,7 @@ function SportIcon({ sport }: { sport: string }) {
 function SportSection({
   sport,
   todayGames,
+  nextUpcomingGames,
   scheduleByDate,
   isExpanded,
   hasMySchedule,
@@ -309,6 +318,7 @@ function SportSection({
 }: {
   sport: string;
   todayGames: ScoreboardGame[];
+  nextUpcomingGames: ScoreboardGame[];
   scheduleByDate: Map<string, ScoreboardGame[]>;
   isExpanded: boolean;
   hasMySchedule: boolean;
@@ -316,6 +326,7 @@ function SportSection({
   onToggle: () => void;
 }) {
   const liveCount = todayGames.filter(g => g.isLive).length;
+  const collapsedGames = todayGames.length > 0 ? todayGames : nextUpcomingGames;
 
   return (
     <div className="rounded-xl border border-line overflow-hidden bg-card">
@@ -342,17 +353,13 @@ function SportSection({
 
       {/* Body */}
       {!isExpanded ? (
-        todayGames.length > 0 ? (
-          todayGames.map(g => (
-            <MatchRow
-              key={g.eventId} game={g}
-              isMyHome={viewingTeamIds.has(g.homeTeamId)}
-              isMyAway={viewingTeamIds.has(g.awayTeamId)}
-            />
-          ))
-        ) : (
-          <p className="px-4 py-3 text-center text-[11px] text-copy-3">No games today.</p>
-        )
+        collapsedGames.map(g => (
+          <MatchRow
+            key={g.eventId} game={g}
+            isMyHome={viewingTeamIds.has(g.homeTeamId)}
+            isMyAway={viewingTeamIds.has(g.awayTeamId)}
+          />
+        ))
       ) : (
         scheduleByDate.size > 0 ? (
           [...scheduleByDate.entries()].map(([dateKey, dateGames]) => (
@@ -427,6 +434,15 @@ function GameCenterTab({
   const myLiveCount  = myGames.filter(g => g.isLive).length;
   const allLiveCount = games.filter(g => g.isLive).length;
 
+  // Next upcoming games for viewing team — used when no games today
+  const myUpcomingGames = schedule
+    .filter(g => viewingTeamIds.has(g.homeTeamId) || viewingTeamIds.has(g.awayTeamId))
+    .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt));
+  const nextGameDate = myUpcomingGames[0]?.scheduledAt.slice(0, 10);
+  const nextDateGames = nextGameDate
+    ? myUpcomingGames.filter(g => g.scheduledAt.slice(0, 10) === nextGameDate)
+    : [];
+
   const allSports = [...new Set([
     ...selectedSports,
     ...games.map(g => g.sportLeagueId),
@@ -474,7 +490,7 @@ function GameCenterTab({
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2.5">
             <h2 className="text-xs font-semibold text-copy-3 uppercase tracking-widest">
-              {viewingFtId === '__me__' ? 'Your Teams Today' : `${viewingLabel} Today`}
+              {viewingFtId === '__me__' ? 'Your Teams' : viewingLabel}
             </h2>
             {myLiveCount > 0 && (
               <span className="flex items-center gap-1 text-[11px] font-semibold text-positive">
@@ -501,13 +517,7 @@ function GameCenterTab({
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
             {[1, 2].map(i => <SkeletonCard key={i} />)}
           </div>
-        ) : myGames.length === 0 ? (
-          <div className="bg-card border border-line rounded-xl px-4 py-5 text-center">
-            <p className="text-copy-3 text-sm">
-              {viewingFtId === '__me__' ? 'None of your teams play today.' : `${viewingLabel} have no games today.`}
-            </p>
-          </div>
-        ) : (
+        ) : myGames.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
             {myGames.map(g => (
               <GameCard
@@ -517,6 +527,21 @@ function GameCenterTab({
                 showSport
               />
             ))}
+          </div>
+        ) : nextDateGames.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+            {nextDateGames.map(g => (
+              <GameCard
+                key={g.eventId} game={g}
+                isMyHome={viewingTeamIds.has(g.homeTeamId)}
+                isMyAway={viewingTeamIds.has(g.awayTeamId)}
+                showSport
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="bg-card border border-line rounded-xl px-4 py-5 text-center">
+            <p className="text-copy-3 text-sm">No upcoming games scheduled.</p>
           </div>
         )}
       </section>
@@ -553,6 +578,12 @@ function GameCenterTab({
               scheduleByDate.get(dateKey)!.push(g);
             }
 
+            // Next upcoming date bucket for this sport — owned teams only
+            const nextSportDate = myUpcomingSportGames[0]?.scheduledAt.slice(0, 10);
+            const nextUpcomingGames = nextSportDate
+              ? myUpcomingSportGames.filter(g => g.scheduledAt.slice(0, 10) === nextSportDate)
+              : [];
+
             const totalCount = todaySportGames.length + upcomingSportGames.length;
             if (totalCount === 0 && !selectedSports.includes(sport)) return null;
 
@@ -561,6 +592,7 @@ function GameCenterTab({
                 key={sport}
                 sport={sport}
                 todayGames={todaySportGames}
+                nextUpcomingGames={nextUpcomingGames}
                 scheduleByDate={scheduleByDate}
                 isExpanded={expandedSports.has(sport)}
                 hasMySchedule={myUpcomingSportGames.length > 0}

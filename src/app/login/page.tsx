@@ -86,7 +86,10 @@ function LoginContent() {
     setError('');
     setLoading(true);
     try {
-      await api.post('/users/password-reset', { email: email.trim() });
+      // postPublic, not post: the authenticated client demands a Firebase token
+      // and throws "Not authenticated" when nobody is signed in — which is the
+      // entire situation this button exists for.
+      await api.postPublic('/users/password-reset', { email: email.trim() });
       setResetSent(true);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to send reset email');

@@ -79,6 +79,33 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return (text ? JSON.parse(text) : undefined) as T;
 }
 
+/**
+ * Request against a backend route marked @Public() — sends no Authorization
+ * header and never touches Firebase auth.
+ *
+ * The authenticated `request` above starts by calling getToken(), which throws
+ * "Not authenticated" when auth.currentUser is null. That is correct for normal
+ * calls but wrong for the handful of routes that exist precisely for people who
+ * are NOT signed in: password reset threw before the request was ever sent, so
+ * the only users who could successfully ask for a reset link were the ones
+ * already logged in and therefore least likely to need one.
+ */
+async function publicRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ message: res.statusText }));
+    throw new Error(err.message ?? res.statusText);
+  }
+  const text = await res.text();
+  return (text ? JSON.parse(text) : undefined) as T;
+}
+
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 export const api = {
@@ -86,6 +113,10 @@ export const api = {
 
   post: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: 'POST', body: JSON.stringify(body) }),
+
+  /** POST to a @Public() route without requiring a signed-in user. */
+  postPublic: <T>(path: string, body?: unknown) =>
+    publicRequest<T>(path, { method: 'POST', body: JSON.stringify(body) }),
   patch: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: 'PATCH', body: JSON.stringify(body) }),
   put: <T>(path: string, body?: unknown) =>
