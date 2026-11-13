@@ -59,7 +59,7 @@ interface DashStanding {
 
 interface RankHistoryEntry { weekOf: string; ranks: Record<string, number>; }
 
-interface LeagueSummary { myPoints: number | null; rankDelta: number | null; }
+interface LeagueSummary { myPoints: number | null; rankDelta: number | null; myTeamName?: string; myTeamLogoUrl?: string | null; }
 
 interface WaiverActivity {
   id: string; leagueId: string; leagueName: string;
@@ -357,8 +357,11 @@ export default function DashboardPage() {
     // Standings: rank delta + points + best team
     Promise.all(
       active.map(league =>
-        api.get<{ standings: DashStanding[]; rankHistory: RankHistoryEntry[] }>(`/leagues/${league.id}/standings`)
-          .then(({ standings, rankHistory }) => ({ leagueId: league.id, standings, rankHistory }))
+        Promise.all([
+          api.get<{ standings: DashStanding[]; rankHistory: RankHistoryEntry[] }>(`/leagues/${league.id}/standings`),
+          api.get<Array<{ userId: string; displayName: string; logoUrl?: string | null }>>(`/leagues/${league.id}/teams`),
+        ])
+          .then(([{ standings, rankHistory }, teams]) => ({ leagueId: league.id, standings, rankHistory, teams }))
           .catch(() => null)
       )
     ).then(results => {
@@ -371,6 +374,8 @@ export default function DashboardPage() {
         const mine = r.standings.find(s => s.userId === user.uid);
         if (!mine) continue;
 
+        const myFt = r.teams.find(t => t.userId === user.uid);
+
         let rankDelta: number | null = null;
         if (r.rankHistory.length >= 2) {
           const sorted = [...r.rankHistory].sort((a, b) => b.weekOf.localeCompare(a.weekOf));
@@ -378,7 +383,7 @@ export default function DashboardPage() {
           const prev = sorted[1].ranks[user.uid];
           if (cur != null && prev != null) rankDelta = prev - cur;
         }
-        map.set(r.leagueId, { myPoints: mine.totalPoints ?? null, rankDelta });
+        map.set(r.leagueId, { myPoints: mine.totalPoints ?? null, rankDelta, myTeamName: myFt?.displayName, myTeamLogoUrl: myFt?.logoUrl ?? null });
 
         // Best performing team: prefer hot-tagged, then highest points
         for (const tb of mine.teamBreakdown ?? []) {
@@ -642,11 +647,21 @@ export default function DashboardPage() {
                   const p2 = l2.myRank != null && l2.totalMembers ? (l2.totalMembers - l2.myRank) / l2.totalMembers : -1;
                   return pct >= p2;
                 });
+                const teamName = summary?.myTeamName ?? league.name;
+                const teamLogo = summary?.myTeamLogoUrl;
                 return (
                   <Link key={league.id} href={`/leagues/${league.id}`}
                     className={`group rounded-xl p-3 border transition-colors ${isBest ? 'bg-brand-dim border-brand/30 hover:border-brand/60' : 'bg-card border-line hover:border-brand/30'}`}
                   >
-                    <p className="text-[11px] text-copy-3 truncate mb-2 group-hover:text-copy-2 transition-colors">{league.name}</p>
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-6 h-6 rounded-full flex-shrink-0 overflow-hidden bg-field border border-line flex items-center justify-center">
+                        {teamLogo
+                          ? <img src={teamLogo} alt={teamName} className="w-full h-full object-cover" />
+                          : <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-copy-3"><path d="M6 9H4.5a2.5 2.5 0 010-5H6M18 9h1.5a2.5 2.5 0 000-5H18M3 4h18M6 9v10a1 1 0 001 1h10a1 1 0 001-1V9M9 12h6" /></svg>
+                        }
+                      </div>
+                      <p className="text-[11px] text-copy-3 truncate group-hover:text-copy-2 transition-colors">{teamName}</p>
+                    </div>
                     <div className="flex items-end justify-between gap-1">
                       <div>
                         <span className={`text-xl font-bold tabular-nums ${isBest ? 'text-brand' : 'text-copy'}`}>#{league.myRank}</span>
