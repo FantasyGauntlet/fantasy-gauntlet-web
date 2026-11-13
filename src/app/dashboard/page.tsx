@@ -633,7 +633,13 @@ export default function DashboardPage() {
 
       {/* This Week */}
       {leagueSummaries.size > 0 && (() => {
-        const activeWithRank = activeLeagues.filter(l => l.state === 'active' && l.myRank != null);
+        const activeWithRank = activeLeagues
+          .filter(l => l.state === 'active' && l.myRank != null)
+          .sort((a, b) => {
+            const pa = a.myRank != null && a.totalMembers ? (a.totalMembers - a.myRank) / a.totalMembers : -1;
+            const pb = b.myRank != null && b.totalMembers ? (b.totalMembers - b.myRank) / b.totalMembers : -1;
+            return pb - pa;
+          });
         if (!activeWithRank.length) return null;
         return (
           <div>
@@ -660,7 +666,10 @@ export default function DashboardPage() {
                           : <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-copy-3"><path d="M6 9H4.5a2.5 2.5 0 010-5H6M18 9h1.5a2.5 2.5 0 000-5H18M3 4h18M6 9v10a1 1 0 001 1h10a1 1 0 001-1V9M9 12h6" /></svg>
                         }
                       </div>
-                      <p className="text-[11px] text-copy-3 truncate group-hover:text-copy-2 transition-colors">{teamName}</p>
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-medium text-copy truncate group-hover:text-copy-2 transition-colors">{teamName}</p>
+                        <p className="text-[10px] text-copy-3 truncate">{league.name}</p>
+                      </div>
                     </div>
                     <div className="flex items-end justify-between gap-1">
                       <div>
