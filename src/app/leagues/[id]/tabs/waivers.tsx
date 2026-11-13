@@ -1278,32 +1278,37 @@ function WaiversTab({
                           <p className="text-xs text-danger mt-0.5">All bids denied</p>
                         )}
                       </div>
-                      {/* Status badge */}
-                      <div className="flex-shrink-0 flex items-center justify-end gap-2 min-w-[7.5rem]">
-                        {winner ? (
-                          <span className="text-[11px] font-semibold text-positive bg-positive/10 border border-positive/20 px-2 py-0.5 rounded-full leading-none">Approved</span>
-                        ) : (
-                          <span className="text-[11px] font-semibold text-danger bg-danger/10 border border-danger/20 px-2 py-0.5 rounded-full leading-none">Denied</span>
-                        )}
-                        {/* Expand toggle if there are losing bids */}
-                        {losers.length > 0 && (
-                          <button
-                            onClick={() => setExpandedLosingBids(prev => {
-                              const next = new Set(prev);
-                              if (next.has(key)) next.delete(key); else next.add(key);
-                              return next;
-                            })}
-                            className="flex items-center gap-1 text-[11px] text-copy-3 hover:text-copy transition-colors"
-                          >
-                            <span>{losers.length} lost</span>
-                            <svg
-                              width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-                              className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                      {/* Status badge + lost toggle — fixed-width columns so badge never shifts */}
+                      <div className="flex-shrink-0 flex items-center gap-2">
+                        {/* Badge — fixed width, always right-aligned */}
+                        <div className="w-[4.5rem] flex justify-end">
+                          {winner ? (
+                            <span className="text-[11px] font-semibold text-positive bg-positive/10 border border-positive/20 px-2 py-0.5 rounded-full leading-none whitespace-nowrap">Approved</span>
+                          ) : (
+                            <span className="text-[11px] font-semibold text-danger bg-danger/10 border border-danger/20 px-2 py-0.5 rounded-full leading-none whitespace-nowrap">Denied</span>
+                          )}
+                        </div>
+                        {/* Lost toggle — fixed width, empty space when no losers */}
+                        <div className="w-14 flex justify-start">
+                          {losers.length > 0 && (
+                            <button
+                              onClick={() => setExpandedLosingBids(prev => {
+                                const next = new Set(prev);
+                                if (next.has(key)) next.delete(key); else next.add(key);
+                                return next;
+                              })}
+                              className="flex items-center gap-1 text-[11px] text-copy-3 hover:text-copy transition-colors whitespace-nowrap"
                             >
-                              <polyline points="6 9 12 15 18 9" />
-                            </svg>
-                          </button>
-                        )}
+                              <span>{losers.length} lost</span>
+                              <svg
+                                width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                                className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                              >
+                                <polyline points="6 9 12 15 18 9" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                     {/* Losing bids â€” collapsible */}
