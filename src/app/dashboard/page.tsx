@@ -543,10 +543,11 @@ export default function DashboardPage() {
       {popupAnn && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={dismissPopup}>
           <div
-            className="bg-card border border-line rounded-2xl p-6 w-full max-w-md shadow-2xl"
+            className="bg-card border border-line rounded-2xl shadow-2xl w-full max-w-sm sm:max-w-lg flex flex-col max-h-[85vh]"
             onClick={e => e.stopPropagation()}
           >
-            <div className="flex items-start justify-between gap-3 mb-3">
+            {/* Header — always visible */}
+            <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3 flex-shrink-0">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-xl bg-brand-dim border border-brand/20 flex items-center justify-center flex-shrink-0">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-brand">
@@ -555,26 +556,32 @@ export default function DashboardPage() {
                 </div>
                 <span className="text-xs font-semibold text-copy-3 uppercase tracking-widest">What's New</span>
               </div>
-              <button onClick={dismissPopup} className="text-copy-3 hover:text-copy transition-colors p-1 -mr-1 -mt-1">
+              <button onClick={dismissPopup} className="text-copy-3 hover:text-copy transition-colors p-1 -mr-1 -mt-1 flex-shrink-0">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                   <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
                 </svg>
               </button>
             </div>
-            <h2 className="text-lg font-bold text-copy mb-2">{popupAnn.title}</h2>
-            <p className="text-sm text-copy-2 leading-relaxed whitespace-pre-wrap mb-4">{popupAnn.body}</p>
-            {popupAnn.imageUrl && (
-              <img src={popupAnn.imageUrl} alt="" className="w-full rounded-xl border border-line object-contain mb-4 max-h-64" />
-            )}
-            {popupAnn.sentAt && (
-              <p className="text-xs text-copy-3 mb-4">{new Date(popupAnn.sentAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
-            )}
-            <button
-              onClick={dismissPopup}
-              className="w-full bg-brand hover:bg-brand-2 text-white font-semibold text-sm py-2.5 rounded-xl transition-colors"
-            >
-              Got it
-            </button>
+            {/* Scrollable body */}
+            <div className="overflow-y-auto px-5 flex-1 min-h-0">
+              <h2 className="text-lg font-bold text-copy mb-2">{popupAnn.title}</h2>
+              <p className="text-sm text-copy-2 leading-relaxed whitespace-pre-wrap">{popupAnn.body}</p>
+              {popupAnn.imageUrl && (
+                <img src={popupAnn.imageUrl} alt="" className="w-full rounded-xl border border-line object-contain mt-4 max-h-64" />
+              )}
+              {popupAnn.sentAt && (
+                <p className="text-xs text-copy-3 mt-3">{new Date(popupAnn.sentAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
+              )}
+            </div>
+            {/* Footer — always visible */}
+            <div className="px-5 pb-5 pt-4 flex-shrink-0">
+              <button
+                onClick={dismissPopup}
+                className="w-full bg-brand hover:bg-brand-2 text-white font-semibold text-sm py-2.5 rounded-xl transition-colors"
+              >
+                Got it
+              </button>
+            </div>
           </div>
         </div>
       )}
