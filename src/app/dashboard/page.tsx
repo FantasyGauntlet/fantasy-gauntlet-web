@@ -480,6 +480,7 @@ export default function DashboardPage() {
   // ── Announcements ─────────────────────────────────────────────────────────
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [showChangelog, setShowChangelog] = useState(false);
+  const [expandedAnns, setExpandedAnns] = useState<Set<string>>(new Set());
   const [popupAnn, setPopupAnn] = useState<Announcement | null>(null);
 
   useEffect(() => {
@@ -588,40 +589,68 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Changelog drawer */}
+      {/* Changelog modal */}
       {showChangelog && (
-        <div className="fixed inset-0 z-40 flex" onClick={() => setShowChangelog(false)}>
-          <div className="flex-1" />
-          <div
-            className="w-full max-w-sm bg-card border-l border-line h-full overflow-y-auto shadow-2xl"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="sticky top-0 bg-card border-b border-line px-5 py-4 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-copy">Site Updates</h2>
-              <button onClick={() => setShowChangelog(false)} className="text-copy-3 hover:text-copy transition-colors">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-              </button>
-            </div>
-            <div className="p-5 space-y-5">
-              {announcements.length === 0 && (
-                <p className="text-sm text-copy-3">No updates yet.</p>
-              )}
-              {announcements.map(a => (
-                <div key={a.id} className="border-b border-line pb-5 last:border-0 last:pb-0">
-                  <p className="text-xs text-copy-3 mb-1">
-                    {a.sentAt
-                      ? new Date(a.sentAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
-                      : new Date(a.createdAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-                  </p>
-                  <h3 className="text-sm font-semibold text-copy mb-1">{a.title}</h3>
-                  <p className="text-sm text-copy-2 whitespace-pre-wrap leading-relaxed mb-2">{a.body}</p>
-                  {a.imageUrl && (
-                    <img src={a.imageUrl} alt="" className="w-full rounded-xl border border-line object-contain max-h-48" />
-                  )}
+        <div className="fixed inset-0 z-40 overflow-y-auto bg-black/60 backdrop-blur-sm" onClick={() => setShowChangelog(false)}>
+          <div className="flex min-h-full items-center justify-center p-4">
+            <div
+              className="bg-card border border-line rounded-2xl shadow-2xl w-full max-w-sm sm:max-w-lg flex flex-col max-h-[85vh] my-4"
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between px-5 pt-5 pb-4 flex-shrink-0 border-b border-line">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-brand-dim border border-brand/20 flex items-center justify-center flex-shrink-0">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-brand">
+                      <path d="M22 10v6M2 10l10-5 10 5-10 5z" /><path d="M6 12v5c3 3 9 3 12 0v-5" />
+                    </svg>
+                  </div>
+                  <h2 className="text-sm font-semibold text-copy">What's New</h2>
                 </div>
-              ))}
+                <button onClick={() => setShowChangelog(false)} className="text-copy-3 hover:text-copy transition-colors p-1 -mr-1">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              </div>
+              {/* Scrollable list */}
+              <div className="overflow-y-auto flex-1 min-h-0 divide-y divide-line">
+                {announcements.length === 0 && (
+                  <p className="p-5 text-sm text-copy-3">No updates yet.</p>
+                )}
+                {announcements.map(a => {
+                  const isExpanded = expandedAnns.has(a.id);
+                  const dateStr = new Date(a.sentAt ?? a.createdAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+                  return (
+                    <div key={a.id}>
+                      <button
+                        className="w-full flex items-center justify-between gap-3 px-5 py-3.5 hover:bg-field transition-colors text-left"
+                        onClick={() => setExpandedAnns(prev => {
+                          const next = new Set(prev);
+                          if (next.has(a.id)) next.delete(a.id); else next.add(a.id);
+                          return next;
+                        })}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-copy truncate">{a.title}</p>
+                          <p className="text-xs text-copy-3 mt-0.5">{dateStr}</p>
+                        </div>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`flex-shrink-0 text-copy-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`}>
+                          <polyline points="6 9 12 15 18 9" />
+                        </svg>
+                      </button>
+                      {isExpanded && (
+                        <div className="px-5 pb-4">
+                          <p className="text-sm text-copy-2 whitespace-pre-wrap leading-relaxed">{a.body}</p>
+                          {a.imageUrl && (
+                            <img src={a.imageUrl} alt="" className="w-full rounded-xl border border-line object-contain mt-3 max-h-56" />
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
