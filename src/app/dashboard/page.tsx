@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
@@ -335,6 +335,10 @@ export default function DashboardPage() {
   const [recentActivity, setRecentActivity] = useState<WaiverActivity[]>([]);
   const [sportDeadlines, setSportDeadlines] = useState<Record<string, string>>({});
   const [performerCards, setPerformerCards] = useState<PerformerCard[]>([]);
+  const [standoutIndex, setStandoutIndex] = useState(0);
+  const [rotateKey, setRotateKey] = useState(0);
+  const dragStartX = useRef<number | null>(null);
+  const dragDelta = useRef(0);
 
   useEffect(() => {
     if (authLoading || !user) return;
@@ -432,6 +436,16 @@ export default function DashboardPage() {
     // Sport transaction deadlines
     api.get<Record<string, string>>('/sports/deadlines').then(setSportDeadlines).catch(() => {});
   }, [authLoading, user, leagues]);
+
+  // Reset slideshow index when the cards list changes
+  useEffect(() => { setStandoutIndex(0); }, [performerCards.length]);
+
+  // Auto-rotate standouts every 10 seconds; rotateKey resets the timer on manual nav
+  useEffect(() => {
+    if (performerCards.length <= 1) return;
+    const t = setInterval(() => setStandoutIndex(i => (i + 1) % performerCards.length), 10000);
+    return () => clearInterval(t);
+  }, [performerCards.length, rotateKey]);
 
   async function acceptInvite(invite: PendingInvite) {
     setAcceptingInvite(s => ({ ...s, [invite.id]: true }));
@@ -708,36 +722,67 @@ export default function DashboardPage() {
         );
       })()}
 
-      {/* Performers carousel */}
-      {performerCards.length > 0 && (
-        <div>
-          <h2 className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-3">Standouts</h2>
-          <div className="flex gap-2 overflow-x-auto pb-1 -mb-1" style={{ scrollbarWidth: 'none' }}>
-            {performerCards.map((card, i) => (
-              <Link key={`${card.leagueId}-${card.teamId}-${i}`} href={`/leagues/${card.leagueId}`}
-                className={`group flex-shrink-0 w-44 rounded-xl border p-3 transition-colors ${card.label === 'hot' ? 'bg-orange-500/5 border-orange-500/20 hover:border-orange-500/40' : 'bg-card border-line hover:border-brand/30'}`}
+      {/* Standouts slideshow */}
+      {performerCards.length > 0 && (() => {
+        const card = performerCards[standoutIndex];
+        function goTo(idx: number) {
+          setStandoutIndex(idx);
+          setRotateKey(k => k + 1);
+        }
+        return (
+          <div>
+            <div
+              className={`flex items-center gap-3 px-4 py-3 rounded-xl border select-none ${card.label === 'hot' ? 'bg-orange-500/5 border-orange-500/20' : 'bg-card border-line'}`}
+              onPointerDown={e => { dragStartX.current = e.clientX; dragDelta.current = 0; }}
+              onPointerMove={e => { if (dragStartX.current !== null) dragDelta.current = e.clientX - dragStartX.current; }}
+              onPointerUp={e => {
+                const delta = e.clientX - (dragStartX.current ?? e.clientX);
+                dragStartX.current = null;
+                if (Math.abs(delta) > 40 && performerCards.length > 1) {
+                  goTo(delta < 0
+                    ? (standoutIndex + 1) % performerCards.length
+                    : (standoutIndex - 1 + performerCards.length) % performerCards.length
+                  );
+                }
+              }}
+              onPointerLeave={() => { dragStartX.current = null; }}
+            >
+              <Link
+                href={`/leagues/${card.leagueId}`}
+                className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden ${card.label === 'hot' ? 'bg-orange-500/10 border border-orange-500/20' : 'bg-field border border-line'}`}
+                onClick={e => { if (Math.abs(dragDelta.current) > 10) e.preventDefault(); }}
               >
-                <div className="flex items-center gap-1.5 mb-2.5">
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden ${card.label === 'hot' ? 'bg-orange-500/10 border border-orange-500/20' : 'bg-field border border-line'}`}>
-                    {card.logoUrl
-                      ? <img src={card.logoUrl} alt={card.teamName} className="w-6 h-6 object-contain" />
-                      : card.label === 'hot'
-                        ? <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="text-orange-400"><path d="M5 8V2M2 5l3-3 3 3"/></svg>
-                        : <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-copy-3"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-                    }
-                  </div>
-                  <span className={`text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full border ${card.label === 'hot' ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' : 'bg-brand-dim text-brand border-brand/20'}`}>
-                    {card.label === 'hot' ? 'Hot' : 'Top scorer'}
-                  </span>
-                </div>
-                <p className="text-sm font-semibold text-copy truncate group-hover:text-brand transition-colors leading-tight">{card.teamName}</p>
-                <p className="text-[10px] text-copy-3 mt-0.5">{formatSport(card.sport)} · {card.points.toFixed(1)} pts</p>
-                <p className="text-[10px] text-copy-3/70 mt-1 truncate">{card.leagueName}</p>
+                {card.logoUrl
+                  ? <img src={card.logoUrl} alt={card.teamName} className="w-7 h-7 object-contain" />
+                  : card.label === 'hot'
+                    ? <svg width="14" height="14" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="text-orange-400"><path d="M5 8V2M2 5l3-3 3 3"/></svg>
+                    : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-copy-3"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                }
               </Link>
-            ))}
+              <Link href={`/leagues/${card.leagueId}`} className="flex-1 min-w-0 group" onClick={e => { if (Math.abs(dragDelta.current) > 10) e.preventDefault(); }}>
+                <p className="text-sm font-semibold text-copy truncate group-hover:text-brand transition-colors">{card.teamName}</p>
+                <p className="text-xs text-copy-3">
+                  <span className={card.label === 'hot' ? 'text-orange-400 font-medium' : 'text-brand font-medium'}>
+                    {card.label === 'hot' ? 'Hot team' : 'Top scorer'}
+                  </span>
+                  {' · '}{formatSport(card.sport)}{' · '}{card.points.toFixed(1)} pts{' · '}{card.leagueName}
+                </p>
+              </Link>
+              {performerCards.length > 1 && (
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  {performerCards.map((_, i) => (
+                    <button
+                      key={i}
+                      onClick={() => goTo(i)}
+                      className={`rounded-full transition-all ${i === standoutIndex ? 'w-3 h-1.5 bg-copy-2' : 'w-1.5 h-1.5 bg-line hover:bg-copy-3'}`}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Error */}
       {error && (
