@@ -443,7 +443,7 @@ export default function DashboardPage() {
   // Auto-rotate standouts every 10 seconds; rotateKey resets the timer on manual nav
   useEffect(() => {
     if (performerCards.length <= 1) return;
-    const t = setInterval(() => setStandoutIndex(i => (i + 1) % performerCards.length), 10000);
+    const t = setInterval(() => setStandoutIndex(i => (i + 1) % performerCards.length), 5000);
     return () => clearInterval(t);
   }, [performerCards.length, rotateKey]);
 
