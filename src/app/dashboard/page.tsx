@@ -730,56 +730,67 @@ export default function DashboardPage() {
           setRotateKey(k => k + 1);
         }
         return (
-          <div>
+          <div
+            className={`relative rounded-xl border overflow-hidden select-none transition-colors duration-300 ${card.label === 'hot' ? 'bg-orange-500/5 border-orange-500/20' : 'bg-card border-line'}`}
+            onPointerDown={e => { dragStartX.current = e.clientX; dragDelta.current = 0; }}
+            onPointerMove={e => { if (dragStartX.current !== null) dragDelta.current = e.clientX - dragStartX.current; }}
+            onPointerUp={e => {
+              const delta = e.clientX - (dragStartX.current ?? e.clientX);
+              dragStartX.current = null;
+              if (Math.abs(delta) > 40 && performerCards.length > 1) {
+                goTo(delta < 0
+                  ? (standoutIndex + 1) % performerCards.length
+                  : (standoutIndex - 1 + performerCards.length) % performerCards.length
+                );
+              }
+            }}
+            onPointerLeave={() => { dragStartX.current = null; }}
+          >
+            {/* Sliding inner track */}
             <div
-              className={`flex items-center gap-3 px-4 py-3 rounded-xl border select-none ${card.label === 'hot' ? 'bg-orange-500/5 border-orange-500/20' : 'bg-card border-line'}`}
-              onPointerDown={e => { dragStartX.current = e.clientX; dragDelta.current = 0; }}
-              onPointerMove={e => { if (dragStartX.current !== null) dragDelta.current = e.clientX - dragStartX.current; }}
-              onPointerUp={e => {
-                const delta = e.clientX - (dragStartX.current ?? e.clientX);
-                dragStartX.current = null;
-                if (Math.abs(delta) > 40 && performerCards.length > 1) {
-                  goTo(delta < 0
-                    ? (standoutIndex + 1) % performerCards.length
-                    : (standoutIndex - 1 + performerCards.length) % performerCards.length
-                  );
-                }
-              }}
-              onPointerLeave={() => { dragStartX.current = null; }}
+              className="flex transition-transform duration-300 ease-in-out"
+              style={{ transform: `translateX(-${standoutIndex * 100}%)` }}
             >
-              <Link
-                href={`/leagues/${card.leagueId}`}
-                className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden ${card.label === 'hot' ? 'bg-orange-500/10 border border-orange-500/20' : 'bg-field border border-line'}`}
-                onClick={e => { if (Math.abs(dragDelta.current) > 10) e.preventDefault(); }}
-              >
-                {card.logoUrl
-                  ? <img src={card.logoUrl} alt={card.teamName} className="w-7 h-7 object-contain" />
-                  : card.label === 'hot'
-                    ? <svg width="14" height="14" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="text-orange-400"><path d="M5 8V2M2 5l3-3 3 3"/></svg>
-                    : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-copy-3"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-                }
-              </Link>
-              <Link href={`/leagues/${card.leagueId}`} className="flex-1 min-w-0 group" onClick={e => { if (Math.abs(dragDelta.current) > 10) e.preventDefault(); }}>
-                <p className="text-sm font-semibold text-copy truncate group-hover:text-brand transition-colors">{card.teamName}</p>
-                <p className="text-xs text-copy-3">
-                  <span className={card.label === 'hot' ? 'text-orange-400 font-medium' : 'text-brand font-medium'}>
-                    {card.label === 'hot' ? 'Hot team' : 'Top scorer'}
-                  </span>
-                  {' · '}{formatSport(card.sport)}{' · '}{card.points.toFixed(1)} pts{' · '}{card.leagueName}
-                </p>
-              </Link>
-              {performerCards.length > 1 && (
-                <div className="flex items-center gap-1 flex-shrink-0">
-                  {performerCards.map((_, i) => (
-                    <button
-                      key={i}
-                      onClick={() => goTo(i)}
-                      className={`rounded-full transition-all ${i === standoutIndex ? 'w-3 h-1.5 bg-copy-2' : 'w-1.5 h-1.5 bg-line hover:bg-copy-3'}`}
-                    />
-                  ))}
+              {performerCards.map((c, i) => (
+                <div key={`${c.leagueId}-${c.teamId}-${i}`} className="flex-shrink-0 w-full flex items-center gap-3 px-4 py-3" style={{ minWidth: '100%' }}>
+                  <Link
+                    href={`/leagues/${c.leagueId}`}
+                    className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden ${c.label === 'hot' ? 'bg-orange-500/10 border border-orange-500/20' : 'bg-field border border-line'}`}
+                    onClick={e => { if (Math.abs(dragDelta.current) > 10) e.preventDefault(); }}
+                  >
+                    {c.logoUrl
+                      ? <img src={c.logoUrl} alt={c.teamName} className="w-7 h-7 object-contain" />
+                      : c.label === 'hot'
+                        ? <svg width="14" height="14" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="text-orange-400"><path d="M5 8V2M2 5l3-3 3 3"/></svg>
+                        : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-copy-3"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                    }
+                  </Link>
+                  <Link href={`/leagues/${c.leagueId}`} className="flex-1 min-w-0 group" onClick={e => { if (Math.abs(dragDelta.current) > 10) e.preventDefault(); }}>
+                    <p className="text-sm font-semibold text-copy truncate group-hover:text-brand transition-colors">{c.teamName}</p>
+                    <p className="text-xs text-copy-3">
+                      <span className={c.label === 'hot' ? 'text-orange-400 font-medium' : 'text-brand font-medium'}>
+                        {c.label === 'hot' ? 'Hot team' : 'Top scorer'}
+                      </span>
+                      {' · '}{formatSport(c.sport)}{' · '}{c.points.toFixed(1)} pts{' · '}{c.leagueName}
+                    </p>
+                  </Link>
+                  {/* Spacer so dots don't overlap text on the last visible card */}
+                  {performerCards.length > 1 && <div className="w-10 flex-shrink-0" />}
                 </div>
-              )}
+              ))}
             </div>
+            {/* Dots — absolutely positioned so they stay fixed while content slides */}
+            {performerCards.length > 1 && (
+              <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                {performerCards.map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => goTo(i)}
+                    className={`rounded-full transition-all ${i === standoutIndex ? 'w-3 h-1.5 bg-copy-2' : 'w-1.5 h-1.5 bg-line hover:bg-copy-3'}`}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         );
       })()}

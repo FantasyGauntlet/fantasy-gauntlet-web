@@ -49,17 +49,22 @@ export default function LeaguePage() {
   const [scheduleLoaded, setScheduleLoaded] = useState(false);
   const [waiverFilterPush, setWaiverFilterPush] = useState<{ sport: string | null; v: number }>({ sport: null, v: 0 });
   const [startAuctionError, setStartAuctionError] = useState<string | null>(null);
+  const [gamesTodayOpen, setGamesTodayOpen] = useState(false);
+  const [gamesTodayAnchor, setGamesTodayAnchor] = useState<{ right: number; top: number } | null>(null);
   const tabBarRef = useRef<HTMLDivElement>(null);
   const dropdownPanelRef = useRef<HTMLDivElement>(null);
+  const gamesTodayPanelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handleOutsideClick(e: MouseEvent | TouchEvent) {
       const target = e.target as Node;
       const inTabBar = tabBarRef.current?.contains(target);
       const inDropdown = dropdownPanelRef.current?.contains(target);
-      if (!inTabBar && !inDropdown) {
+      const inGamesToday = gamesTodayPanelRef.current?.contains(target);
+      if (!inTabBar && !inDropdown && !inGamesToday) {
         setOpenDropdown(null);
         setDropdownAnchor(null);
+        setGamesTodayOpen(false);
       }
     }
     document.addEventListener('mousedown', handleOutsideClick);
@@ -124,7 +129,7 @@ export default function LeaguePage() {
   }, [league?.state, league?.selectedSports, fantasyTeams]);
 
   useEffect(() => {
-    if (!mountedTabs.has('games') || scheduleLoaded) return;
+    if ((!mountedTabs.has('games') && !gamesTodayOpen) || scheduleLoaded) return;
     if (!league?.selectedSports.length || league.state !== 'active') return;
     setScheduleLoaded(true);
     const sports = league.selectedSports.join(',');
@@ -132,7 +137,7 @@ export default function LeaguePage() {
     const qs = teamIds ? `sports=${sports}&teamIds=${teamIds}` : `sports=${sports}`;
     api.get<ScoreboardGame[]>(`/sports/schedule?${qs}&days=120`)
       .then(setSchedule).catch(() => {});
-  }, [mountedTabs, scheduleLoaded, league?.selectedSports, league?.state, fantasyTeams]);
+  }, [mountedTabs, scheduleLoaded, gamesTodayOpen, league?.selectedSports, league?.state, fantasyTeams]);
 
   const liveTeamIds = useMemo(() => {
     const ids = new Set<string>();
@@ -408,6 +413,46 @@ export default function LeaguePage() {
             </svg>
           </button>
         </div>
+
+        {/* Games Today button — only in active leagues */}
+        {league.state === 'active' && (
+          <button
+            onClick={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              if (gamesTodayOpen) {
+                setGamesTodayOpen(false);
+              } else {
+                setGamesTodayAnchor({ right: window.innerWidth - rect.right, top: rect.bottom });
+                setGamesTodayOpen(true);
+                setOpenDropdown(null);
+                setDropdownAnchor(null);
+              }
+            }}
+            className={`ml-auto flex-shrink-0 px-2.5 sm:px-3 py-2 sm:py-2.5 text-xs sm:text-sm font-medium transition-colors -mb-px border-b-2 relative flex items-center gap-1.5 ${
+              gamesTodayOpen
+                ? 'border-brand text-brand'
+                : scoreboard.length > 0
+                  ? 'border-transparent text-copy-2 hover:text-copy hover:border-line-2'
+                  : 'border-transparent text-copy-3 hover:text-copy-2 hover:border-line-2'
+            }`}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+              <line x1="16" y1="2" x2="16" y2="6" />
+              <line x1="8" y1="2" x2="8" y2="6" />
+              <line x1="3" y1="10" x2="21" y2="10" />
+            </svg>
+            <span className="hidden sm:inline">Today</span>
+            {hasLiveGames && !gamesTodayOpen && (
+              <span className="absolute top-1.5 right-0.5 sm:right-1">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-positive opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-positive" />
+                </span>
+              </span>
+            )}
+          </button>
+        )}
       </div>
 
       {/* Dropdown panels — position:fixed so they escape any overflow context */}
@@ -439,6 +484,153 @@ export default function LeaguePage() {
           </div>
         </div>
       )}
+
+      {/* Games Today panel */}
+      {gamesTodayOpen && gamesTodayAnchor && league.state === 'active' && (() => {
+        const todayTeamIds = new Set(scoreboard.flatMap(g => [g.homeTeamId, g.awayTeamId]));
+        const myTeamsNotToday = [...myOwnedTeamIds].filter(id => !todayTeamIds.has(id));
+        const nextGameByTeam = myTeamsNotToday.map(teamId => {
+          const game = schedule.find(g =>
+            (g.homeTeamId === teamId || g.awayTeamId === teamId) &&
+            new Date(g.scheduledAt) > new Date()
+          );
+          return game ? { teamId, game } : null;
+        }).filter((x): x is { teamId: string; game: ScoreboardGame } => x !== null);
+        // Dedupe: same game may appear for two owned teams
+        const seenNextGameIds = new Set<string>();
+        const dedupedNextGames = nextGameByTeam.filter(({ game }) => {
+          if (seenNextGameIds.has(game.eventId)) return false;
+          seenNextGameIds.add(game.eventId);
+          return true;
+        }).sort((a, b) => new Date(a.game.scheduledAt).getTime() - new Date(b.game.scheduledAt).getTime());
+
+        return (
+          <div
+            ref={gamesTodayPanelRef}
+            style={{
+              position: 'fixed',
+              right: Math.max(8, gamesTodayAnchor.right),
+              top: gamesTodayAnchor.top + 4,
+              zIndex: 9999,
+              width: 300,
+              maxWidth: 'calc(100vw - 16px)',
+            }}
+          >
+            <div className="bg-card border border-line rounded-xl shadow-xl overflow-hidden">
+              {/* Today's games */}
+              <div className="px-4 pt-3 pb-2 flex items-center justify-between">
+                <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide">Games Today</p>
+                {scoreboardLoading && <span className="text-[10px] text-copy-3">Updating…</span>}
+              </div>
+              {scoreboard.length === 0 ? (
+                <p className="px-4 pb-3 text-sm text-copy-3">No games today</p>
+              ) : (
+                <div className="divide-y divide-line">
+                  {scoreboard.map(game => {
+                    const myHome = myOwnedTeamIds.has(game.homeTeamId);
+                    const myAway = myOwnedTeamIds.has(game.awayTeamId);
+                    return (
+                      <div key={game.eventId} className={`px-3 py-2 ${myHome || myAway ? 'bg-brand-dim/40' : ''}`}>
+                        <div className="flex items-center gap-1.5 text-xs">
+                          {/* Home */}
+                          <div className={`flex items-center gap-1.5 flex-1 min-w-0 ${myHome ? 'font-semibold text-copy' : 'text-copy-2'}`}>
+                            {game.homeLogo
+                              ? <img src={game.homeLogo} alt="" className="w-5 h-5 object-contain flex-shrink-0" />
+                              : <div className="w-5 h-5 rounded bg-field flex-shrink-0" />
+                            }
+                            <span className="truncate">{game.homeShortName}</span>
+                            {game.homeScore != null && (
+                              <span className={`ml-auto font-bold flex-shrink-0 ${myHome ? 'text-copy' : 'text-copy-2'}`}>{game.homeScore}</span>
+                            )}
+                          </div>
+                          {/* Status */}
+                          <div className="flex-shrink-0 w-14 text-center">
+                            {game.isLive ? (
+                              <span className="text-positive font-semibold text-[10px] flex items-center justify-center gap-0.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-positive inline-block" />
+                                LIVE
+                              </span>
+                            ) : game.isFinished ? (
+                              <span className="text-copy-3 text-[10px]">FT</span>
+                            ) : (
+                              <span className="text-copy-3">
+                                {new Date(game.scheduledAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
+                              </span>
+                            )}
+                          </div>
+                          {/* Away */}
+                          <div className={`flex items-center gap-1.5 flex-1 min-w-0 justify-end ${myAway ? 'font-semibold text-copy' : 'text-copy-2'}`}>
+                            {game.awayScore != null && (
+                              <span className={`mr-auto font-bold flex-shrink-0 ${myAway ? 'text-copy' : 'text-copy-2'}`}>{game.awayScore}</span>
+                            )}
+                            <span className="truncate">{game.awayShortName}</span>
+                            {game.awayLogo
+                              ? <img src={game.awayLogo} alt="" className="w-5 h-5 object-contain flex-shrink-0" />
+                              : <div className="w-5 h-5 rounded bg-field flex-shrink-0" />
+                            }
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Next game section — my owned teams not playing today */}
+              {dedupedNextGames.length > 0 && (
+                <>
+                  <div className="px-4 pt-3 pb-2 border-t border-line">
+                    <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide">Next Up</p>
+                  </div>
+                  <div className="divide-y divide-line pb-1">
+                    {dedupedNextGames.map(({ game }) => {
+                      const myHome = myOwnedTeamIds.has(game.homeTeamId);
+                      const myAway = myOwnedTeamIds.has(game.awayTeamId);
+                      const when = new Date(game.scheduledAt);
+                      const isThisWeek = when.getTime() - Date.now() < 7 * 24 * 60 * 60 * 1000;
+                      const dateLabel = isThisWeek
+                        ? when.toLocaleDateString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })
+                        : when.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+                      return (
+                        <div key={game.eventId} className="px-3 py-2">
+                          <div className="flex items-center gap-1.5 text-xs">
+                            <div className={`flex items-center gap-1.5 flex-1 min-w-0 ${myHome ? 'font-semibold text-copy' : 'text-copy-2'}`}>
+                              {game.homeLogo
+                                ? <img src={game.homeLogo} alt="" className="w-5 h-5 object-contain flex-shrink-0" />
+                                : <div className="w-5 h-5 rounded bg-field flex-shrink-0" />
+                              }
+                              <span className="truncate">{game.homeShortName}</span>
+                            </div>
+                            <span className="text-copy-3 flex-shrink-0 text-[10px] text-center w-14">vs</span>
+                            <div className={`flex items-center gap-1.5 flex-1 min-w-0 justify-end ${myAway ? 'font-semibold text-copy' : 'text-copy-2'}`}>
+                              <span className="truncate">{game.awayShortName}</span>
+                              {game.awayLogo
+                                ? <img src={game.awayLogo} alt="" className="w-5 h-5 object-contain flex-shrink-0" />
+                                : <div className="w-5 h-5 rounded bg-field flex-shrink-0" />
+                              }
+                            </div>
+                          </div>
+                          <p className="text-[10px] text-copy-3 mt-0.5 pl-6">{dateLabel}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+
+              {/* Link to full Game Center */}
+              <div className="border-t border-line px-4 py-2.5">
+                <button
+                  onClick={() => { switchTab('games'); setGamesTodayOpen(false); }}
+                  className="text-xs text-brand hover:text-brand-2 font-medium transition-colors"
+                >
+                  Open Game Center →
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {mountedTabs.has('standings') && (
         <div className={tab !== 'standings' ? 'hidden' : ''}>
