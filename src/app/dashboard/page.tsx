@@ -541,9 +541,10 @@ export default function DashboardPage() {
     <div className="space-y-8">
       {/* Announcement popup */}
       {popupAnn && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={dismissPopup}>
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm" onClick={dismissPopup}>
+          <div className="flex min-h-full items-center justify-center p-4">
           <div
-            className="bg-card border border-line rounded-2xl shadow-2xl w-full max-w-sm sm:max-w-lg flex flex-col max-h-[85vh]"
+            className="bg-card border border-line rounded-2xl shadow-2xl w-full max-w-sm sm:max-w-lg flex flex-col max-h-[85vh] my-4"
             onClick={e => e.stopPropagation()}
           >
             {/* Header — always visible */}
@@ -582,6 +583,7 @@ export default function DashboardPage() {
                 Got it
               </button>
             </div>
+          </div>
           </div>
         </div>
       )}
