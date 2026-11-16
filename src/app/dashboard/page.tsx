@@ -70,7 +70,7 @@ interface WaiverActivity {
   faabBid?: number;
 }
 
-interface BestTeam { teamName: string; sport: string; points: number; formTag: 'hot' | 'cold' | null; logoUrl?: string | null; }
+interface PerformerCard { teamId: string; teamName: string; sport: string; points: number; logoUrl?: string | null; label: 'hot' | 'top'; leagueName: string; leagueId: string; }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -334,7 +334,7 @@ export default function DashboardPage() {
   const [leagueSummaries, setLeagueSummaries] = useState<Map<string, LeagueSummary>>(new Map());
   const [recentActivity, setRecentActivity] = useState<WaiverActivity[]>([]);
   const [sportDeadlines, setSportDeadlines] = useState<Record<string, string>>({});
-  const [bestTeam, setBestTeam] = useState<BestTeam | null>(null);
+  const [performerCards, setPerformerCards] = useState<PerformerCard[]>([]);
 
   useEffect(() => {
     if (authLoading || !user) return;
@@ -353,7 +353,7 @@ export default function DashboardPage() {
   useEffect(() => {
     if (authLoading || !user) return;
     const active = leagues.filter(l => l.state === 'active');
-    if (!active.length) { setLeagueSummaries(new Map()); setRecentActivity([]); setBestTeam(null); return; }
+    if (!active.length) { setLeagueSummaries(new Map()); setRecentActivity([]); setPerformerCards([]); return; }
 
     // Standings: rank delta + points + best team
     Promise.all(
@@ -367,8 +367,7 @@ export default function DashboardPage() {
       )
     ).then(results => {
       const map = new Map<string, LeagueSummary>();
-      let best: BestTeam | null = null;
-      let bestPoints = -1;
+      const allCards: PerformerCard[] = [];
 
       for (const r of results) {
         if (!r) continue;
@@ -376,6 +375,7 @@ export default function DashboardPage() {
         if (!mine) continue;
 
         const myFt = r.teams.find(t => t.userId === user.uid);
+        const leagueName = active.find(l => l.id === r.leagueId)?.name ?? '';
 
         let rankDelta: number | null = null;
         if (r.rankHistory.length >= 2) {
@@ -386,18 +386,32 @@ export default function DashboardPage() {
         }
         map.set(r.leagueId, { myPoints: mine.totalPoints ?? null, rankDelta, myTeamName: myFt?.displayName, myTeamLogoUrl: myFt?.logoUrl ?? null });
 
-        // Best performing team: prefer hot-tagged, then highest points
+        // Collect hot teams for this league
+        const hotIds = new Set<string>();
         for (const tb of mine.teamBreakdown ?? []) {
           if (tb.seasonActive === false) continue;
-          const isHot = tb.formTag === 'hot';
-          if (!best || tb.points > bestPoints || (isHot && best.formTag !== 'hot')) {
-            bestPoints = tb.points;
-            best = { teamName: tb.teamName, sport: tb.sport, points: tb.points, formTag: tb.formTag ?? null, logoUrl: tb.logoUrl ?? null };
+          if (tb.formTag === 'hot') {
+            hotIds.add(tb.teamId);
+            allCards.push({ teamId: tb.teamId, teamName: tb.teamName, sport: tb.sport, points: tb.points, logoUrl: tb.logoUrl ?? null, label: 'hot', leagueName, leagueId: r.leagueId });
           }
         }
+        // Top scorer per league (skip teams already listed as hot)
+        const eligible = (mine.teamBreakdown ?? []).filter(tb => tb.seasonActive !== false && !hotIds.has(tb.teamId) && tb.points > 0);
+        if (eligible.length > 0) {
+          const top = eligible.reduce((a, b) => b.points > a.points ? b : a);
+          allCards.push({ teamId: top.teamId, teamName: top.teamName, sport: top.sport, points: top.points, logoUrl: top.logoUrl ?? null, label: 'top', leagueName, leagueId: r.leagueId });
+        }
       }
+
+      // Hot cards first, then top scorers sorted by points desc
+      allCards.sort((a, b) => {
+        if (a.label === 'hot' && b.label !== 'hot') return -1;
+        if (a.label !== 'hot' && b.label === 'hot') return 1;
+        return b.points - a.points;
+      });
+
       setLeagueSummaries(map);
-      setBestTeam(best);
+      setPerformerCards(allCards);
     });
 
     // Waiver activity across all active leagues
@@ -694,20 +708,33 @@ export default function DashboardPage() {
         );
       })()}
 
-      {/* Best performer */}
-      {bestTeam && (
-        <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${bestTeam.formTag === 'hot' ? 'bg-orange-500/5 border-orange-500/20' : 'bg-card border-line'}`}>
-          <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden ${bestTeam.formTag === 'hot' ? 'bg-orange-500/10 border border-orange-500/20' : 'bg-field border border-line'}`}>
-            {bestTeam.logoUrl
-              ? <img src={bestTeam.logoUrl} alt={bestTeam.teamName} className="w-6 h-6 object-contain" />
-              : bestTeam.formTag === 'hot'
-                ? <svg width="13" height="13" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="text-orange-400"><path d="M5 8V2M2 5l3-3 3 3"/></svg>
-                : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-copy-3"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-            }
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-copy truncate">{bestTeam.teamName}</p>
-            <p className="text-xs text-copy-3">{bestTeam.formTag === 'hot' ? 'Hot team on your roster' : 'Top scorer on your roster'} · {formatSport(bestTeam.sport)} · {bestTeam.points.toFixed(1)} pts</p>
+      {/* Performers carousel */}
+      {performerCards.length > 0 && (
+        <div>
+          <h2 className="text-xs font-semibold text-copy-3 uppercase tracking-widest mb-3">Standouts</h2>
+          <div className="flex gap-2 overflow-x-auto pb-1 -mb-1" style={{ scrollbarWidth: 'none' }}>
+            {performerCards.map((card, i) => (
+              <Link key={`${card.leagueId}-${card.teamId}-${i}`} href={`/leagues/${card.leagueId}`}
+                className={`group flex-shrink-0 w-44 rounded-xl border p-3 transition-colors ${card.label === 'hot' ? 'bg-orange-500/5 border-orange-500/20 hover:border-orange-500/40' : 'bg-card border-line hover:border-brand/30'}`}
+              >
+                <div className="flex items-center gap-1.5 mb-2.5">
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden ${card.label === 'hot' ? 'bg-orange-500/10 border border-orange-500/20' : 'bg-field border border-line'}`}>
+                    {card.logoUrl
+                      ? <img src={card.logoUrl} alt={card.teamName} className="w-6 h-6 object-contain" />
+                      : card.label === 'hot'
+                        ? <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="text-orange-400"><path d="M5 8V2M2 5l3-3 3 3"/></svg>
+                        : <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-copy-3"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                    }
+                  </div>
+                  <span className={`text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full border ${card.label === 'hot' ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' : 'bg-brand-dim text-brand border-brand/20'}`}>
+                    {card.label === 'hot' ? 'Hot' : 'Top scorer'}
+                  </span>
+                </div>
+                <p className="text-sm font-semibold text-copy truncate group-hover:text-brand transition-colors leading-tight">{card.teamName}</p>
+                <p className="text-[10px] text-copy-3 mt-0.5">{formatSport(card.sport)} · {card.points.toFixed(1)} pts</p>
+                <p className="text-[10px] text-copy-3/70 mt-1 truncate">{card.leagueName}</p>
+              </Link>
+            ))}
           </div>
         </div>
       )}
