@@ -487,7 +487,8 @@ export default function LeaguePage() {
 
       {/* Games Today panel */}
       {gamesTodayOpen && gamesTodayAnchor && league.state === 'active' && (() => {
-        const todayTeamIds = new Set(scoreboard.flatMap(g => [g.homeTeamId, g.awayTeamId]));
+        const myGamesToday = scoreboard.filter(g => myOwnedTeamIds.has(g.homeTeamId) || myOwnedTeamIds.has(g.awayTeamId));
+        const todayTeamIds = new Set(myGamesToday.flatMap(g => [g.homeTeamId, g.awayTeamId]));
         const myTeamsNotToday = [...myOwnedTeamIds].filter(id => !todayTeamIds.has(id));
         const nextGameByTeam = myTeamsNotToday.map(teamId => {
           const game = schedule.find(g =>
@@ -522,11 +523,11 @@ export default function LeaguePage() {
                 <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide">Games Today</p>
                 {scoreboardLoading && <span className="text-[10px] text-copy-3">Updating…</span>}
               </div>
-              {scoreboard.length === 0 ? (
-                <p className="px-4 pb-3 text-sm text-copy-3">No games today</p>
+              {myGamesToday.length === 0 ? (
+                <p className="px-4 pb-3 text-sm text-copy-3">None of your teams play today</p>
               ) : (
                 <div className="divide-y divide-line">
-                  {scoreboard.map(game => {
+                  {myGamesToday.map(game => {
                     const myHome = myOwnedTeamIds.has(game.homeTeamId);
                     const myAway = myOwnedTeamIds.has(game.awayTeamId);
                     return (
