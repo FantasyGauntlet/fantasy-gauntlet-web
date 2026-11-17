@@ -50,18 +50,15 @@ export default function LeaguePage() {
   const [waiverFilterPush, setWaiverFilterPush] = useState<{ sport: string | null; v: number }>({ sport: null, v: 0 });
   const [startAuctionError, setStartAuctionError] = useState<string | null>(null);
   const [gamesTodayOpen, setGamesTodayOpen] = useState(false);
-  const [gamesTodayAnchor, setGamesTodayAnchor] = useState<{ right: number; top: number } | null>(null);
   const tabBarRef = useRef<HTMLDivElement>(null);
   const dropdownPanelRef = useRef<HTMLDivElement>(null);
-  const gamesTodayPanelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handleOutsideClick(e: MouseEvent | TouchEvent) {
       const target = e.target as Node;
       const inTabBar = tabBarRef.current?.contains(target);
       const inDropdown = dropdownPanelRef.current?.contains(target);
-      const inGamesToday = gamesTodayPanelRef.current?.contains(target);
-      if (!inTabBar && !inDropdown && !inGamesToday) {
+      if (!inTabBar && !inDropdown) {
         setOpenDropdown(null);
         setDropdownAnchor(null);
         setGamesTodayOpen(false);
@@ -418,11 +415,10 @@ export default function LeaguePage() {
         {league.state === 'active' && (
           <button
             onClick={(e) => {
-              const rect = e.currentTarget.getBoundingClientRect();
+              e.stopPropagation();
               if (gamesTodayOpen) {
                 setGamesTodayOpen(false);
               } else {
-                setGamesTodayAnchor({ right: window.innerWidth - rect.right, top: rect.bottom });
                 setGamesTodayOpen(true);
                 setOpenDropdown(null);
                 setDropdownAnchor(null);
@@ -485,8 +481,8 @@ export default function LeaguePage() {
         </div>
       )}
 
-      {/* Games Today panel */}
-      {gamesTodayOpen && gamesTodayAnchor && league.state === 'active' && (() => {
+      {/* Games Today modal */}
+      {gamesTodayOpen && league.state === 'active' && (() => {
         const myGamesToday = scoreboard.filter(g => myOwnedTeamIds.has(g.homeTeamId) || myOwnedTeamIds.has(g.awayTeamId));
         const todayTeamIds = new Set(myGamesToday.flatMap(g => [g.homeTeamId, g.awayTeamId]));
         const myTeamsNotToday = [...myOwnedTeamIds].filter(id => !todayTeamIds.has(id));
@@ -506,25 +502,23 @@ export default function LeaguePage() {
         }).sort((a, b) => new Date(a.game.scheduledAt).getTime() - new Date(b.game.scheduledAt).getTime());
 
         return (
-          <div
-            ref={gamesTodayPanelRef}
-            style={{
-              position: 'fixed',
-              right: Math.max(8, gamesTodayAnchor.right),
-              top: gamesTodayAnchor.top + 4,
-              zIndex: 9999,
-              width: 300,
-              maxWidth: 'calc(100vw - 16px)',
-            }}
-          >
-            <div className="bg-card border border-line rounded-xl shadow-xl overflow-hidden">
-              {/* Today's games */}
-              <div className="px-4 pt-3 pb-2 flex items-center justify-between">
-                <p className="text-xs font-semibold text-copy-3 uppercase tracking-wide">Games Today</p>
-                {scoreboardLoading && <span className="text-[10px] text-copy-3">Updating…</span>}
+          <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm" onClick={() => setGamesTodayOpen(false)}>
+            <div className="flex min-h-full items-center justify-center p-4">
+              <div className="bg-card border border-line rounded-2xl shadow-2xl w-full max-w-sm flex flex-col max-h-[85vh] my-4" onClick={e => e.stopPropagation()}>
+              {/* Header */}
+              <div className="flex items-center justify-between gap-3 px-5 pt-5 pb-3 flex-shrink-0">
+                <div>
+                  <p className="text-base font-semibold text-copy">Games Today</p>
+                  {scoreboardLoading && <p className="text-[10px] text-copy-3 mt-0.5">Updating…</p>}
+                </div>
+                <button onClick={() => setGamesTodayOpen(false)} className="text-copy-3 hover:text-copy transition-colors p-1 -mr-1 flex-shrink-0">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
+                </button>
               </div>
+              {/* Scrollable body */}
+              <div className="overflow-y-auto flex-1 min-h-0">
               {myGamesToday.length === 0 ? (
-                <p className="px-4 pb-3 text-sm text-copy-3">None of your teams play today</p>
+                <p className="px-5 pt-1 pb-4 text-sm text-copy-3">None of your teams play today</p>
               ) : (
                 <div className="divide-y divide-line">
                   {myGamesToday.map(game => {
@@ -619,8 +613,9 @@ export default function LeaguePage() {
                 </>
               )}
 
-              {/* Link to full Game Center */}
-              <div className="border-t border-line px-4 py-2.5">
+              </div>
+              {/* Footer */}
+              <div className="border-t border-line px-5 py-3 flex-shrink-0">
                 <button
                   onClick={() => { switchTab('games'); setGamesTodayOpen(false); }}
                   className="text-xs text-brand hover:text-brand-2 font-medium transition-colors"
@@ -628,6 +623,7 @@ export default function LeaguePage() {
                   Open Game Center →
                 </button>
               </div>
+            </div>
             </div>
           </div>
         );
