@@ -400,7 +400,7 @@ export default function DashboardPage() {
           }
         }
         // Top scorer per league (skip teams already listed as hot)
-        const eligible = (mine.teamBreakdown ?? []).filter(tb => tb.seasonActive !== false && !hotIds.has(tb.teamId) && tb.points > 0);
+        const eligible = (mine.teamBreakdown ?? []).filter(tb => tb.seasonActive === true && !hotIds.has(tb.teamId) && tb.points > 0);
         if (eligible.length > 0) {
           const top = eligible.reduce((a, b) => b.points > a.points ? b : a);
           allCards.push({ teamId: top.teamId, teamName: top.teamName, sport: top.sport, points: top.points, logoUrl: top.logoUrl ?? null, label: 'top', leagueName, leagueId: r.leagueId });

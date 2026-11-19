@@ -52,13 +52,15 @@ export default function LeaguePage() {
   const [gamesTodayOpen, setGamesTodayOpen] = useState(false);
   const tabBarRef = useRef<HTMLDivElement>(null);
   const dropdownPanelRef = useRef<HTMLDivElement>(null);
+  const gamesTodayModalRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handleOutsideClick(e: MouseEvent | TouchEvent) {
       const target = e.target as Node;
       const inTabBar = tabBarRef.current?.contains(target);
       const inDropdown = dropdownPanelRef.current?.contains(target);
-      if (!inTabBar && !inDropdown) {
+      const inGamesToday = gamesTodayModalRef.current?.contains(target);
+      if (!inTabBar && !inDropdown && !inGamesToday) {
         setOpenDropdown(null);
         setDropdownAnchor(null);
         setGamesTodayOpen(false);
@@ -486,10 +488,11 @@ export default function LeaguePage() {
         const myGamesToday = scoreboard.filter(g => myOwnedTeamIds.has(g.homeTeamId) || myOwnedTeamIds.has(g.awayTeamId));
         const todayTeamIds = new Set(myGamesToday.flatMap(g => [g.homeTeamId, g.awayTeamId]));
         const myTeamsNotToday = [...myOwnedTeamIds].filter(id => !todayTeamIds.has(id));
+        const now = new Date();
         const nextGameByTeam = myTeamsNotToday.map(teamId => {
           const game = schedule.find(g =>
             (g.homeTeamId === teamId || g.awayTeamId === teamId) &&
-            new Date(g.scheduledAt) > new Date()
+            new Date(g.scheduledAt) > now
           );
           return game ? { teamId, game } : null;
         }).filter((x): x is { teamId: string; game: ScoreboardGame } => x !== null);
@@ -504,7 +507,7 @@ export default function LeaguePage() {
         return (
           <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm" onClick={() => setGamesTodayOpen(false)}>
             <div className="flex min-h-full items-center justify-center p-4">
-              <div className="bg-card border border-line rounded-2xl shadow-2xl w-full max-w-sm flex flex-col max-h-[85vh] my-4" onClick={e => e.stopPropagation()}>
+              <div ref={gamesTodayModalRef} className="bg-card border border-line rounded-2xl shadow-2xl w-full max-w-sm flex flex-col max-h-[85vh] my-4" onClick={e => e.stopPropagation()}>
               {/* Header */}
               <div className="flex items-center justify-between gap-3 px-5 pt-5 pb-3 flex-shrink-0">
                 <div>
